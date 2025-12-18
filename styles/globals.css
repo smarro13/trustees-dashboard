@@ -1,0 +1,165 @@
+/* Tailwind CSS v4 base import */
+@import "tailwindcss";
+
+/* CSS variables for theme tweaks (optional) */
+:root {
+  --bg: 247 247 248; /* zinc-50-ish */
+}
+
+/* App-wide base styles */
+html, body, #__next {
+  height: 100%;
+}
+
+body {
+  background: linear-gradient(180deg, rgb(250 250 250), rgb(244 244 245));
+  color: rgb(24 24 27);
+}
+
+/* Better focus outlines for accessibility */
+:where(a, button, [role="button"]) {
+  outline: none;
+}
+
+:where(a, button, [role="button"]):focus-visible {
+  outline: 2px solid rgb(59 130 246);
+  outline-offset: 2px;
+}
+
+/* Smooth transitions for interactive elements */
+.transition-base {
+  transition: all 200ms ease;
+}
+
+/* ===== Player Card Styles (as provided) ===== */
+.player-card {
+  max-width: 600px;
+  margin: 20px auto;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  font-family: Arial, sans-serif;
+  background: #fff;
+  padding: 20px;
+}
+
+.pc-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.pc-image {
+  flex: 1 1 200px;
+  text-align: center;
+  padding: 10px;
+}
+
+.pc-image img {
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+.pc-details {
+  flex: 2 1 300px;
+  padding: 15px;
+}
+
+.pc-name {
+  margin: 0 0 10px 0;
+  font-size: 1.3em; /* reduced default */
+  font-weight: 800;
+  color: #7a0f14;
+}
+
+.pc-meta {
+  margin: 5px 0;
+  font-size: 1.0em; /* reduced default */
+  color: #555;
+}
+
+.pc-tags { margin-top: 10px; }
+
+.pc-tag {
+  display: inline-block;
+  background: #eee;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.85em; /* slightly smaller */
+}
+
+/* Hide mobile-specific elements on desktop */
+.pc-mobile-header,
+.pc-dropdown { display: none; }
+
+/* ===== Mobile Styles ===== */
+@media (max-width: 700px) {
+  /* Hide desktop details */
+  .pc-details { display: none; }
+
+  /* Mobile layout: flex row for image + text */
+  .pc-wrap {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    flex-wrap: wrap; /* allow dropdown below */
+  }
+
+  .pc-image img {
+    border-radius: 12px;
+    display: block;
+  }
+
+  .pc-mobile-header {
+    flex: 1; /* take all remaining space */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-left: 10px;
+  }
+
+  .pc-mobile-header .pc-name {
+    font-size: 1.4rem;
+    margin: 0 0 6px 0;
+  }
+
+  .pc-mobile-header .pc-sponsor-text {
+    font-size: 1rem;
+    margin: 0;
+    display: block;
+  }
+
+  .pc-mobile-header .pc-sponsor-text a {
+    color: #7a0f14;
+    text-decoration: underline;
+  }
+
+  /* Dropdown below the row */
+  .pc-dropdown {
+    display: block;
+    width: 100%;
+    margin-top: 10px;
+  }
+
+  .pc-dropdown summary {
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .pc-dropdown p, .pc-dropdown .pc-tags {
+    margin: 5px 0;
+  }
+}
+
+/* Meeting card specific adjustments to reduce footprint */
+.meeting-card {
+  padding: 12px; /* override player-card padding */
+}
+.meeting-card .pc-name {
+  font-size: 1.2em; /* smaller title */
+}
+.meeting-card .pc-meta {
+  font-size: 0.95em; /* smaller meta */
+}
+.meeting-card .pc-image {
+  padding: 6px; /* tighter image padding */
+}
