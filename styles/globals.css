@@ -1,7 +1,7 @@
 /* Tailwind CSS v4 base import */
 @import "tailwindcss";
 
-/* CSS variables for theme tweaks (optional) */
+/* Theme variables (light tweaks) */
 :root {
   --bg: 247 247 248; /* zinc-50-ish */
 }
@@ -16,7 +16,7 @@ body {
   color: rgb(24 24 27);
 }
 
-/* Better focus outlines for accessibility */
+/* Accessibility: improved focus outlines */
 :where(a, button, [role="button"]) {
   outline: none;
 }
@@ -26,12 +26,12 @@ body {
   outline-offset: 2px;
 }
 
-/* Smooth transitions for interactive elements */
+/* Utility: smooth transitions for interactive elements */
 .transition-base {
   transition: all 200ms ease;
 }
 
-/* ===== Player Card Styles (as provided) ===== */
+/* ===== Card styles shared by Meetings & Actions ===== */
 .player-card {
   max-width: 600px;
   margin: 20px auto;
@@ -66,7 +66,7 @@ body {
 
 .pc-name {
   margin: 0 0 10px 0;
-  font-size: 1.3em; /* reduced default */
+  font-size: 0.9em; /* reduced default */
   font-weight: 800;
   color: #7a0f14;
 }
@@ -87,11 +87,17 @@ body {
   font-size: 0.85em; /* slightly smaller */
 }
 
-/* Hide mobile-specific elements on desktop */
+/* Buttons styled as tags */
+button.pc-tag {
+  border: 0;
+  cursor: pointer;
+}
+
+/* Desktop-only: hide mobile-specific elements */
 .pc-mobile-header,
 .pc-dropdown { display: none; }
 
-/* ===== Mobile Styles ===== */
+/* ===== Mobile layout behavior for player cards ===== */
 @media (max-width: 700px) {
   /* Hide desktop details */
   .pc-details { display: none; }
@@ -150,7 +156,7 @@ body {
   }
 }
 
-/* Meeting card specific adjustments to reduce footprint */
+/* ===== Meeting-card compact variant (smaller padding & type) ===== */
 .meeting-card {
   padding: 12px; /* override player-card padding */
 }
