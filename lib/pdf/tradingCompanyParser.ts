@@ -18,7 +18,7 @@ export type TradingParseResult = {
 };
 
 export async function parseTradingCompanyPDF(buffer: Buffer): Promise<TradingParseResult> {
-  const data = await pdfParse(buffer);
+  const data = await (pdfParse as unknown as (buf: Buffer) => Promise<{ text?: string }>)(buffer);
   const text = data.text || "";
 
   const lines = text
