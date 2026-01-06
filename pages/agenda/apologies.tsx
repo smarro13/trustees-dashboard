@@ -67,7 +67,8 @@ export default function ApologiesPage() {
 
   return (
     <main className="min-h-screen">
-      <div className="mx-auto max-w-4xl px-6 py-10">
+      {/* expand width similar to other agenda pages */}
+      <div className="mx-auto w-full max-w-6xl sm:max-w-7xl lg:max-w-[1200px] px-2 sm:px-4 lg:px-6 py-6 sm:py-8 lg:py-10">
         <header className="mb-8">
           <Link
             href="/"
@@ -84,11 +85,16 @@ export default function ApologiesPage() {
           </p>
         </header>
 
-        {/* Add apology */}
-        <section className="player-card mb-8">
-          <h2 className="pc-name mb-4">Add apology</h2>
+        {/* Add apology – full-width, lightly styled section */}
+        <section className="mb-8 w-full rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
+          <div className="border-b border-zinc-200 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
+            <h2 className="pc-name text-xl font-semibold">
+              Add apology
+            </h2>
+          </div>
 
-          <div className="space-y-3">
+          {/* Any future controls should live inside this padded block */}
+          <div className="w-full px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6 space-y-3">
             <input
               type="text"
               placeholder="Name"
@@ -118,6 +124,7 @@ export default function ApologiesPage() {
                 </p>
               ) : null;
             })()}
+
             <select
               value={meetingId ?? ''}
               onChange={(e) => setMeetingId(e.target.value || null)}
@@ -135,13 +142,15 @@ export default function ApologiesPage() {
               ))}
             </select>
 
-            <button
-              onClick={addApology}
-              disabled={loading}
-              className="rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {loading ? 'Adding…' : 'Add apology'}
-            </button>
+            <div className="flex justify-end">
+              <button
+                onClick={addApology}
+                disabled={loading}
+                className="rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {loading ? 'Adding…' : 'Add apology'}
+              </button>
+            </div>
           </div>
         </section>
 

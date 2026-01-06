@@ -2,17 +2,72 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 
-type Item = { label: string; amount: string };
+type Item = {
+  dateRange?: string; // now a single month (e.g. "March 2025")
+  moneyIn?: string;
+  moneyOut?: string;
+};
+
+type RegularPayment = {
+  description: string;
+  frequency: string;
+  amount: string;
+  notes: string;
+};
+
+type RegularIncome = {
+  description: string;
+  frequency: string;
+  amount: string;
+  notes: string;
+};
+
+type MoneyOwed = {
+  name: string;
+  amount: string;
+};
 
 export default function TreasuryPage() {
   const [reports, setReports] = useState<any[]>([]);
   const [meetings, setMeetings] = useState<any[]>([]);
-
   const [period, setPeriod] = useState('');
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
-  const [items, setItems] = useState<Item[]>([{ label: '', amount: '' }]);
-
+  const [items, setItems] = useState<Item[]>([
+    { dateRange: '', moneyIn: '', moneyOut: '' },
+  ]);
+  const [regularPayments, setRegularPayments] = useState<RegularPayment[]>([
+    { description: 'Gas', frequency: 'Monthly', amount: '300', notes: 'Monthly Readings' },
+    { description: 'Water', frequency: 'Monthly', amount: '580', notes: 'Catch Up Payments' },
+    { description: 'BT Group (Phone)', frequency: 'Monthly TC', amount: '99', notes: '' },
+    { description: 'BT Group (Broadband)', frequency: 'Monthly TC', amount: '246', notes: '' },
+    { description: '3 Mobile', frequency: 'Monthly TC', amount: '30', notes: 'Steward Mobile' },
+    { description: 'Bottom Line', frequency: 'Monthly', amount: '85', notes: 'On Average' },
+    { description: 'Sky TV', frequency: 'Monthly TC', amount: '450', notes: '' },
+    { description: 'Coaching Staff', frequency: 'Monthly', amount: '1353', notes: '' },
+    { description: 'Laundry', frequency: 'Monthly', amount: '650', notes: 'Average over the year' },
+    { description: 'DK Services', frequency: 'Monthly TC', amount: '104', notes: 'Pot Washers' },
+    { description: 'FDMS', frequency: 'Monthly TC', amount: '520', notes: 'Varies on the amount taken' },
+    { description: 'Mark Bates', frequency: 'Monthly', amount: '140', notes: 'Average' },
+    { description: 'Physio', frequency: 'Monthly', amount: '320', notes: '' },
+    { description: 'Concept Hygiene', frequency: 'Monthly', amount: '270', notes: '' },
+    { description: 'Aldermore Bank PLC', frequency: 'Monthly TC', amount: '255.60', notes: 'Club Control' },
+    { description: 'Biffa Waste', frequency: 'Monthly TC', amount: '557', notes: '' },
+    { description: 'HMRC', frequency: 'Monthly', amount: '355', notes: 'PAYE for RM (Increased)' },
+    { description: 'Club Insure', frequency: 'Monthly', amount: '858.33', notes: '' },
+    { description: 'Coporate Asset Sols', frequency: 'Monthly TC', amount: '400.80', notes: '' },
+  ]);
+  const [regularIncomes, setRegularIncomes] = useState<RegularIncome[]>([
+    { description: 'Road Riders', frequency: 'Monthly', amount: '450', notes: '' },
+    { description: 'LoveAdmin', frequency: 'Monthly', amount: '4800', notes: '' },
+    { description: 'BottomLine', frequency: 'Monthly', amount: '800', notes: '' },
+    { description: 'Aldwinians TC', frequency: 'Monthly', amount: '1000', notes: '' },
+  ]);
+  const [moniesOwed, setMoniesOwed] = useState<MoneyOwed[]>([
+    { name: 'TGL Solutions', amount: '2500' },
+    { name: 'Smirfit Sponsorship', amount: '1000' },
+    { name: '6 Nations Tickets', amount: '2280' },
+  ]);
   const [loading, setLoading] = useState(false);
 
   const loadData = async () => {
@@ -27,10 +82,12 @@ export default function TreasuryPage() {
 
     if (data) setReports(data);
 
+    // only fetch meetings that are not yet linked OR (if you prefer) that exist at all.
+    // Here: fetch meetings in the future or with no linked report yet.
     const { data: meetingsData } = await supabase
       .from('meetings')
       .select('id, meeting_date')
-      .order('meeting_date', { ascending: false });
+      .order('meeting_date', { ascending: true });
 
     if (meetingsData) setMeetings(meetingsData);
   };
@@ -40,12 +97,79 @@ export default function TreasuryPage() {
   }, []);
 
   const addRow = () =>
-    setItems([...items, { label: '', amount: '' }]);
+    setItems([
+      ...items,
+      { dateRange: '', moneyIn: '', moneyOut: '' },
+    ]);
 
   const updateRow = (i: number, key: keyof Item, value: string) => {
     const copy = [...items];
     copy[i][key] = value;
+    if (key === 'dateRange' && value) {
+      const [year, month] = value.split('-');
+      const d = new Date(Number(year), Number(month) - 1, 1);
+      copy[i].dateRange = d.toLocaleDateString('en-GB', {
+        month: 'long',
+        year: 'numeric',
+      });
+    }
     setItems(copy);
+  };
+
+  const addRegularPaymentRow = () =>
+    setRegularPayments([
+      ...regularPayments,
+      { description: '', frequency: '', amount: '', notes: '' },
+    ]);
+
+  const updateRegularPaymentRow = (
+    i: number,
+    key: keyof RegularPayment,
+    value: string,
+  ) => {
+    const copy = [...regularPayments];
+    copy[i][key] = value;
+    setRegularPayments(copy);
+  };
+
+  const addRegularIncomeRow = () =>
+    setRegularIncomes([
+      ...regularIncomes,
+      { description: '', frequency: '', amount: '', notes: '' },
+    ]);
+
+  const updateRegularIncomeRow = (
+    i: number,
+    key: keyof RegularIncome,
+    value: string,
+  ) => {
+    const copy = [...regularIncomes];
+    copy[i][key] = value;
+    setRegularIncomes(copy);
+  };
+
+  const addMoneyOwedRow = () =>
+    setMoniesOwed([
+      ...moniesOwed,
+      { name: '', amount: '' },
+    ]);
+
+  const updateMoneyOwedRow = (i: number, key: keyof MoneyOwed, value: string) => {
+    const copy = [...moniesOwed];
+    copy[i][key] = value;
+    setMoniesOwed(copy);
+  };
+
+  const removeMoneyOwedRow = (index: number) => {
+    setMoniesOwed((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeRegularIncomeRow = (index: number) => {
+    setRegularIncomes((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeRegularPaymentRow = (index: number) => {
+    setRegularPayments((prev) => prev.filter((_, i) => i !== index));
   };
 
   const saveReport = async () => {
@@ -58,37 +182,113 @@ export default function TreasuryPage() {
       .insert({
         reporting_period: period,
         meeting_id: meetingId,
-        notes
+        notes,
       })
       .select()
       .single();
 
     if (report) {
       const rows = items
-        .filter(i => i.label && i.amount)
-        .map(i => ({
+        .filter(
+          (i) =>
+            (i.moneyIn && Number(i.moneyIn)) ||
+            (i.moneyOut && Number(i.moneyOut))
+        )
+        .map((i, idx) => {
+          const moneyIn = Number(i.moneyIn || '0');
+          const moneyOut = Number(i.moneyOut || '0');
+          const diff = moneyIn - moneyOut;
+          const baseLabel = i.dateRange || `Entry ${idx + 1}`;
+          return {
+            report_id: report.id,
+            label: baseLabel,
+            amount: diff,
+          };
+        });
+
+      const regularRows = regularPayments
+        .filter((rp) => rp.description && rp.amount)
+        .map((rp) => ({
           report_id: report.id,
-          label: i.label,
-          amount: Number(i.amount)
+          label: `Regular: ${rp.description} (${rp.frequency}${
+            rp.notes ? ` – ${rp.notes}` : ''
+          })`,
+          amount: Number(rp.amount || '0'),
         }));
 
-      if (rows.length) {
-        await supabase.from('treasury_report_items').insert(rows);
+      const regularIncomeRows = regularIncomes
+        .filter((ri) => ri.description && ri.amount)
+        .map((ri) => ({
+          report_id: report.id,
+          label: `Regular income: ${ri.description} (${ri.frequency}${
+            ri.notes ? ` – ${ri.notes}` : ''
+          })`,
+          amount: Number(ri.amount || '0'),
+        }));
+
+      const moniesOwedRows = moniesOwed
+        .filter((m) => m.name && m.amount)
+        .map((m) => ({
+          report_id: report.id,
+          label: `Monies owed: ${m.name}`,
+          amount: -Number(m.amount || '0'), // negative because this is owed
+        }));
+
+      const allRows = [
+        ...rows,
+        ...regularRows,
+        ...regularIncomeRows,
+        ...moniesOwedRows,
+      ];
+
+      if (allRows.length) {
+        await supabase.from('treasury_report_items').insert(allRows);
       }
     }
 
     setPeriod('');
     setMeetingId(null);
     setNotes('');
-    setItems([{ label: '', amount: '' }]);
+    setItems([{ dateRange: '', moneyIn: '', moneyOut: '' }]);
+    setRegularPayments([
+      { description: '', frequency: '', amount: '', notes: '' },
+    ]);
+    setRegularIncomes([
+      { description: '', frequency: '', amount: '', notes: '' },
+    ]);
+    setMoniesOwed([
+      { name: '', amount: '' },
+    ]);
     setLoading(false);
 
     loadData();
   };
 
+  // helper to sort for UX without mutating state
+  const getSortedRegularPayments = () => {
+    return [...regularPayments].sort((a, b) => {
+      const fa = a.frequency.trim().toLowerCase();
+      const fb = b.frequency.trim().toLowerCase();
+
+      const rank = (f: string) => {
+        if (f.startsWith('monthly') && !f.includes('tc')) return 0; // Monthly first
+        if (f.includes('monthly tc')) return 1;                      // then Monthly TC
+        return 2;                                                    // then everything else
+      };
+
+      const ra = rank(fa);
+      const rb = rank(fb);
+      if (ra !== rb) return ra - rb;
+
+      // within same group, sort alphabetically by description
+      return a.description.localeCompare(b.description);
+    });
+  };
+
   return (
-    <main className="min-h-screen">
-      <div className="mx-auto max-w-5xl px-6 py-10">
+    <main className="min-h-screen bg-zinc-50">
+      {/* widen content area more to reduce cramping */}
+      <div className="mx-auto w-full max-w-6xl sm:max-w-7xl lg:max-w-[1200px] px-2 sm:px-4 lg:px-6 py-6 sm:py-8 lg:py-10">
         {/* Header */}
         <header className="mb-8">
           <Link
@@ -102,79 +302,485 @@ export default function TreasuryPage() {
             Treasury Report
           </h1>
           <p className="mt-1 text-zinc-600">
-            Financial overview for the board
+            Financial overview for Aldwinians RUFC - Monthly Update
           </p>
         </header>
 
-        {/* New report */}
-        <section className="player-card mb-10">
-          <h2 className="pc-name mb-4">Add treasury report</h2>
+        {/* New report – flat, full-width section */}
+        <section className="mb-10 w-full rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
+          <div className="border-b border-zinc-200 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
+            <h2 className="text-xl font-semibold text-zinc-900">
+              Add treasury report
+            </h2>
+          </div>
 
-          <div className="space-y-4">
-            <input
-              type="text"
-              placeholder="Reporting period (e.g. March 2025)"
-              value={period}
-              onChange={(e) => setPeriod(e.target.value)}
-              className="w-full rounded-md border px-3 py-2"
-            />
+          {/* Any new inputs/tables/buttons should be added inside this padded block */}
+          <div className="w-full px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6 space-y-6">
+            {/* Period + meeting row */}
+            <div className="grid gap-4 lg:grid-cols-2">
+              <input
+                type="text"
+                placeholder="Reporting period (e.g. March 2025)"
+                value={period}
+                onChange={(e) => setPeriod(e.target.value)}
+                className="w-full rounded-md border px-3 py-2"
+              />
 
-            <select
-              value={meetingId ?? ''}
-              onChange={(e) => setMeetingId(e.target.value || null)}
-              className="w-full rounded-md border px-3 py-2"
-            >
-              <option value="">Link to meeting (optional)</option>
-              {meetings.map(m => (
-                <option key={m.id} value={m.id}>
-                  {new Date(m.meeting_date).toLocaleDateString()}
-                </option>
-              ))}
-            </select>
+              <select
+                value={meetingId ?? ''}
+                onChange={(e) => setMeetingId(e.target.value || null)}
+                className="w-full rounded-md border px-3 py-2"
+              >
+                <option value="">Link to meeting (optional)</option>
+                {meetings.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {new Date(m.meeting_date).toLocaleDateString('en-GB', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                    })}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-            {/* Table */}
-            <table className="w-full border text-sm">
-              <thead className="bg-zinc-100">
-                <tr>
-                  <th className="border px-2 py-1 text-left">Item</th>
-                  <th className="border px-2 py-1 text-right">Amount (£)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((row, i) => (
-                  <tr key={i}>
-                    <td className="border px-2 py-1">
-                      <input
-                        value={row.label}
-                        onChange={(e) =>
-                          updateRow(i, 'label', e.target.value)
-                        }
-                        className="w-full"
-                      />
+            {/* Month / Money table */}
+            <div>
+              <table className="w-full text-sm border table-fixed">
+                <colgroup>
+                  <col className="w-[30%]" />
+                  <col className="w-[20%]" />
+                  <col className="w-[20%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[15%]" />
+                </colgroup>
+                <thead className="bg-zinc-50">
+                  <tr>
+                    <th className="border px-2 py-1 text-left">Month</th>
+                    <th className="border px-2 py-1 text-right">Money In (£)</th>
+                    <th className="border px-2 py-1 text-right">Money Out (£)</th>
+                    <th className="border px-2 py-1 text-right">Difference</th>
+                    <th className="border px-2 py-1 text-right">Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((row, idx) => {
+                    const moneyIn = Number(row.moneyIn || '0');
+                    const moneyOut = Number(row.moneyOut || '0');
+                    const diff = moneyIn - moneyOut;
+
+                    const balance = items
+                      .slice(0, idx + 1)
+                      .reduce((acc, r) => {
+                        const mi = Number(r.moneyIn || '0');
+                        const mo = Number(r.moneyOut || '0');
+                        return acc + (mi - mo);
+                      }, 0);
+
+                    return (
+                      <tr key={idx}>
+                        <td className="border px-2 py-1 align-top">
+                          <input
+                            type="month"
+                            onChange={(e) =>
+                              updateRow(idx, 'dateRange', e.target.value)
+                            }
+                            className="w-full rounded border px-2 py-1"
+                          />
+                          {row.dateRange && (
+                            <p className="mt-1 text-xs text-zinc-500">
+                              {row.dateRange}
+                            </p>
+                          )}
+                        </td>
+                        <td className="border px-2 py-1 text-right align-top">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={row.moneyIn || ''}
+                            onChange={(e) =>
+                              updateRow(idx, 'moneyIn', e.target.value)
+                            }
+                            className="w-full rounded border px-2 py-1 text-right"
+                          />
+                        </td>
+                        <td className="border px-2 py-1 text-right align-top">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={row.moneyOut || ''}
+                            onChange={(e) =>
+                              updateRow(idx, 'moneyOut', e.target.value)
+                            }
+                            className="w-full rounded border px-2 py-1 text-right"
+                          />
+                        </td>
+                        <td className="border px-2 py-1 text-right align-top">
+                          £{diff.toFixed(2)}
+                        </td>
+                        <td className="border px-2 py-1 text-right align-top">
+                          £{balance.toFixed(2)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="font-semibold bg-zinc-50">
+                    <td className="border px-2 py-1" colSpan={2}>
+                      Totals
                     </td>
-                    <td className="border px-2 py-1">
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={row.amount}
-                        onChange={(e) =>
-                          updateRow(i, 'amount', e.target.value)
-                        }
-                        className="w-full text-right"
-                      />
+                    <td className="border px-2 py-1 text-right">
+                      £
+                      {items
+                        .reduce(
+                          (sum, r) => sum + Number(r.moneyIn || '0'),
+                          0
+                        )
+                        .toFixed(2)}
+                    </td>
+                    <td className="border px-2 py-1 text-right">
+                      £
+                      {items
+                        .reduce(
+                          (sum, r) => sum + Number(r.moneyOut || '0'),
+                          0
+                        )
+                        .toFixed(2)}
+                    </td>
+                    <td className="border px-2 py-1 text-right">
+                      £
+                      {items
+                        .reduce((sum, r) => {
+                          const mi = Number(r.moneyIn || '0');
+                          const mo = Number(r.moneyOut || '0');
+                          return sum + (mi - mo);
+                        }, 0)
+                        .toFixed(2)}
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </tfoot>
+              </table>
+            </div>
 
-            <button
-              onClick={addRow}
-              className="text-sm text-blue-600 hover:underline"
-            >
-              + Add row
-            </button>
+            {/* Regular income table */}
+            <div className="mt-4">
+              <h3 className="mb-2 text-sm font-semibold text-zinc-800">
+                Regular income
+              </h3>
+              <table className="w-full text-sm border">
+                <thead className="bg-zinc-50">
+                  <tr>
+                    <th className="border px-2 py-1 text-left">Regular Payments</th>
+                    <th className="border px-2 py-1 text-left">Frequency</th>
+                    <th className="border px-2 py-1 text-right">Amount (£)</th>
+                    <th className="border px-2 py-1 text-left">Notes</th>
+                    <th className="border px-2 py-1 text-center w-20">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {regularIncomes.map((ri, idx) => (
+                    <tr key={idx} className="align-top">
+                      <td className="border px-2 py-1 align-top">
+                        <input
+                          type="text"
+                          value={ri.description}
+                          onChange={(e) =>
+                            updateRegularIncomeRow(idx, 'description', e.target.value)
+                          }
+                          className="w-full rounded border px-2 py-1"
+                          placeholder="e.g. Membership fees"
+                        />
+                      </td>
+                      <td className="border px-2 py-1 align-top">
+                        <input
+                          type="text"
+                          value={ri.frequency}
+                          onChange={(e) =>
+                            updateRegularIncomeRow(idx, 'frequency', e.target.value)
+                          }
+                          className="w-full rounded border px-2 py-1"
+                          placeholder="e.g. Monthly"
+                        />
+                      </td>
+                      <td className="border px-2 py-1 text-right align-top">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={ri.amount}
+                          onChange={(e) =>
+                            updateRegularIncomeRow(idx, 'amount', e.target.value)
+                          }
+                          className="w-full rounded border px-2 py-1 text-right"
+                          placeholder="0.00"
+                        />
+                      </td>
+                      <td className="border px-2 py-1 align-top">
+                        <textarea
+                          value={ri.notes}
+                          onChange={(e) =>
+                            updateRegularIncomeRow(idx, 'notes', e.target.value)
+                          }
+                          rows={2}
+                          className="w-full rounded border px-2 py-1 resize-y"
+                          placeholder="Optional notes"
+                        />
+                      </td>
+                      <td className="border px-2 py-1 text-center align-middle">
+                        <button
+                          type="button"
+                          onClick={() => removeRegularIncomeRow(idx)}
+                          className="rounded border px-2 py-0.5 text-xs text-red-600"
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="mt-2 flex items-center justify-between text-sm">
+                <button
+                  type="button"
+                  onClick={addRegularIncomeRow}
+                  className="rounded-md border px-3 py-1 text-sm"
+                >
+                  + Add regular income
+                </button>
+                <span className="font-semibold">
+                  Total regular income:{' '}
+                  £
+                  {regularIncomes
+                    .reduce(
+                      (sum, ri) => sum + Number(ri.amount || '0'),
+                      0,
+                    )
+                    .toFixed(2)}
+                </span>
+              </div>
+            </div>
 
+            {/* Monies owed table */}
+            <div className="mt-4">
+              <h3 className="mb-2 text-sm font-semibold text-zinc-800">
+                Monies owed
+              </h3>
+              <table className="w-full text-sm border">
+                <thead className="bg-zinc-50">
+                  <tr>
+                    <th className="border px-2 py-1 text-left">Name</th>
+                    <th className="border px-2 py-1 text-right">Amount (£)</th>
+                    <th className="border px-2 py-1 text-center w-20">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {moniesOwed.map((m, idx) => (
+                    <tr key={idx}>
+                      <td className="border px-2 py-1">
+                        <input
+                          type="text"
+                          value={m.name}
+                          onChange={(e) =>
+                            updateMoneyOwedRow(idx, 'name', e.target.value)
+                          }
+                          className="w-full rounded border px-2 py-1"
+                          placeholder="e.g. Player subs outstanding"
+                        />
+                      </td>
+                      <td className="border px-2 py-1 text-right">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={m.amount}
+                          onChange={(e) =>
+                            updateMoneyOwedRow(idx, 'amount', e.target.value)
+                          }
+                          className="w-full rounded border px-2 py-1 text-right"
+                          placeholder="0.00"
+                        />
+                      </td>
+                      <td className="border px-2 py-1 text-center align-middle">
+                        <button
+                          type="button"
+                          onClick={() => removeMoneyOwedRow(idx)}
+                          className="rounded border px-2 py-0.5 text-xs text-red-600"
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="mt-2 flex items-center justify-between text-sm">
+                <button
+                  type="button"
+                  onClick={addMoneyOwedRow}
+                  className="rounded-md border px-3 py-1 text-sm"
+                >
+                  + Add monies owed
+                </button>
+                <span className="font-semibold">
+                  Total owed:{' '}
+                  £
+                  {moniesOwed
+                    .reduce(
+                      (sum, m) => sum + Number(m.amount || '0'),
+                      0,
+                    )
+                    .toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            {/* Regular payments table */}
+            <div className="mt-4">
+              <h3 className="mb-2 text-sm font-semibold text-zinc-800">
+                Regular payments
+              </h3>
+              <table className="w-full text-sm border">
+                <thead className="bg-zinc-50">
+                  <tr>
+                    <th className="border px-2 py-1 text-left">Description</th>
+                    <th className="border px-2 py-1 text-left">Frequency</th>
+                    <th className="border px-2 py-1 text-right">Amount (£)</th>
+                    <th className="border px-2 py-1 text-left">Notes</th>
+                    <th className="border px-2 py-1 text-center w-20">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {getSortedRegularPayments().map((rp, idx) => (
+                    <tr key={idx} className="align-top">
+                      <td className="border px-2 py-1 align-top">
+                        <input
+                          type="text"
+                          value={rp.description}
+                          onChange={(e) =>
+                            updateRegularPaymentRow(
+                              idx,
+                              'description',
+                              e.target.value,
+                            )
+                          }
+                          className="w-full rounded border px-2 py-1"
+                          placeholder="e.g. Pitch hire"
+                        />
+                      </td>
+                      <td className="border px-2 py-1 align-top">
+                        <input
+                          type="text"
+                          value={rp.frequency}
+                          onChange={(e) =>
+                            updateRegularPaymentRow(
+                              idx,
+                              'frequency',
+                              e.target.value,
+                            )
+                          }
+                          className="w-full rounded border px-2 py-1"
+                          placeholder="e.g. Monthly"
+                        />
+                      </td>
+                      <td className="border px-2 py-1 text-right align-top">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={rp.amount}
+                          onChange={(e) =>
+                            updateRegularPaymentRow(
+                              idx,
+                              'amount',
+                              e.target.value,
+                            )
+                          }
+                          className="w-full rounded border px-2 py-1 text-right"
+                          placeholder="0.00"
+                        />
+                      </td>
+                      <td className="border px-2 py-1 align-top">
+                        <textarea
+                          value={rp.notes}
+                          onChange={(e) =>
+                            updateRegularPaymentRow(
+                              idx,
+                              'notes',
+                              e.target.value,
+                            )
+                          }
+                          rows={3}
+                          className="w-full rounded border px-2 py-1 resize-y"
+                          placeholder="Optional notes (will be included in report label)"
+                        />
+                      </td>
+                      <td className="border px-2 py-1 text-center align-middle">
+                        <button
+                          type="button"
+                          onClick={() => removeRegularPaymentRow(idx)}
+                          className="rounded border px-2 py-0.5 text-xs text-red-600"
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Grouped totals */}
+              <div className="mt-3 text-sm">
+                {(() => {
+                  const monthlyTotal = regularPayments
+                    .filter(
+                      (rp) =>
+                        rp.frequency.trim().toLowerCase().startsWith('monthly') &&
+                        !rp.frequency.toLowerCase().includes('tc'),
+                    )
+                    .reduce((sum, rp) => sum + Number(rp.amount || '0'), 0);
+
+                  const monthlyTcTotal = regularPayments
+                    .filter((rp) =>
+                      rp.frequency.trim().toLowerCase().includes('monthly tc'),
+                    )
+                    .reduce((sum, rp) => sum + Number(rp.amount || '0'), 0);
+
+                  const combinedTotal = monthlyTotal + monthlyTcTotal;
+
+                  return (
+                    <div className="space-y-1">
+                      <p>
+                        <span className="font-semibold">Monthly total:</span>{' '}
+                        £{monthlyTotal.toFixed(2)}
+                      </p>
+                      <p>
+                        <span className="font-semibold">Monthly TC total:</span>{' '}
+                        £{monthlyTcTotal.toFixed(2)}
+                      </p>
+                      <p>
+                        <span className="font-semibold">
+                          Combined regular payments total:
+                        </span>{' '}
+                        £{combinedTotal.toFixed(2)}
+                      </p>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <button
+                type="button"
+                onClick={addRegularPaymentRow}
+                className="mt-3 rounded-md border px-3 py-1 text-sm"
+              >
+                + Add regular payment
+              </button>
+            </div>
+
+            {/* Notes + save */}
             <textarea
               placeholder="Additional commentary / updates"
               value={notes}
@@ -183,26 +789,32 @@ export default function TreasuryPage() {
               className="w-full rounded-md border px-3 py-2"
             />
 
-            <button
-              onClick={saveReport}
-              disabled={loading}
-              className="rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {loading ? 'Saving…' : 'Save report'}
-            </button>
+            <div className="flex justify-end">
+              <button
+                onClick={saveReport}
+                disabled={loading}
+                className="rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {loading ? 'Saving…' : 'Save report'}
+              </button>
+            </div>
           </div>
         </section>
 
         {/* Reports */}
         <section className="space-y-6">
-          {reports.map(r => (
+          {reports.map((r) => (
             <div key={r.id} className="player-card">
               <h3 className="pc-name text-lg">{r.reporting_period}</h3>
 
               {r.meetings?.meeting_date && (
                 <p className="pc-meta">
                   Meeting:{' '}
-                  {new Date(r.meetings.meeting_date).toLocaleDateString()}
+                  {new Date(r.meetings.meeting_date).toLocaleDateString('en-GB', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                  })}
                 </p>
               )}
 

@@ -62,7 +62,8 @@ export default function ConflictsPage() {
 
   return (
     <main className="min-h-screen">
-      <div className="mx-auto max-w-5xl px-6 py-10">
+      {/* expand width similar to treasury/minutes pages */}
+      <div className="mx-auto w-full max-w-6xl sm:max-w-7xl lg:max-w-[1200px] px-2 sm:px-4 lg:px-6 py-6 sm:py-8 lg:py-10">
         {/* Header */}
         <header className="mb-8">
           <Link
@@ -80,11 +81,17 @@ export default function ConflictsPage() {
           </p>
         </header>
 
-        {/* Add conflict */}
-        <section className="player-card mb-10">
-          <h2 className="pc-name mb-4">Declare a conflict</h2>
+        {/* Add conflict – full-width, lightly styled section */}
+        <section className="mb-10 w-full rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
+          <div className="border-b border-zinc-200 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
+            {/* keep pc-name for consistent red styling */}
+            <h2 className="pc-name text-xl font-semibold">
+              Declare a conflict
+            </h2>
+          </div>
 
-          <div className="space-y-4">
+          {/* Any new controls should be added inside this padded, full-width area */}
+          <div className="w-full px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6 space-y-4">
             <input
               type="text"
               placeholder="Name"
@@ -137,13 +144,15 @@ export default function ConflictsPage() {
               className="w-full rounded-md border border-zinc-300 px-3 py-2"
             />
 
-            <button
-              onClick={addConflict}
-              disabled={loading}
-              className="rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {loading ? 'Saving…' : 'Record conflict'}
-            </button>
+            <div className="flex justify-end">
+              <button
+                onClick={addConflict}
+                disabled={loading}
+                className="rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {loading ? 'Saving…' : 'Record conflict'}
+              </button>
+            </div>
           </div>
         </section>
 
