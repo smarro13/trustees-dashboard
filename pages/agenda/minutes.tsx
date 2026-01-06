@@ -68,7 +68,8 @@ export default function MinutesPage() {
 
   return (
     <main className="min-h-screen">
-      <div className="mx-auto max-w-5xl px-6 py-10">
+      {/* expand width similar to treasury page */}
+      <div className="mx-auto w-full max-w-6xl sm:max-w-7xl lg:max-w-[1200px] px-2 sm:px-4 lg:px-6 py-6 sm:py-8 lg:py-10">
         <header className="mb-8">
           <Link
             href="/"
@@ -85,11 +86,16 @@ export default function MinutesPage() {
           </p>
         </header>
 
-        {/* Upload */}
-        <section className="player-card mb-10">
-          <h2 className="pc-name mb-4">Upload minutes</h2>
+        {/* Upload – full-width, lightly styled section instead of player-card */}
+        <section className="mb-10 w-full rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
+          <div className="border-b border-zinc-200 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
+            {/* keep pc-name so it inherits your red styling from globals */}
+            <h2 className="pc-name text-xl font-semibold">
+              Upload minutes
+            </h2>
+          </div>
 
-          <div className="space-y-4">
+          <div className="w-full px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6 space-y-4">
             <input
               type="text"
               placeholder="e.g. Aldwinians Management Meeting - 25th December 2025"
@@ -122,17 +128,19 @@ export default function MinutesPage() {
               className="w-full"
             />
 
-            <button
-              onClick={uploadMinutes}
-              disabled={loading}
-              className="rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {loading ? 'Uploading…' : 'Upload minutes'}
-            </button>
+            <div className="flex justify-end">
+              <button
+                onClick={uploadMinutes}
+                disabled={loading}
+                className="rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {loading ? 'Uploading…' : 'Upload minutes'}
+              </button>
+            </div>
           </div>
         </section>
 
-        {/* List */}
+        {/* List – keep existing player-card styling for items */}
         <section className="space-y-4">
           {minutes.length === 0 ? (
             <p className="text-zinc-500">No minutes uploaded yet.</p>

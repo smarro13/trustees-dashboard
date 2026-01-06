@@ -47,7 +47,7 @@ export default function CorrespondencePage() {
       sender: sender || null,
       summary,
       received_date: receivedDate || null,
-      meeting_id: meetingId
+      meeting_id: meetingId,
     });
 
     setSubject('');
