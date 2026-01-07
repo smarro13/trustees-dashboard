@@ -29,7 +29,7 @@ export default function AgendaMenu() {
         {[
           { label: 'Apologies', href: '/agenda/apologies' },
           { label: 'Previous Minutes', href: '/agenda/minutes' },
-          { label: 'Action Tracker', href: '/actions' },
+          { label: 'Action Tracker', href: '/agenda/actions' },
           { label: 'Correspondence', href: '/agenda/correspondence' },
           { label: 'Safeguarding', href: '/agenda/safeguarding' },
           { label: 'Conflicts of Interest', href: '/agenda/conflicts' },

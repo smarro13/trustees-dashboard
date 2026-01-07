@@ -7,39 +7,64 @@ import AgendaMenu from '../components/AgendaMenu';
 export default function LandingPage() {
   const [meetings, setMeetings] = useState<any[]>([]);
   const [actions, setActions] = useState<any[]>([]);
+  const [dueActions, setDueActions] = useState<any[]>([]);
 
   const updateActionStatus = async (actionId: string, status: string) => {
-    await supabase
+    await supabase.from('actions').update({ status }).eq('id', actionId);
+  };
+
+  // fetch meetings
+  const fetchMeetings = async () => {
+    const { data } = await supabase
+      .from('meetings')
+      .select('*')
+      .order('meeting_date', { ascending: true })
+      .limit(5);
+    if (data) setMeetings(data);
+  };
+
+  // fetch dashboard actions (from `actions` table)
+  const fetchActions = async () => {
+    const { data } = await supabase
       .from('actions')
-      .update({ status })
-      .eq('id', actionId);
+      .select('*')
+      .order('due_date', { ascending: true })
+      .limit(5);
+    if (data) setActions(data);
+  };
+
+  // fetch upcoming (non-completed) actions from action_items
+  const fetchDueActions = async () => {
+    const { data, error } = await supabase
+      .from('action_items')
+      .select(`
+        id,
+        title,
+        owner,
+        due_date,
+        status,
+        meetings ( meeting_date )
+      `)
+      .neq('status', 'Completed')
+      .order('due_date', { ascending: true, nullsLast: true })
+      .limit(6);
+
+    if (error) {
+      console.error('Failed to load actions', error);
+      return;
+    }
+
+    setDueActions(data || []);
   };
 
   useEffect(() => {
     let meetingsChannel: RealtimeChannel;
     let actionsChannel: RealtimeChannel;
 
-    const loadMeetings = async () => {
-      const { data } = await supabase
-        .from('meetings')
-        .select('*')
-        .order('meeting_date', { ascending: true })
-        .limit(5);
-      if (data) setMeetings(data);
-    };
-
-    const loadActions = async () => {
-      const { data } = await supabase
-        .from('actions')
-        .select('*')
-        .order('due_date', { ascending: true })
-        .limit(5);
-      if (data) setActions(data);
-    };
-
-    // Initial load
-    loadMeetings();
-    loadActions();
+    // initial load
+    fetchMeetings();
+    fetchActions();
+    fetchDueActions();
 
     // Realtime: Meetings
     meetingsChannel = supabase
@@ -47,7 +72,7 @@ export default function LandingPage() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'meetings' },
-        () => loadMeetings()
+        () => fetchMeetings(),
       )
       .subscribe();
 
@@ -57,7 +82,7 @@ export default function LandingPage() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'actions' },
-        () => loadActions()
+        () => fetchActions(),
       )
       .subscribe();
 
@@ -66,6 +91,10 @@ export default function LandingPage() {
       if (actionsChannel) supabase.removeChannel(actionsChannel);
     };
   }, []);
+
+  // split dueActions: with due date vs no due date
+  const actionsWithDue = dueActions.filter((a) => a.due_date);
+  const actionsWithoutDue = dueActions.filter((a) => !a.due_date);
 
   return (
     <main className="min-h-screen">
@@ -159,131 +188,142 @@ export default function LandingPage() {
               )}
             </section>
 
-            {/* Upcoming Actions */}
+            {/* Upcoming Actions – show dated actions in a table */}
             <section>
               <div className="mb-5 flex items-center justify-between">
                 <h2 className="text-2xl font-semibold text-zinc-900">Upcoming Actions</h2>
                 <Link
-                  href="/actions"
+                  href="/agenda/actions"
                   className="text-sm font-medium text-blue-600 hover:text-blue-700"
                 >
                   View all
                 </Link>
               </div>
 
-              {actions.length === 0 ? (
+              {actionsWithDue.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-zinc-200 bg-white p-6 text-zinc-500">
-                  No pending actions.
+                  No dated actions.
                 </p>
               ) : (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                  {actions.map((a) => {
-                    const status = String(a.status ?? '').toLowerCase();
-                    const badgeClasses =
-                      status === 'not_started'
-                        ? 'bg-red-200 text-red-800'
-                        : status === 'in_progress'
-                        ? 'bg-yellow-200 text-yellow-800'
-                        : 'bg-green-200 text-green-800';
-                    return (
-                      <div key={a.id} className="player-card transition-base hover:-translate-y-0.5 hover:shadow-md">
-                        <div className="pc-wrap">
-                          <div className="pc-image">
-                            <div className="inline-flex h-16 w-16 items-center justify-center rounded-lg bg-zinc-100 text-2xl">
-                              📋
-                            </div>
-                          </div>
+                <div className="overflow-x-auto rounded-md border border-zinc-200 bg-white">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-zinc-50">
+                      <tr>
+                        <th className="border-b border-zinc-200 px-3 py-2 text-left">Title</th>
+                        <th className="border-b border-zinc-200 px-3 py-2 text-left">Owner</th>
+                        <th className="border-b border-zinc-200 px-3 py-2 text-left">Due</th>
+                        <th className="border-b border-zinc-200 px-3 py-2 text-left">Meeting</th>
+                        <th className="border-b border-zinc-200 px-3 py-2 text-right">Open</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {actionsWithDue.map((a) => {
+                        const due = a.due_date ? new Date(a.due_date) : null;
+                        const isOverdue =
+                          due && due < new Date() && a.status !== 'Completed';
 
-                          <div className="pc-mobile-header">
-                            <h3 className="pc-name">{a.title}</h3>
-                            <p className="pc-sponsor-text">
-                              Assigned to: {a.assigned_to || 'Unassigned'} • Due:{' '}
-                              {a.due_date
-                                ? new Date(a.due_date).toLocaleDateString('en-GB', {
-                                    day: '2-digit',
-                                    month: '2-digit',
-                                    year: 'numeric',
-                                  })
-                                : 'N/A'}
-                            </p>
-                          </div>
-
-                          <div className="pc-details">
-                            <h3 className="pc-name">{a.title}</h3>
-                            <p className="pc-meta">
-                              Assigned to: {a.assigned_to || 'Unassigned'} | Due:{' '}
-                              {a.due_date
-                                ? new Date(a.due_date).toLocaleDateString('en-GB', {
-                                    day: '2-digit',
-                                    month: '2-digit',
-                                    year: 'numeric',
-                                  })
-                                : 'N/A'}
-                            </p>
-                            <div className="pc-tags flex gap-2">
-                              <button
-                                onClick={() => updateActionStatus(a.id, 'not_started')}
-                                className={`pc-tag ${
-                                  status === 'not_started'
-                                    ? 'bg-red-200 text-red-800'
-                                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-                                }`}
+                        return (
+                          <tr key={a.id} className="align-middle">
+                            <td className="border-b border-zinc-100 px-3 py-2 font-medium text-zinc-900">
+                              {a.title}
+                            </td>
+                            <td className="border-b border-zinc-100 px-3 py-2">
+                              {a.owner || '—'}
+                            </td>
+                            <td className="border-b border-zinc-100 px-3 py-2">
+                              {due ? (
+                                <span
+                                  className={
+                                    isOverdue ? 'text-red-600 font-semibold' : ''
+                                  }
+                                >
+                                  {due.toLocaleDateString('en-GB')}
+                                </span>
+                              ) : (
+                                '—'
+                              )}
+                            </td>
+                            <td className="border-b border-zinc-100 px-3 py-2 text-xs text-zinc-600">
+                              {a.meetings?.meeting_date
+                                ? new Date(
+                                    a.meetings.meeting_date,
+                                  ).toLocaleDateString('en-GB')
+                                : '—'}
+                            </td>
+                            <td className="border-b border-zinc-100 px-3 py-2 text-right">
+                              <Link
+                                href="/agenda/actions"
+                                className="text-sm text-blue-600 hover:underline"
                               >
-                                ▶ Not started
-                              </button>
+                                Open →
+                              </Link>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
 
-                              <button
-                                onClick={() => updateActionStatus(a.id, 'in_progress')}
-                                className={`pc-tag ${
-                                  status === 'in_progress'
-                                    ? 'bg-yellow-200 text-yellow-800'
-                                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-                                }`}
-                              >
-                                ⏳ In progress
-                              </button>
+            {/* Action Tracker – open actions with NO due date, also in a table */}
+            <section className="mb-12 mt-12">
+              <div className="mb-5 flex items-center justify-between">
+                <h2 className="text-2xl font-semibold text-zinc-900">
+                  Action Tracker
+                </h2>
+                <Link
+                  href="/agenda/actions"
+                  className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                >
+                  View all
+                </Link>
+              </div>
 
-                              <button
-                                onClick={() => updateActionStatus(a.id, 'done')}
-                                className={`pc-tag ${
-                                  status === 'done'
-                                    ? 'bg-green-200 text-green-800'
-                                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-                                }`}
-                              >
-                                ✅ Done
-                              </button>
-                            </div>
-                          </div>
-
-                          <details className="pc-dropdown">
-                            <summary>Details</summary>
-                            <p className="pc-meta">
-                              Assigned to: {a.assigned_to || 'Unassigned'} | Due:{' '}
-                              {a.due_date
-                                ? new Date(a.due_date).toLocaleDateString('en-GB', {
-                                    day: '2-digit',
-                                    month: '2-digit',
-                                    year: 'numeric',
-                                  })
-                                : 'N/A'}
-                            </p>
-                            <div className="pc-tags flex gap-2 mt-2">
-                              <button onClick={() => updateActionStatus(a.id, 'not_started')} className="pc-tag bg-red-100">
-                                ▶ Not started
-                              </button>
-                              <button onClick={() => updateActionStatus(a.id, 'in_progress')} className="pc-tag bg-yellow-100">
-                                ⏳ In progress
-                              </button>
-                              <button onClick={() => updateActionStatus(a.id, 'done')} className="pc-tag bg-green-100">
-                                ✅ Done
-                              </button>
-                            </div>
-                          </details>
-                        </div>
-                      </div>
-                    );
-                  })}
+              {actionsWithoutDue.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-zinc-200 bg-white p-6 text-zinc-500">
+                  No open undated actions 🎉
+                </p>
+              ) : (
+                <div className="overflow-x-auto rounded-md border border-zinc-200 bg-white">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-zinc-50">
+                      <tr>
+                        <th className="border-b border-zinc-200 px-3 py-2 text-left">Title</th>
+                        <th className="border-b border-zinc-200 px-3 py-2 text-left">Owner</th>
+                        <th className="border-b border-zinc-200 px-3 py-2 text-left">Meeting</th>
+                        <th className="border-b border-zinc-200 px-3 py-2 text-right">Open</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {actionsWithoutDue.map((a) => (
+                        <tr key={a.id} className="align-middle">
+                          <td className="border-b border-zinc-100 px-3 py-2 font-medium text-zinc-900">
+                            {a.title}
+                          </td>
+                          <td className="border-b border-zinc-100 px-3 py-2">
+                            {a.owner || '—'}
+                          </td>
+                          <td className="border-b border-zinc-100 px-3 py-2 text-xs text-zinc-600">
+                            {a.meetings?.meeting_date
+                              ? new Date(
+                                  a.meetings.meeting_date,
+                                ).toLocaleDateString('en-GB')
+                              : '—'}
+                          </td>
+                          <td className="border-b border-zinc-100 px-3 py-2 text-right">
+                            <Link
+                              href="/agenda/actions"
+                              className="text-sm text-blue-600 hover:underline"
+                            >
+                              Open →
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </section>
