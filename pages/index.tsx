@@ -6,12 +6,7 @@ import AgendaMenu from '../components/AgendaMenu';
 
 export default function LandingPage() {
   const [meetings, setMeetings] = useState<any[]>([]);
-  const [actions, setActions] = useState<any[]>([]);
   const [dueActions, setDueActions] = useState<any[]>([]);
-
-  const updateActionStatus = async (actionId: string, status: string) => {
-    await supabase.from('actions').update({ status }).eq('id', actionId);
-  };
 
   // fetch meetings
   const fetchMeetings = async () => {
@@ -21,16 +16,6 @@ export default function LandingPage() {
       .order('meeting_date', { ascending: true })
       .limit(5);
     if (data) setMeetings(data);
-  };
-
-  // fetch dashboard actions (from `actions` table)
-  const fetchActions = async () => {
-    const { data } = await supabase
-      .from('actions')
-      .select('*')
-      .order('due_date', { ascending: true })
-      .limit(5);
-    if (data) setActions(data);
   };
 
   // fetch upcoming (non-completed) actions from action_items
@@ -63,7 +48,6 @@ export default function LandingPage() {
 
     // initial load
     fetchMeetings();
-    fetchActions();
     fetchDueActions();
 
     // Realtime: Meetings
@@ -76,13 +60,13 @@ export default function LandingPage() {
       )
       .subscribe();
 
-    // Realtime: Actions
+    // Realtime: Actions -> now from action_items
     actionsChannel = supabase
-      .channel('actions-realtime')
+      .channel('action-items-realtime')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'actions' },
-        () => fetchActions(),
+        { event: '*', schema: 'public', table: 'action_items' },
+        () => fetchDueActions(),
       )
       .subscribe();
 
@@ -91,6 +75,13 @@ export default function LandingPage() {
       if (actionsChannel) supabase.removeChannel(actionsChannel);
     };
   }, []);
+
+  const updateActionStatus = async (actionId: string, status: string) => {
+    await supabase
+      .from('action_items')
+      .update({ status })
+      .eq('id', actionId);
+  };
 
   // split dueActions: with due date vs no due date
   const actionsWithDue = dueActions.filter((a) => a.due_date);

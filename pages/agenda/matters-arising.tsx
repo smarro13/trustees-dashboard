@@ -3,162 +3,125 @@ import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 
 export default function MattersArisingPage() {
-  const [items, setItems] = useState<any[]>([]);
-  const [nextMeeting, setNextMeeting] = useState<any | null>(null);
-
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-
-  const [loading, setLoading] = useState(false);
-
-  const loadData = async () => {
-    setLoading(true);
-
-    // Load future meetings – first one is "next meeting"
-    const { data: meetings } = await supabase
-      .from('meetings')
-      .select('id, meeting_date')
-      .gte('meeting_date', new Date().toISOString())
-      .order('meeting_date', { ascending: true })
-      .limit(1);
-
-    if (meetings && meetings.length > 0) {
-      setNextMeeting(meetings[0]);
-    } else {
-      setNextMeeting(null);
-    }
-
-    const { data } = await supabase
-      .from('matters_arising')
-      .select(`*, meetings ( meeting_date )`)
-      .order('created_at', { ascending: false });
-
-    if (data) setItems(data);
-
-    setLoading(false);
-  };
+  const [details, setDetails] = useState('');
+  const [raisedBy, setRaisedBy] = useState('');
+  const [addToActions, setAddToActions] = useState(false);
+  const [nextMeetingId, setNextMeetingId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadData();
+    const loadNextMeeting = async () => {
+      const { data } = await supabase
+        .from('meetings')
+        .select('id')
+        .gte('meeting_date', new Date().toISOString())
+        .order('meeting_date', { ascending: true })
+        .limit(1)
+        .single();
+
+      if (data) setNextMeetingId(data.id);
+    };
+
+    loadNextMeeting();
   }, []);
 
-  const saveItem = async () => {
+  const saveMatter = async () => {
     if (!title.trim()) return;
 
-    setLoading(true);
+    // 1️⃣ Save matter
+    const { data, error } = await supabase
+      .from('matters_arising')
+      .insert({
+        title,
+        details,
+        raised_by: raisedBy || null,
+        meeting_id: nextMeetingId,
+        add_to_actions: addToActions,
+      })
+      .select()
+      .single();
 
-    await supabase.from('matters_arising').insert({
-      title,
-      description: description || null,
-      meeting_id: nextMeeting?.id ?? null,
-    });
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    // 2️⃣ Optionally create action
+    if (addToActions && data) {
+      await supabase.from('action_items').insert({
+        title,
+        description: details || null,
+        meeting_id: nextMeetingId,
+        source: 'Matters Arising',
+        status: 'Open',
+        created_by: raisedBy || null,
+      });
+    }
 
     setTitle('');
-    setDescription('');
-
-    setLoading(false);
-    loadData();
+    setDetails('');
+    setRaisedBy('');
+    setAddToActions(false);
   };
 
   return (
     <main className="min-h-screen">
-      <div className="mx-auto w-full max-w-[1000px] px-4 py-10">
-        <header className="mb-8">
-          <Link
-            href="/"
-            className="mb-3 inline-block text-sm font-medium text-blue-600 hover:underline"
-          >
-            ← Back to dashboard
-          </Link>
+      <div className="mx-auto max-w-[800px] px-4 py-10">
+        <Link href="/" className="text-sm text-blue-600 hover:underline">
+          ← Back to dashboard
+        </Link>
 
-          <h1 className="text-3xl font-extrabold text-zinc-900">
-            Matters Arising
-          </h1>
-          <p className="mt-1 text-zinc-600">
-            Topics to be carried forward to the next meeting
-          </p>
-        </header>
+        <h1 className="mt-4 text-3xl font-extrabold text-zinc-900">
+          Matters Arising
+        </h1>
+        <p className="mt-1 text-zinc-600">
+          Topics to be discussed at the next meeting
+        </p>
 
-        {/* Add new matter */}
-        <section className="mb-10 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
-          <div className="border-b border-zinc-200 px-6 py-4">
-            <h2 className="text-xl font-semibold">
-              Add matter for next meeting
-            </h2>
-            {nextMeeting && (
-              <p className="mt-1 text-sm text-zinc-600">
-                Will be added to meeting on{' '}
-                {new Date(nextMeeting.meeting_date).toLocaleDateString('en-GB')}
-              </p>
-            )}
-            {!nextMeeting && (
-              <p className="mt-1 text-sm text-red-600">
-                No future meeting found — item will remain unassigned.
-              </p>
-            )}
-          </div>
+        <section className="mt-8 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200 p-6 space-y-4">
+          <input
+            type="text"
+            placeholder="Topic title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full rounded-md border px-3 py-2"
+          />
 
-          <div className="space-y-5 px-6 py-6">
+          <textarea
+            placeholder="Details / context"
+            value={details}
+            onChange={(e) => setDetails(e.target.value)}
+            rows={4}
+            className="w-full rounded-md border px-3 py-2"
+          />
+
+          <input
+            type="text"
+            placeholder="Raised by (optional)"
+            value={raisedBy}
+            onChange={(e) => setRaisedBy(e.target.value)}
+            className="w-full rounded-md border px-3 py-2"
+          />
+
+          <label className="flex items-center gap-2 text-sm">
             <input
-              type="text"
-              placeholder="Matter title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full rounded-md border px-3 py-2"
+              type="checkbox"
+              checked={addToActions}
+              onChange={(e) => setAddToActions(e.target.checked)}
             />
+            Add to Action Tracker
+          </label>
 
-            <textarea
-              placeholder="Details / background (optional)"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={4}
-              className="w-full rounded-md border px-3 py-2"
-            />
-
-            <div className="flex justify-end">
-              <button
-                onClick={saveItem}
-                disabled={loading}
-                className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
-              >
-                {loading ? 'Saving…' : 'Add matter'}
-              </button>
-            </div>
+          <div className="flex justify-end">
+            <button
+              onClick={saveMatter}
+              className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700"
+            >
+              Save matter
+            </button>
           </div>
-        </section>
-
-        {/* Existing items */}
-        <section className="space-y-4">
-          {loading && (
-            <p className="text-sm text-zinc-500">Loading matters…</p>
-          )}
-
-          {!loading &&
-            items.map((i) => (
-              <div key={i.id} className="player-card">
-                <h3 className="pc-name text-lg">{i.title}</h3>
-
-                {i.meetings?.meeting_date && (
-                  <p className="pc-meta">
-                    For meeting:{' '}
-                    {new Date(i.meetings.meeting_date).toLocaleDateString('en-GB')}
-                  </p>
-                )}
-
-                {i.description && (
-                  <p className="mt-2 whitespace-pre-wrap text-zinc-700">
-                    {i.description}
-                  </p>
-                )}
-
-                <p className="mt-2 text-xs text-zinc-400">
-                  Added {new Date(i.created_at).toLocaleString('en-GB')}
-                </p>
-              </div>
-            ))}
         </section>
       </div>
     </main>
   );
 }
-         
