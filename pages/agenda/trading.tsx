@@ -235,6 +235,26 @@ export default function TradingPage() {
               </select>
             </div>
 
+            {/* Setmore functions booking box */}
+            <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div>
+                <h3 className="font-semibold text-blue-900">
+                  Book functions in Setmore
+                </h3>
+                <p className="text-xs text-blue-800">
+                  Use Setmore to view and manage room hire, events, and other bookings.
+                </p>
+              </div>
+              <a
+                href="https://aldwiniansrufc.setmore.com/bookings"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+              >
+                View bookings
+              </a>
+            </div>
+
             {/* Month / Money table */}
             <div>
               <table className="w-full text-sm border table-fixed">
@@ -277,6 +297,28 @@ export default function TradingPage() {
                               updateRow(idx, 'dateRange', e.target.value)
                             }
                             className="w-full rounded border px-2 py-1"
+                          />
+                          {row.dateRange && (
+                            <p className="mt-1 text-xs text-zinc-500">
+                              {row.dateRange}
+                            </p>
+                          )}
+                        </td>
+                        <td className="border px-2 py-1 text-right align-top">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={row.moneyIn || ''}
+                            onChange={(e) =>
+                              updateRow(idx, 'moneyIn', e.target.value)
+                            }
+                            className="w-full rounded border px-2 py-1 text-right"
+                          />
+                        </td>
+                        <td className="border px-2 py-1 text-right align-top">
+                          <input
+                            type="number"
                           />
                           {row.dateRange && (
                             <p className="mt-1 text-xs text-zinc-500">
