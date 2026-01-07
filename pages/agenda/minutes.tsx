@@ -132,7 +132,7 @@ export default function MinutesPage() {
               <button
                 onClick={uploadMinutes}
                 disabled={loading}
-                className="rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
                 {loading ? 'Uploading…' : 'Upload minutes'}
               </button>

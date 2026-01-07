@@ -319,28 +319,6 @@ export default function TradingPage() {
                         <td className="border px-2 py-1 text-right align-top">
                           <input
                             type="number"
-                          />
-                          {row.dateRange && (
-                            <p className="mt-1 text-xs text-zinc-500">
-                              {row.dateRange}
-                            </p>
-                          )}
-                        </td>
-                        <td className="border px-2 py-1 text-right align-top">
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={row.moneyIn || ''}
-                            onChange={(e) =>
-                              updateRow(idx, 'moneyIn', e.target.value)
-                            }
-                            className="w-full rounded border px-2 py-1 text-right"
-                          />
-                        </td>
-                        <td className="border px-2 py-1 text-right align-top">
-                          <input
-                            type="number"
                             step="0.01"
                             min="0"
                             value={row.moneyOut || ''}
