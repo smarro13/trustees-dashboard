@@ -63,10 +63,11 @@ export default function MeetingAgendaView({ meetingId }: Props) {
             .eq('meeting_id', meetingId)
             .order('created_at', { ascending: false }),
 
-          supabase.from('action_items')
-            .select('id, title, owner, due_date, status, created_at')
-            .eq('meeting_id', meetingId)
-            .order('due_date', { ascending: true, nullsLast: true }),
+            supabase
+              .from('action_items')
+              .select('id, title, owner, due_date, status, created_at')
+              .eq('meeting_id', meetingId)
+              .order('due_date', { ascending: true })
         ])
 
         if (apol.error) throw apol.error
