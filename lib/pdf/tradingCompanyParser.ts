@@ -86,4 +86,47 @@ function parseRowLine(line: string): TradingItem | null {
     salesRatioStr,
   ] = tail;
 
-  const avgCost = t
+  const avgCost = toNumber(avgCostStr);
+  const lineCost = toNumber(lineCostStr);
+  const quantity = toInt(quantityStr);
+  const value = toNumber(valueStr);
+  const profit = toNumber(profitStr);
+  const gpPercent = toPercent(gpStr);
+  const salesRatioPercent = toPercent(salesRatioStr);
+
+  if (
+    !Number.isFinite(avgCost) ||
+    !Number.isFinite(lineCost) ||
+    !Number.isFinite(quantity) ||
+    !Number.isFinite(value) ||
+    !Number.isFinite(profit) ||
+    !Number.isFinite(gpPercent) ||
+    !Number.isFinite(salesRatioPercent)
+  ) {
+    return null;
+  }
+
+  return {
+    name,
+    avgCost,
+    lineCost,
+    quantity,
+    value,
+    profit,
+    gpPercent,
+    salesRatioPercent,
+  };
+}
+
+function toNumber(s: string): number {
+  const cleaned = s.replace(/[,£$]/g, "").replace(/\((.*)\)/, "-$1");
+  return parseFloat(cleaned);
+}
+
+function toInt(s: string): number {
+  return parseInt(s.replace(/,/g, ""), 10);
+}
+
+function toPercent(s: string): number {
+  return parseFloat(s.replace("%", "").replace(/,/g, ""));
+}
