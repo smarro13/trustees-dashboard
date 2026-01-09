@@ -14,14 +14,14 @@ export default function ActionTrackerPage() {
   const [owner, setOwner] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [meetingId, setMeetingId] = useState<string | null>(null);
-  const [createdBy, setCreatedBy] = useState(''); // new: who created the action
+  const [createdBy, setCreatedBy] = useState('');
 
   const [loading, setLoading] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('action_items')
       .select(
         `
@@ -35,17 +35,21 @@ export default function ActionTrackerPage() {
         created_by,
         meeting_id,
         meetings ( meeting_date )
-      `,
+      `
       )
       .order('status', { ascending: true })
-      .order('due_date', { ascending: true, nullsLast: true });
+      .order('due_date', { ascending: true }); // ✅ NULLs already last by default
 
-    if (data) setActions(data);
+    if (error) {
+      console.error(error);
+    } else if (data) {
+      setActions(data);
+    }
 
     const { data: meetingsData } = await supabase
       .from('meetings')
       .select('id, meeting_date')
-      .order('meeting_date', { ascending: true }); // changed to ascending
+      .order('meeting_date', { ascending: true });
 
     if (meetingsData) setMeetings(meetingsData);
 
@@ -61,18 +65,16 @@ export default function ActionTrackerPage() {
 
     setLoading(true);
 
-    const { data, error } = await supabase.from('action_items').insert({
+    const { error } = await supabase.from('action_items').insert({
       title,
       description: description || null,
       owner: owner || null,
       due_date: dueDate || null,
       meeting_id: meetingId,
       source: 'Manual',
-      status: 'Open', // ensure new actions start as Open
-      created_by: createdBy || null, // new
+      status: 'Open',
+      created_by: createdBy || null,
     });
-
-    console.log('insert result:', data, error);
 
     setLoading(false);
 
@@ -86,7 +88,8 @@ export default function ActionTrackerPage() {
     setOwner('');
     setDueDate('');
     setMeetingId(null);
-    setCreatedBy(''); // reset
+    setCreatedBy('');
+
     loadData();
   };
 
@@ -121,78 +124,58 @@ export default function ActionTrackerPage() {
           </p>
         </header>
 
-        {/* Manual action */}
+        {/* Add action */}
         <section className="mb-10 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="border-b border-zinc-200 px-6 py-4">
             <h2 className="text-xl font-semibold">Add action</h2>
           </div>
 
           <div className="space-y-4 px-6 py-6">
-            {/* Title */}
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-zinc-700">
-                Title
-              </label>
+            <div>
+              <label className="block text-sm font-medium">Title</label>
               <input
-                type="text"
-                placeholder="Action title"
+                className="w-full rounded-md border px-3 py-2"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full rounded-md border px-3 py-2"
               />
             </div>
 
-            {/* Description */}
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-zinc-700">
-                Description
-              </label>
+            <div>
+              <label className="block text-sm font-medium">Description</label>
               <textarea
-                placeholder="Details"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
                 rows={3}
                 className="w-full rounded-md border px-3 py-2"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
               />
             </div>
 
             <div className="grid gap-4 md:grid-cols-3">
-              {/* Owner */}
-              <div className="space-y-1">
-                <label className="block text-sm font-medium text-zinc-700">
-                  Owner
-                </label>
+              <div>
+                <label className="block text-sm font-medium">Owner</label>
                 <input
-                  type="text"
-                  placeholder="Owner"
+                  className="w-full rounded-md border px-3 py-2"
                   value={owner}
                   onChange={(e) => setOwner(e.target.value)}
-                  className="w-full rounded-md border px-3 py-2"
                 />
               </div>
 
-              {/* Due date */}
-              <div className="space-y-1">
-                <label className="block text-sm font-medium text-zinc-700">
-                  Due date
-                </label>
+              <div>
+                <label className="block text-sm font-medium">Due date</label>
                 <input
                   type="date"
+                  className="w-full rounded-md border px-3 py-2"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full rounded-md border px-3 py-2"
                 />
               </div>
 
-              {/* Meeting */}
-              <div className="space-y-1">
-                <label className="block text-sm font-medium text-zinc-700">
-                  Linked meeting
-                </label>
+              <div>
+                <label className="block text-sm font-medium">Linked meeting</label>
                 <select
+                  className="w-full rounded-md border px-3 py-2"
                   value={meetingId ?? ''}
                   onChange={(e) => setMeetingId(e.target.value || null)}
-                  className="w-full rounded-md border px-3 py-2"
                 >
                   <option value="">Link to meeting</option>
                   {meetings.map((m) => (
@@ -204,17 +187,12 @@ export default function ActionTrackerPage() {
               </div>
             </div>
 
-            {/* Created by */}
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-zinc-700">
-                Created by
-              </label>
+            <div>
+              <label className="block text-sm font-medium">Created by</label>
               <input
-                type="text"
-                placeholder="Created by (optional)"
+                className="w-full rounded-md border px-3 py-2"
                 value={createdBy}
                 onChange={(e) => setCreatedBy(e.target.value)}
-                className="w-full rounded-md border px-3 py-2"
               />
             </div>
 
@@ -222,7 +200,7 @@ export default function ActionTrackerPage() {
               <button
                 onClick={addAction}
                 disabled={loading}
-                className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700"
+                className="rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700"
               >
                 Add action
               </button>
@@ -230,82 +208,48 @@ export default function ActionTrackerPage() {
           </div>
         </section>
 
-        {/* Action list as table */}
-        <section className="mt-8 space-y-4">
-          <h2 className="text-lg font-semibold text-zinc-900">Actions</h2>
-
+        {/* Actions table */}
+        <section>
           {loading ? (
             <p className="text-sm text-zinc-500">Loading actions…</p>
           ) : actions.length === 0 ? (
             <p className="text-sm text-zinc-500">No actions yet.</p>
           ) : (
-            <div className="overflow-x-auto rounded-md border border-zinc-200 bg-white">
+            <div className="overflow-x-auto rounded-md border bg-white">
               <table className="min-w-full text-sm">
                 <thead className="bg-zinc-50">
                   <tr>
-                    <th className="border-b border-zinc-200 px-3 py-2 text-left">
-                      Title
-                    </th>
-                    <th className="border-b border-zinc-200 px-3 py-2 text-left">
-                      Owner
-                    </th>
-                    <th className="border-b border-zinc-200 px-3 py-2 text-left">
-                      Due
-                    </th>
-                    <th className="border-b border-zinc-200 px-3 py-2 text-left">
-                      Meeting
-                    </th>
-                    <th className="border-b border-zinc-200 px-3 py-2 text-left">
-                      Created by
-                    </th>
-                    <th className="border-b border-zinc-200 px-3 py-2 text-left">
-                      Source
-                    </th>
-                    <th className="border-b border-zinc-200 px-3 py-2 text-left">
-                      Details
-                    </th>
-                    <th className="border-b border-zinc-200 px-3 py-2 text-left">
-                      Status
-                    </th>
+                    <th className="px-3 py-2 text-left">Title</th>
+                    <th className="px-3 py-2 text-left">Owner</th>
+                    <th className="px-3 py-2 text-left">Due</th>
+                    <th className="px-3 py-2 text-left">Meeting</th>
+                    <th className="px-3 py-2 text-left">Created by</th>
+                    <th className="px-3 py-2 text-left">Source</th>
+                    <th className="px-3 py-2 text-left">Details</th>
+                    <th className="px-3 py-2 text-left">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {actions.map((a) => (
-                    <tr key={a.id} className="align-top">
-                      <td className="border-b border-zinc-100 px-3 py-2 font-medium text-zinc-900">
-                        {a.title}
-                      </td>
-                      <td className="border-b border-zinc-100 px-3 py-2">
-                        {a.owner || '—'}
-                      </td>
-                      <td className="border-b border-zinc-100 px-3 py-2">
+                    <tr key={a.id}>
+                      <td className="px-3 py-2 font-medium">{a.title}</td>
+                      <td className="px-3 py-2">{a.owner || '—'}</td>
+                      <td className="px-3 py-2">
                         {a.due_date
                           ? new Date(a.due_date).toLocaleDateString('en-GB')
                           : '—'}
                       </td>
-                      <td className="border-b border-zinc-100 px-3 py-2">
+                      <td className="px-3 py-2">
                         {a.meetings?.meeting_date
-                          ? new Date(
-                              a.meetings.meeting_date,
-                            ).toLocaleDateString('en-GB')
+                          ? new Date(a.meetings.meeting_date).toLocaleDateString('en-GB')
                           : '—'}
                       </td>
-                      <td className="border-b border-zinc-100 px-3 py-2">
-                        {a.created_by || '—'}
+                      <td className="px-3 py-2">{a.created_by || '—'}</td>
+                      <td className="px-3 py-2 text-xs">{a.source || '—'}</td>
+                      <td className="px-3 py-2">
+                        {a.description || <span className="text-zinc-400">No details</span>}
                       </td>
-                      <td className="border-b border-zinc-100 px-3 py-2 text-xs text-zinc-600">
-                        {a.source || '—'}
-                      </td>
-                      <td className="border-b border-zinc-100 px-3 py-2 max-w-xs">
-                        {a.description ? (
-                          <p className="whitespace-pre-wrap text-zinc-700">
-                            {a.description}
-                          </p>
-                        ) : (
-                          <span className="text-zinc-400 text-xs">No details</span>
-                        )}
-                      </td>
-                      <td className="border-b border-zinc-100 px-3 py-2">
+                      <td className="px-3 py-2">
                         <select
                           value={a.status}
                           onChange={(e) => updateStatus(a.id, e.target.value)}
