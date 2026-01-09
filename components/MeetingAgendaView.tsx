@@ -86,7 +86,7 @@ export default function MeetingAgendaView({ meetingId }: Props) {
         setActions(act.data ?? [])
       } catch (err) {
         console.error('Failed to load meeting agenda', err)
-      } finally {
+      } finally { 
         setLoading(false)
       }
     }
