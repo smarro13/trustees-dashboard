@@ -15,10 +15,11 @@ export default function LandingPage() {
       .select('*')
       .order('meeting_date', { ascending: true })
       .limit(5);
+
     if (data) setMeetings(data);
   };
 
-  // fetch upcoming (non-completed) actions from action_items
+  // fetch upcoming (non-completed) actions
   const fetchDueActions = async () => {
     const { data, error } = await supabase
       .from('action_items')
@@ -31,7 +32,7 @@ export default function LandingPage() {
         meetings ( meeting_date )
       `)
       .neq('status', 'Completed')
-      .order('due_date', { ascending: true, nullsLast: true })
+      .order('due_date', { ascending: true }) // ✅ NULLs last by default
       .limit(6);
 
     if (error) {
@@ -60,7 +61,7 @@ export default function LandingPage() {
       )
       .subscribe();
 
-    // Realtime: Actions -> now from action_items
+    // Realtime: Actions
     actionsChannel = supabase
       .channel('action-items-realtime')
       .on(
@@ -76,13 +77,6 @@ export default function LandingPage() {
     };
   }, []);
 
-  const updateActionStatus = async (actionId: string, status: string) => {
-    await supabase
-      .from('action_items')
-      .update({ status })
-      .eq('id', actionId);
-  };
-
   // split dueActions: with due date vs no due date
   const actionsWithDue = dueActions.filter((a) => a.due_date);
   const actionsWithoutDue = dueActions.filter((a) => !a.due_date);
@@ -92,7 +86,7 @@ export default function LandingPage() {
       <div className="mx-auto w-full max-w-screen-2xl px-4 sm:px-6 lg:px-8 py-8 lg:py-10">
         <header className="mb-10 text-center">
           <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900 sm:text-5xl">
-            Aldwinians RUFC - Management Dashboard
+            Aldwinians RUFC – Management Dashboard
           </h1>
           <p className="mt-2 text-zinc-600">
             Dashboard overview
@@ -108,8 +102,13 @@ export default function LandingPage() {
             {/* Upcoming Meetings */}
             <section className="mb-12">
               <div className="mb-5 flex items-center justify-between">
-                <h2 className="text-2xl font-semibold text-zinc-900">Upcoming Meetings</h2>
-                <Link href="/meetings" className="text-sm font-medium text-blue-600 hover:text-blue-700">
+                <h2 className="text-2xl font-semibold text-zinc-900">
+                  Upcoming Meetings
+                </h2>
+                <Link
+                  href="/meetings"
+                  className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                >
                   View all
                 </Link>
               </div>
@@ -121,14 +120,16 @@ export default function LandingPage() {
               ) : (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
                   {meetings.map((m) => {
-                    const dateLabel = new Date(m.meeting_date).toLocaleDateString('en-GB', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric',
-                    });
+                    const dateLabel = new Date(m.meeting_date).toLocaleDateString(
+                      'en-GB',
+                    );
                     const isLocked = Boolean(m.is_locked);
+
                     return (
-                      <div key={m.id} className="player-card meeting-card transition-base hover:-translate-y-0.5 hover:shadow-md">
+                      <div
+                        key={m.id}
+                        className="player-card meeting-card transition-base hover:-translate-y-0.5 hover:shadow-md"
+                      >
                         <div className="pc-wrap">
                           <div className="pc-image">
                             <div className="inline-flex h-12 w-12 items-center justify-center rounded-lg bg-zinc-100 text-xl">
@@ -139,38 +140,25 @@ export default function LandingPage() {
                           <div className="pc-mobile-header">
                             <h3 className="pc-name">{dateLabel}</h3>
                             <p className="pc-sponsor-text">
-                              {isLocked ? '🔒 Locked for editing' : 'Open for agenda updates'}
+                              {isLocked
+                                ? '🔒 Locked for editing'
+                                : 'Open for agenda updates'}
                             </p>
                           </div>
 
                           <div className="pc-details">
                             <h3 className="pc-name">
-                              <Link href={`/meeting/${m.id}`} className="hover:underline">
+                              <Link
+                                href={`/meeting/${m.id}`}
+                                className="hover:underline"
+                              >
                                 {dateLabel}
                               </Link>
                             </h3>
-                            <p className="pc-meta">{isLocked ? '🔒 Locked' : 'Open for updates'}</p>
-                            <div className="pc-tags">
-                              <span className={`pc-tag ${isLocked ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                                {isLocked ? 'Locked' : 'Open'}
-                              </span>
-                            </div>
+                            <p className="pc-meta">
+                              {isLocked ? '🔒 Locked' : 'Open for updates'}
+                            </p>
                           </div>
-
-                          <details className="pc-dropdown">
-                            <summary>Details</summary>
-                            <p className="pc-meta">{isLocked ? '🔒 Locked' : 'Open for updates'}</p>
-                            <div className="pc-tags">
-                              <span className={`pc-tag ${isLocked ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                                {isLocked ? 'Locked' : 'Open'}
-                              </span>
-                            </div>
-                            <div className="mt-2 text-sm">
-                              <Link href={`/meeting/${m.id}`} className="text-blue-600 hover:underline">
-                                Open meeting
-                              </Link>
-                            </div>
-                          </details>
                         </div>
                       </div>
                     );
@@ -179,10 +167,12 @@ export default function LandingPage() {
               )}
             </section>
 
-            {/* Upcoming Actions – show dated actions in a table */}
+            {/* Upcoming Actions (with due date) */}
             <section>
               <div className="mb-5 flex items-center justify-between">
-                <h2 className="text-2xl font-semibold text-zinc-900">Upcoming Actions</h2>
+                <h2 className="text-2xl font-semibold text-zinc-900">
+                  Upcoming Actions
+                </h2>
                 <Link
                   href="/agenda/actions"
                   className="text-sm font-medium text-blue-600 hover:text-blue-700"
@@ -200,32 +190,34 @@ export default function LandingPage() {
                   <table className="min-w-full text-sm">
                     <thead className="bg-zinc-50">
                       <tr>
-                        <th className="border-b border-zinc-200 px-3 py-2 text-left">Title</th>
-                        <th className="border-b border-zinc-200 px-3 py-2 text-left">Owner</th>
-                        <th className="border-b border-zinc-200 px-3 py-2 text-left">Due</th>
-                        <th className="border-b border-zinc-200 px-3 py-2 text-left">Meeting</th>
-                        <th className="border-b border-zinc-200 px-3 py-2 text-right">Open</th>
+                        <th className="px-3 py-2 text-left">Title</th>
+                        <th className="px-3 py-2 text-left">Owner</th>
+                        <th className="px-3 py-2 text-left">Due</th>
+                        <th className="px-3 py-2 text-left">Meeting</th>
+                        <th className="px-3 py-2 text-right">Open</th>
                       </tr>
                     </thead>
                     <tbody>
                       {actionsWithDue.map((a) => {
-                        const due = a.due_date ? new Date(a.due_date) : null;
+                        const due = a.due_date
+                          ? new Date(a.due_date)
+                          : null;
                         const isOverdue =
                           due && due < new Date() && a.status !== 'Completed';
 
                         return (
-                          <tr key={a.id} className="align-middle">
-                            <td className="border-b border-zinc-100 px-3 py-2 font-medium text-zinc-900">
+                          <tr key={a.id}>
+                            <td className="px-3 py-2 font-medium">
                               {a.title}
                             </td>
-                            <td className="border-b border-zinc-100 px-3 py-2">
-                              {a.owner || '—'}
-                            </td>
-                            <td className="border-b border-zinc-100 px-3 py-2">
+                            <td className="px-3 py-2">{a.owner || '—'}</td>
+                            <td className="px-3 py-2">
                               {due ? (
                                 <span
                                   className={
-                                    isOverdue ? 'text-red-600 font-semibold' : ''
+                                    isOverdue
+                                      ? 'text-red-600 font-semibold'
+                                      : ''
                                   }
                                 >
                                   {due.toLocaleDateString('en-GB')}
@@ -234,17 +226,17 @@ export default function LandingPage() {
                                 '—'
                               )}
                             </td>
-                            <td className="border-b border-zinc-100 px-3 py-2 text-xs text-zinc-600">
+                            <td className="px-3 py-2 text-xs text-zinc-600">
                               {a.meetings?.meeting_date
                                 ? new Date(
                                     a.meetings.meeting_date,
                                   ).toLocaleDateString('en-GB')
                                 : '—'}
                             </td>
-                            <td className="border-b border-zinc-100 px-3 py-2 text-right">
+                            <td className="px-3 py-2 text-right">
                               <Link
                                 href="/agenda/actions"
-                                className="text-sm text-blue-600 hover:underline"
+                                className="text-blue-600 hover:underline"
                               >
                                 Open →
                               </Link>
@@ -258,8 +250,8 @@ export default function LandingPage() {
               )}
             </section>
 
-            {/* Action Tracker – open actions with NO due date, also in a table */}
-            <section className="mb-12 mt-12">
+            {/* Undated actions */}
+            <section className="mt-12">
               <div className="mb-5 flex items-center justify-between">
                 <h2 className="text-2xl font-semibold text-zinc-900">
                   Action Tracker
@@ -281,32 +273,28 @@ export default function LandingPage() {
                   <table className="min-w-full text-sm">
                     <thead className="bg-zinc-50">
                       <tr>
-                        <th className="border-b border-zinc-200 px-3 py-2 text-left">Title</th>
-                        <th className="border-b border-zinc-200 px-3 py-2 text-left">Owner</th>
-                        <th className="border-b border-zinc-200 px-3 py-2 text-left">Meeting</th>
-                        <th className="border-b border-zinc-200 px-3 py-2 text-right">Open</th>
+                        <th className="px-3 py-2 text-left">Title</th>
+                        <th className="px-3 py-2 text-left">Owner</th>
+                        <th className="px-3 py-2 text-left">Meeting</th>
+                        <th className="px-3 py-2 text-right">Open</th>
                       </tr>
                     </thead>
                     <tbody>
                       {actionsWithoutDue.map((a) => (
-                        <tr key={a.id} className="align-middle">
-                          <td className="border-b border-zinc-100 px-3 py-2 font-medium text-zinc-900">
-                            {a.title}
-                          </td>
-                          <td className="border-b border-zinc-100 px-3 py-2">
-                            {a.owner || '—'}
-                          </td>
-                          <td className="border-b border-zinc-100 px-3 py-2 text-xs text-zinc-600">
+                        <tr key={a.id}>
+                          <td className="px-3 py-2 font-medium">{a.title}</td>
+                          <td className="px-3 py-2">{a.owner || '—'}</td>
+                          <td className="px-3 py-2 text-xs text-zinc-600">
                             {a.meetings?.meeting_date
                               ? new Date(
                                   a.meetings.meeting_date,
                                 ).toLocaleDateString('en-GB')
                               : '—'}
                           </td>
-                          <td className="border-b border-zinc-100 px-3 py-2 text-right">
+                          <td className="px-3 py-2 text-right">
                             <Link
                               href="/agenda/actions"
-                              className="text-sm text-blue-600 hover:underline"
+                              className="text-blue-600 hover:underline"
                             >
                               Open →
                             </Link>
