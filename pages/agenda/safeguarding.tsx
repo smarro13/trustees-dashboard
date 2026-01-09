@@ -4,33 +4,23 @@ import { supabase } from '../../lib/supabaseClient';
 
 export default function SafeguardingPage() {
   const [updates, setUpdates] = useState<any[]>([]);
-  const [meetings, setMeetings] = useState<any[]>([]);
 
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
   const [status, setStatus] = useState('Information');
   const [reviewDate, setReviewDate] = useState('');
-  const [meetingId, setMeetingId] = useState<string | null>(null);
-  const [team, setTeam] = useState('Under 7s'); // new team field
+  const [team, setTeam] = useState('Under 7s');
 
   const loadData = async () => {
     const { data } = await supabase
       .from('safeguarding_updates')
       .select(`
         *,
-        meetings ( meeting_date ),
         safeguarding_references ( label, url )
       `)
       .order('created_at', { ascending: false });
 
     if (data) setUpdates(data);
-
-    const { data: meetingsData } = await supabase
-      .from('meetings')
-      .select('id, meeting_date')
-      .order('meeting_date', { ascending: false });
-
-    if (meetingsData) setMeetings(meetingsData);
   };
 
   useEffect(() => {
@@ -45,15 +35,13 @@ export default function SafeguardingPage() {
       summary,
       status,
       review_date: reviewDate || null,
-      meeting_id: meetingId,
-      team, // save team
+      team,
     });
 
     setTitle('');
     setSummary('');
     setStatus('Information');
     setReviewDate('');
-    setMeetingId(null);
     setTeam('Under 7s');
 
     loadData();
@@ -123,7 +111,7 @@ export default function SafeguardingPage() {
               className="w-full rounded-md border px-3 py-2"
             />
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
@@ -142,20 +130,6 @@ export default function SafeguardingPage() {
                 className="rounded-md border px-3 py-2"
               />
 
-              <select
-                value={meetingId ?? ''}
-                onChange={(e) => setMeetingId(e.target.value || null)}
-                className="rounded-md border px-3 py-2"
-              >
-                <option value="">Link to meeting</option>
-                {meetings.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {new Date(m.meeting_date).toLocaleDateString()}
-                  </option>
-                ))}
-              </select>
-
-              {/* New team selector */}
               <select
                 value={team}
                 onChange={(e) => setTeam(e.target.value)}
@@ -205,15 +179,6 @@ export default function SafeguardingPage() {
                                 u.review_date
                               ).toLocaleDateString()}`}
                           </p>
-
-                          {u.meetings?.meeting_date && (
-                            <p className="pc-meta">
-                              Meeting{' '}
-                              {new Date(
-                                u.meetings.meeting_date
-                              ).toLocaleDateString()}
-                            </p>
-                          )}
                         </div>
                       </div>
 
