@@ -1,4 +1,4 @@
-import pdfParse from "pdf-parse";
+import * as pdfParse from "pdf-parse";
 
 export type TradingItem = {
   name: string;
@@ -17,8 +17,10 @@ export type TradingParseResult = {
   mostPopularItems: TradingItem[];
 };
 
-export async function parseTradingCompanyPDF(buffer: Buffer): Promise<TradingParseResult> {
-  const data = await (pdfParse as unknown as (buf: Buffer) => Promise<{ text?: string }>)(buffer);
+export async function parseTradingCompanyPDF(
+  buffer: Buffer
+): Promise<TradingParseResult> {
+  const data = await pdfParse(buffer);
   const text = data.text || "";
 
   const lines = text
@@ -49,7 +51,11 @@ export async function parseTradingCompanyPDF(buffer: Buffer): Promise<TradingPar
   }
 
   const highestProfitItem =
-    items.length > 0 ? items.reduce((best, cur) => (cur.profit > best.profit ? cur : best)) : null;
+    items.length > 0
+      ? items.reduce((best, cur) =>
+          cur.profit > best.profit ? cur : best
+        )
+      : null;
 
   const mostPopularItems = [...items]
     .sort((a, b) => b.salesRatioPercent - a.salesRatioPercent)
@@ -68,7 +74,15 @@ function parseRowLine(line: string): TradingItem | null {
   const name = rawTokens.slice(0, -7).join(" ").trim();
   if (!name) return null;
 
-  const [avgCostStr, lineCostStr, quantityStr, valueStr, profitStr, gpStr, salesRatioStr] = tail;
+  const [
+    avgCostStr,
+    lineCostStr,
+    quantityStr,
+    valueStr,
+    profitStr,
+    gpStr,
+    salesRatioStr,
+  ] = tail;
 
   const avgCost = toNumber(avgCostStr);
   const lineCost = toNumber(lineCostStr);
@@ -90,7 +104,16 @@ function parseRowLine(line: string): TradingItem | null {
     return null;
   }
 
-  return { name, avgCost, lineCost, quantity, value, profit, gpPercent, salesRatioPercent };
+  return {
+    name,
+    avgCost,
+    lineCost,
+    quantity,
+    value,
+    profit,
+    gpPercent,
+    salesRatioPercent,
+  };
 }
 
 function toNumber(s: string): number {
