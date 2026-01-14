@@ -14,11 +14,11 @@ export default function AgendaMenu() {
 
       if (!ticking) {
         window.requestAnimationFrame(() => {
-          // On mobile, close the menu when scrolling down past 250px
-          if (window.innerWidth < 640 && lastScrollY > 250) {
+          // On mobile, close the menu when scrolling down past 350px
+          if (window.innerWidth < 640 && lastScrollY > 350) {
             setIsScrolled(true);
             setOpen(false);
-          } else if (lastScrollY <= 250) {
+          } else if (lastScrollY <= 350) {
             setIsScrolled(false);
           }
           ticking = false;
