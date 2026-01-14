@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { supabase } from '@/lib/supabaseClient';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -13,7 +14,7 @@ export default function LoginPage() {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   };
 
-  const resendInvite = async (e: React.FormEvent) => {
+  const login = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -30,21 +31,19 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/resend-invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.toLowerCase() }),
+      const { error: err } = await supabase.auth.signInWithOtp({
+        email: email.toLowerCase(),
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to send invite');
-      }
+      if (err) throw err;
 
       setSent(true);
       setEmail('');
-    } catch (err) {
-      setError('An error occurred. Please try again.');
-      console.error(err);
+    } catch {
+      setError('Unable to send access link. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -79,7 +78,7 @@ export default function LoginPage() {
         </div>
 
         {/* Form Section */}
-        <form className="mt-8 space-y-6 bg-white rounded-lg shadow-sm border border-gray-100 p-8" onSubmit={resendInvite}>
+        <form className="mt-8 space-y-6 bg-white rounded-lg shadow-sm border border-gray-100 p-8" onSubmit={login}>
           <div>
             <label htmlFor="email" className="block text-sm font-semibold text-gray-900 mb-2">
               Email address
