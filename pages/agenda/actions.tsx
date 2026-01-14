@@ -117,7 +117,7 @@ export default function ActionTrackerPage() {
           </Link>
 
           <h1 className="text-2xl sm:text-3xl font-extrabold text-zinc-900">
-            Action Tracker
+            ✅ Action Tracker
           </h1>
           <p className="mt-1 text-sm sm:text-base text-zinc-600">
             Track actions raised across meetings and reports
@@ -127,7 +127,7 @@ export default function ActionTrackerPage() {
         {/* Add action */}
         <section className="mb-10 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="border-b border-zinc-200 px-4 sm:px-6 py-3 sm:py-4">
-            <h2 className="text-lg sm:text-xl font-semibold">Add action</h2>
+            <h2 className="text-lg sm:text-xl font-semibold">➕ Add action</h2>
           </div>
 
           <div className="space-y-4 px-4 sm:px-6 py-4 sm:py-6">

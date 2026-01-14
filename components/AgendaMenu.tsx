@@ -58,19 +58,19 @@ export default function AgendaMenu() {
         className={`flex flex-col gap-2 ${open ? '' : 'hidden'}`}
       >
         {[
-          { label: 'Apologies', href: '/agenda/apologies' },
-          { label: 'Previous Minutes', href: '/agenda/minutes' },
-          { label: 'Action Tracker', href: '/agenda/actions' },
-          { label: 'Correspondence', href: '/agenda/correspondence' },
-          { label: 'Safeguarding', href: '/agenda/safeguarding' },
-          { label: 'Conflicts of Interest', href: '/agenda/conflicts' },
-          { label: 'Treasury Report', href: '/agenda/treasury' },
-          { label: 'Trading Company Report', href: '/agenda/trading' },
-          { label: 'Events Planning', href: '/agenda/events' },
-          { label: 'Membership Report', href: '/agenda/membership' },
-          { label: 'Rugby Report', href: '/agenda/rugby' },
-          { label: 'Matters Arising', href: '/agenda/matters-arising' },
-          { label: 'AOB', href: '/agenda/aob' }
+          { label: '🙏 Apologies', href: '/agenda/apologies' },
+          { label: '📝 Previous Minutes', href: '/agenda/minutes' },
+          { label: '✅ Action Tracker', href: '/agenda/actions' },
+          { label: '✉️ Correspondence', href: '/agenda/correspondence' },
+          { label: '🛡️ Safeguarding', href: '/agenda/safeguarding' },
+          { label: '⚖️ Conflicts of Interest', href: '/agenda/conflicts' },
+          { label: '💰 Treasury Report', href: '/agenda/treasury' },
+          { label: '🏢 Trading Company Report', href: '/agenda/trading' },
+          { label: '🎉 Events Planning', href: '/agenda/events' },
+          { label: '👥 Membership Report', href: '/agenda/membership' },
+          { label: '🏉 Rugby Report', href: '/agenda/rugby' },
+          { label: '📌 Matters Arising', href: '/agenda/matters-arising' },
+          { label: '💬 AOB', href: '/agenda/aob' }
         ].map((item) => (
           <Link
             key={item.href}
