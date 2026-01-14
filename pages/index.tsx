@@ -6,6 +6,9 @@ export default function LoginPage() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
 
+  // Check if Supabase is configured
+  const supabaseConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
+
   const isValidEmail = (value: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   };
@@ -50,6 +53,18 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="w-full max-w-md">
+        {/* Status Indicator */}
+        <div className="mb-4 flex items-center justify-center">
+          <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${
+            supabaseConfigured 
+              ? 'bg-green-100 text-green-700' 
+              : 'bg-red-100 text-red-700'
+          }`}>
+            <span className={`inline-block h-2 w-2 rounded-full ${supabaseConfigured ? 'bg-green-500' : 'bg-red-500'}`}></span>
+            {supabaseConfigured ? '✓ Supabase Connected' : '✗ Supabase Not Configured'}
+          </div>
+        </div>
+
         {/* Logo/Icon Section */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-blue-100 mb-4">
@@ -138,7 +153,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p className="mt-8 text-center text-sm text-gray-600">
-          Questions? Contact the trustees <a href="mailto:trustees@aldwinianrufc.co.uk" className="text-blue-600 hover:underline font-medium">trustees@aldwinianrufc.co.uk</a>
+          Questions? Contact the Management Team  <a href="mailto:info@aldwinians.co.uk" className="text-blue-600 hover:underline font-medium">info@aldwinians.co.uk</a>
         </p>
       </div>
     </div>
