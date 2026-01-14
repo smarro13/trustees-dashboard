@@ -12,12 +12,9 @@ export default function EventsPlanningPage() {
   const [suggestedDate, setSuggestedDate] = useState('');
   const [lead, setLead] = useState('');
   const [status, setStatus] = useState('Idea');
-  const [budget, setBudget] = useState('');
-  const [expectedRevenue, setExpectedRevenue] = useState('');
   const [notes, setNotes] = useState('');
   const [discussionPoints, setDiscussionPoints] = useState('');
   const [meetingId, setMeetingId] = useState<string | null>(null);
-  const [setmoreUrl, setSetmoreUrl] = useState('');
   const [loading, setLoading] = useState(false);
 
   // calendar state
@@ -67,12 +64,9 @@ export default function EventsPlanningPage() {
       suggested_date: suggestedDate || null,
       lead: lead || null,
       status,
-      budget: budget || null,
-      expected_revenue: expectedRevenue || null,
       notes: notes || null,
       discussion_points: discussionPoints || null,
       meeting_id: meetingId,
-      setmore_url: setmoreUrl || null,
     });
 
     setTitle('');
@@ -80,12 +74,9 @@ export default function EventsPlanningPage() {
     setSuggestedDate('');
     setLead('');
     setStatus('Idea');
-    setBudget('');
-    setExpectedRevenue('');
     setNotes('');
     setDiscussionPoints('');
     setMeetingId(null);
-    setSetmoreUrl('');
     setLoading(false);
     loadData();
   };
@@ -396,34 +387,6 @@ export default function EventsPlanningPage() {
 
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  Budget (£)
-                </label>
-                <input
-                  type="number"
-                  value={budget}
-                  onChange={(e) => setBudget(e.target.value)}
-                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
-                  placeholder="0.00"
-                  step="0.01"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  Expected revenue (£)
-                </label>
-                <input
-                  type="number"
-                  value={expectedRevenue}
-                  onChange={(e) => setExpectedRevenue(e.target.value)}
-                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
-                  placeholder="0.00"
-                  step="0.01"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
                   Link to meeting
                 </label>
                 <select
@@ -438,19 +401,6 @@ export default function EventsPlanningPage() {
                     </option>
                   ))}
                 </select>
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-zinc-700 mb-1">
-                  Setmore booking URL
-                </label>
-                <input
-                  type="url"
-                  value={setmoreUrl}
-                  onChange={(e) => setSetmoreUrl(e.target.value)}
-                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
-                  placeholder="https://aldwiniansrufc.setmore.com/..."
-                />
               </div>
 
               <div className="sm:col-span-2">
@@ -608,16 +558,6 @@ export default function EventsPlanningPage() {
                               {e.status}
                             </span>
                           </div>
-                          {e.setmore_url && (
-                            <a
-                              href={e.setmore_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="mt-0.5 block truncate text-[10px] text-blue-700 underline"
-                            >
-                              Setmore
-                            </a>
-                          )}
                         </div>
                       ))}
                     </div>
