@@ -1,12 +1,43 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 export default function AgendaMenu() {
   const [open, setOpen] = useState(true);
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    let lastScrollY = window.scrollY;
+    let ticking = false;
+
+    const handleScroll = () => {
+      lastScrollY = window.scrollY;
+
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          // On mobile, close the menu when scrolling down past 50px
+          if (window.innerWidth < 640 && lastScrollY > 50) {
+            setIsScrolled(true);
+            setOpen(false);
+          } else if (lastScrollY <= 50) {
+            setIsScrolled(false);
+          }
+          ticking = false;
+        });
+
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
 
   return (
     <aside
-      className="mb-12 w-full sm:w-64 lg:w-72 shrink-0 sticky top-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4"
+      className="mb-12 w-full sm:w-64 lg:w-72 shrink-0 sm:sticky sm:top-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4"
       aria-label="Agenda menu"
     >
       <div className="mb-3 flex items-center justify-between">

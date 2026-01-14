@@ -31,6 +31,48 @@ body {
   transition: all 200ms ease;
 }
 
+/* ===== Mobile Touch Target Improvements ===== */
+/* Ensure minimum touch target size of 44x44px on mobile */
+@media (max-width: 768px) {
+  button,
+  [role="button"],
+  input[type="submit"],
+  input[type="button"],
+  a.button {
+    min-height: 44px;
+    padding: 12px 16px;
+  }
+
+  /* Improve input field touch targets */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    min-height: 44px;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+
+  /* Better spacing between interactive elements */
+  button + button,
+  a + button,
+  button + a {
+    margin-left: 8px;
+  }
+}
+
+/* Prevent horizontal scroll on mobile */
+body {
+  overflow-x: hidden;
+}
+
+/* Better text readability on mobile */
+@media (max-width: 640px) {
+  body {
+    -webkit-text-size-adjust: 100%;
+    -moz-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+}
+
 /* ===== Card styles shared by Meetings & Actions ===== */
 .player-card {
   max-width: 600px;

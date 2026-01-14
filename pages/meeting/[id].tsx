@@ -4,6 +4,27 @@ import { useRouter } from 'next/router';
 import { supabase } from '../../lib/supabaseClient';
 import { AGENDA_SECTIONS } from '../../components/agenda/agendaConfig';
 
+// Truncate text component for mobile
+function TruncatedText({ text, maxLength = 100 }: { text: string; maxLength?: number }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  if (text.length <= maxLength) {
+    return <span>{text}</span>;
+  }
+  
+  return (
+    <span>
+      {isExpanded ? text : `${text.slice(0, maxLength)}...`}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="ml-2 text-blue-600 hover:underline text-sm font-medium"
+      >
+        {isExpanded ? 'Show less' : 'Show more'}
+      </button>
+    </span>
+  );
+}
+
 export default function MeetingPage() {
   const router = useRouter();
   const meetingId = useMemo(
@@ -143,7 +164,9 @@ export default function MeetingPage() {
             {correspondence.map((c) => (
               <div key={c.id} className="rounded-md border p-3">
                 <p className="font-semibold">{c.subject}</p>
-                <p className="text-sm text-zinc-700 whitespace-pre-wrap">{c.summary}</p>
+                <p className="text-sm text-zinc-700 whitespace-pre-wrap">
+                  <TruncatedText text={c.summary} maxLength={150} />
+                </p>
               </div>
             ))}
           </div>
@@ -176,27 +199,27 @@ export default function MeetingPage() {
 
   return (
     <main className="min-h-screen bg-zinc-50">
-      <div className="mx-auto max-w-[1200px] px-4 py-10">
-        <header className="mb-8">
+      <div className="mx-auto max-w-[1200px] px-4 py-6 sm:py-10">
+        <header className="mb-6 sm:mb-8">
           <Link href="/" className="text-sm text-blue-600 hover:underline">
             ← Back to dashboard
           </Link>
-          <h1 className="mt-2 text-3xl font-extrabold">
+          <h1 className="mt-2 text-2xl sm:text-3xl font-extrabold">
             Meeting {dateLabel}
           </h1>
-          <p className="text-zinc-600">
+          <p className="text-sm sm:text-base text-zinc-600">
             {meeting?.is_locked ? '🔒 Locked' : 'Open for updates'}
           </p>
         </header>
 
-        <section className="space-y-6">
+        <section className="space-y-4 sm:space-y-6">
           {AGENDA_SECTIONS.map((s) => (
             <div key={s.key} className="rounded-lg bg-white ring-1 ring-zinc-200">
-              <div className="flex justify-between border-b px-4 py-3">
-                <h2 className="font-semibold">{s.label}</h2>
+              <div className="flex justify-between items-center border-b px-4 py-3">
+                <h2 className="text-base sm:text-lg font-semibold">{s.label}</h2>
                 <Link
                   href={`${s.href}?meetingId=${meetingId}`}
-                  className="text-sm text-blue-600 hover:underline"
+                  className="min-h-[44px] flex items-center text-sm text-blue-600 hover:underline"
                 >
                   Edit →
                 </Link>

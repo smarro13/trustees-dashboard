@@ -83,12 +83,12 @@ export default function LandingPage() {
 
   return (
     <main className="min-h-screen">
-      <div className="mx-auto w-full max-w-screen-2xl px-4 sm:px-6 lg:px-8 py-8 lg:py-10">
-        <header className="mb-10 text-center">
-          <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900 sm:text-5xl">
+      <div className="mx-auto w-full max-w-screen-2xl px-4 sm:px-6 lg:px-8 py-4 sm:py-8 lg:py-10">
+        <header className="mb-6 sm:mb-10 text-center">
+          <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-zinc-900 lg:text-5xl">
             Aldwinians RUFC – Management Dashboard
           </h1>
-          <p className="mt-2 text-zinc-600">
+          <p className="mt-2 text-sm sm:text-base text-zinc-600">
             Dashboard overview
             <span className="ml-2 inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
               ● Live
@@ -186,32 +186,29 @@ export default function LandingPage() {
                   No dated actions.
                 </p>
               ) : (
-                <div className="overflow-x-auto rounded-md border border-zinc-200 bg-white">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-zinc-50">
-                      <tr>
-                        <th className="px-3 py-2 text-left">Title</th>
-                        <th className="px-3 py-2 text-left">Owner</th>
-                        <th className="px-3 py-2 text-left">Due</th>
-                        <th className="px-3 py-2 text-left">Meeting</th>
-                        <th className="px-3 py-2 text-right">Open</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {actionsWithDue.map((a) => {
-                        const due = a.due_date
-                          ? new Date(a.due_date)
-                          : null;
-                        const isOverdue =
-                          due && due < new Date() && a.status !== 'Completed';
+                <>
+                  {/* Mobile: Card view */}
+                  <div className="sm:hidden space-y-3">
+                    {actionsWithDue.map((a) => {
+                      const due = a.due_date ? new Date(a.due_date) : null;
+                      const isOverdue =
+                        due && due < new Date() && a.status !== 'Completed';
 
-                        return (
-                          <tr key={a.id}>
-                            <td className="px-3 py-2 font-medium">
-                              {a.title}
-                            </td>
-                            <td className="px-3 py-2">{a.owner || '—'}</td>
-                            <td className="px-3 py-2">
+                      return (
+                        <div
+                          key={a.id}
+                          className="rounded-lg border border-zinc-200 bg-white p-4"
+                        >
+                          <h3 className="font-semibold text-zinc-900 mb-2">
+                            {a.title}
+                          </h3>
+                          <div className="space-y-1 text-sm text-zinc-600">
+                            <p>
+                              <span className="font-medium">Owner:</span>{' '}
+                              {a.owner || '—'}
+                            </p>
+                            <p>
+                              <span className="font-medium">Due:</span>{' '}
                               {due ? (
                                 <span
                                   className={
@@ -225,28 +222,90 @@ export default function LandingPage() {
                               ) : (
                                 '—'
                               )}
-                            </td>
-                            <td className="px-3 py-2 text-xs text-zinc-600">
+                            </p>
+                            <p>
+                              <span className="font-medium">Meeting:</span>{' '}
                               {a.meetings?.meeting_date
                                 ? new Date(
                                     a.meetings.meeting_date,
                                   ).toLocaleDateString('en-GB')
                                 : '—'}
-                            </td>
-                            <td className="px-3 py-2 text-right">
-                              <Link
-                                href="/agenda/actions"
-                                className="text-blue-600 hover:underline"
-                              >
-                                Open →
-                              </Link>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                            </p>
+                          </div>
+                          <Link
+                            href="/agenda/actions"
+                            className="mt-3 inline-block text-sm font-medium text-blue-600 hover:underline"
+                          >
+                            Open →
+                          </Link>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Desktop: Table view */}
+                  <div className="hidden sm:block overflow-x-auto rounded-md border border-zinc-200 bg-white">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-zinc-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Title</th>
+                          <th className="px-3 py-2 text-left">Owner</th>
+                          <th className="px-3 py-2 text-left">Due</th>
+                          <th className="px-3 py-2 text-left">Meeting</th>
+                          <th className="px-3 py-2 text-right">Open</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {actionsWithDue.map((a) => {
+                          const due = a.due_date
+                            ? new Date(a.due_date)
+                            : null;
+                          const isOverdue =
+                            due && due < new Date() && a.status !== 'Completed';
+
+                          return (
+                            <tr key={a.id}>
+                              <td className="px-3 py-2 font-medium">
+                                {a.title}
+                              </td>
+                              <td className="px-3 py-2">{a.owner || '—'}</td>
+                              <td className="px-3 py-2">
+                                {due ? (
+                                  <span
+                                    className={
+                                      isOverdue
+                                        ? 'text-red-600 font-semibold'
+                                        : ''
+                                    }
+                                  >
+                                    {due.toLocaleDateString('en-GB')}
+                                  </span>
+                                ) : (
+                                  '—'
+                                )}
+                              </td>
+                              <td className="px-3 py-2 text-xs text-zinc-600">
+                                {a.meetings?.meeting_date
+                                  ? new Date(
+                                      a.meetings.meeting_date,
+                                    ).toLocaleDateString('en-GB')
+                                  : '—'}
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                <Link
+                                  href="/agenda/actions"
+                                  className="text-blue-600 hover:underline"
+                                >
+                                  Open →
+                                </Link>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </section>
 
@@ -269,41 +328,78 @@ export default function LandingPage() {
                   No open undated actions 🎉
                 </p>
               ) : (
-                <div className="overflow-x-auto rounded-md border border-zinc-200 bg-white">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-zinc-50">
-                      <tr>
-                        <th className="px-3 py-2 text-left">Title</th>
-                        <th className="px-3 py-2 text-left">Owner</th>
-                        <th className="px-3 py-2 text-left">Meeting</th>
-                        <th className="px-3 py-2 text-right">Open</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {actionsWithoutDue.map((a) => (
-                        <tr key={a.id}>
-                          <td className="px-3 py-2 font-medium">{a.title}</td>
-                          <td className="px-3 py-2">{a.owner || '—'}</td>
-                          <td className="px-3 py-2 text-xs text-zinc-600">
+                <>
+                  {/* Mobile: Card view */}
+                  <div className="sm:hidden space-y-3">
+                    {actionsWithoutDue.map((a) => (
+                      <div
+                        key={a.id}
+                        className="rounded-lg border border-zinc-200 bg-white p-4"
+                      >
+                        <h3 className="font-semibold text-zinc-900 mb-2">
+                          {a.title}
+                        </h3>
+                        <div className="space-y-1 text-sm text-zinc-600">
+                          <p>
+                            <span className="font-medium">Owner:</span>{' '}
+                            {a.owner || '—'}
+                          </p>
+                          <p>
+                            <span className="font-medium">Meeting:</span>{' '}
                             {a.meetings?.meeting_date
                               ? new Date(
                                   a.meetings.meeting_date,
                                 ).toLocaleDateString('en-GB')
                               : '—'}
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <Link
-                              href="/agenda/actions"
-                              className="text-blue-600 hover:underline"
-                            >
-                              Open →
-                            </Link>
-                          </td>
+                          </p>
+                        </div>
+                        <Link
+                          href="/agenda/actions"
+                          className="mt-3 inline-block text-sm font-medium text-blue-600 hover:underline"
+                        >
+                          Open →
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop: Table view */}
+                  <div className="hidden sm:block overflow-x-auto rounded-md border border-zinc-200 bg-white">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-zinc-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Title</th>
+                          <th className="px-3 py-2 text-left">Owner</th>
+                          <th className="px-3 py-2 text-left">Meeting</th>
+                          <th className="px-3 py-2 text-right">Open</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {actionsWithoutDue.map((a) => (
+                          <tr key={a.id}>
+                            <td className="px-3 py-2 font-medium">{a.title}</td>
+                            <td className="px-3 py-2">{a.owner || '—'}</td>
+                            <td className="px-3 py-2 text-xs text-zinc-600">
+                              {a.meetings?.meeting_date
+                                ? new Date(
+                                    a.meetings.meeting_date,
+                                  ).toLocaleDateString('en-GB')
+                                : '—'}
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <Link
+                                href="/agenda/actions"
+                                className="text-blue-600 hover:underline"
+                              >
+                                Open →
+                              </Link>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </section>
           </div>
