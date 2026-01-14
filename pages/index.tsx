@@ -85,16 +85,6 @@ export default function LandingPage() {
     <main className="min-h-screen">
       <div className="mx-auto w-full max-w-screen-2xl px-4 sm:px-6 lg:px-8 py-4 sm:py-8 lg:py-10">
         <header className="mb-6 sm:mb-10 text-center">
-          {/* Club Logo */}
-          <div className="mb-4 flex justify-center">
-            <div className="inline-flex h-24 w-24 sm:h-32 sm:w-32 items-center justify-center rounded-lg bg-white shadow-lg p-2">
-              <img 
-                src="https://images.squarespace-cdn.com/content/v1/5ef78b431d988110d40cb9e2/1dd2a7e6-e77d-4ea8-ad66-5879697af4f2/logo.png?format=1500w"
-                alt="Aldwinians RUFC Logo"
-                className="h-full w-full object-contain"
-              />
-            </div>
-          </div>
           <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-zinc-900 lg:text-5xl">
             Aldwinians RUFC – Management Dashboard
           </h1>
