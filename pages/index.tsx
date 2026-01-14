@@ -2,11 +2,31 @@ import { useEffect, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import AgendaMenu from '../components/AgendaMenu';
 
 export default function LandingPage() {
   const [meetings, setMeetings] = useState<any[]>([]);
   const [dueActions, setDueActions] = useState<any[]>([]);
+  const [userEmail, setUserEmail] = useState<string>('');
+  const router = useRouter();
+
+  // Get user session
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserEmail(user.email || '');
+      }
+    };
+    getUser();
+  }, []);
+
+  // Logout function
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/auth/login');
+  };
 
   // fetch meetings
   const fetchMeetings = async () => {
@@ -84,16 +104,38 @@ export default function LandingPage() {
   return (
     <main className="min-h-screen">
       <div className="mx-auto w-full max-w-screen-2xl px-4 sm:px-6 lg:px-8 py-4 sm:py-8 lg:py-10">
-        <header className="mb-6 sm:mb-10 text-center">
-          <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-zinc-900 lg:text-5xl">
-            Aldwinians RUFC – Management Dashboard
-          </h1>
-          <p className="mt-2 text-sm sm:text-base text-zinc-600">
-            Dashboard overview
-            <span className="ml-2 inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
-              ● Live
-            </span>
-          </p>
+        <header className="mb-6 sm:mb-10">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex-1"></div>
+            {userEmail && (
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <p className="text-sm font-medium text-zinc-900">{userEmail}</p>
+                  <p className="text-xs text-zinc-500">Logged in</p>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Logout
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="text-center">
+            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-zinc-900 lg:text-5xl">
+              Aldwinians RUFC – Management Dashboard
+            </h1>
+            <p className="mt-2 text-sm sm:text-base text-zinc-600">
+              Dashboard overview
+              <span className="ml-2 inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
+                ● Live
+              </span>
+            </p>
+          </div>
         </header>
 
         <div className="mt-8 flex flex-col items-start gap-8 sm:flex-row">
