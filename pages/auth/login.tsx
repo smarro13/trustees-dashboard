@@ -138,7 +138,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p className="mt-8 text-center text-sm text-gray-600">
-          Questions? Contact the trustees <a href="mailto:info@aldwinians.co.uk" className="text-blue-600 hover:underline font-medium">trustees@aldwinianrufc.co.uk</a>
+          Questions? Contact the Management Team<a href="mailto:info@aldwinians.co.uk" className="text-blue-600 hover:underline font-medium">info@aldwinians.co.uk</a>
         </p>
       </div>
     </div>
