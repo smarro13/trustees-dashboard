@@ -105,12 +105,6 @@ export default function LandingPage() {
                 <h2 className="text-2xl font-semibold text-zinc-900">
                   Upcoming Meetings
                 </h2>
-                <Link
-                  href="/meetings"
-                  className="text-sm font-medium text-blue-600 hover:text-blue-700"
-                >
-                  View all
-                </Link>
               </div>
 
               {meetings.length === 0 ? (
@@ -126,9 +120,10 @@ export default function LandingPage() {
                     const isLocked = Boolean(m.is_locked);
 
                     return (
-                      <div
+                      <Link
                         key={m.id}
-                        className="player-card meeting-card transition-base hover:-translate-y-0.5 hover:shadow-md"
+                        href={`/meeting/${m.id}`}
+                        className="player-card meeting-card transition-base hover:-translate-y-0.5 hover:shadow-md block"
                       >
                         <div className="pc-wrap">
                           <div className="pc-image">
@@ -148,19 +143,14 @@ export default function LandingPage() {
 
                           <div className="pc-details">
                             <h3 className="pc-name">
-                              <Link
-                                href={`/meeting/${m.id}`}
-                                className="hover:underline"
-                              >
-                                {dateLabel}
-                              </Link>
+                              {dateLabel}
                             </h3>
                             <p className="pc-meta">
                               {isLocked ? '🔒 Locked' : 'Open for updates'}
                             </p>
                           </div>
                         </div>
-                      </div>
+                      </Link>
                     );
                   })}
                 </div>
