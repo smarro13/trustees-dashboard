@@ -15,6 +15,7 @@ export default function EventsPlanningPage() {
   const [budget, setBudget] = useState('');
   const [expectedRevenue, setExpectedRevenue] = useState('');
   const [notes, setNotes] = useState('');
+  const [discussionPoints, setDiscussionPoints] = useState('');
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [setmoreUrl, setSetmoreUrl] = useState('');
   const [loading, setLoading] = useState(false);
@@ -69,6 +70,7 @@ export default function EventsPlanningPage() {
       budget: budget || null,
       expected_revenue: expectedRevenue || null,
       notes: notes || null,
+      discussion_points: discussionPoints || null,
       meeting_id: meetingId,
       setmore_url: setmoreUrl || null,
     });
@@ -81,6 +83,7 @@ export default function EventsPlanningPage() {
     setBudget('');
     setExpectedRevenue('');
     setNotes('');
+    setDiscussionPoints('');
     setMeetingId(null);
     setSetmoreUrl('');
     setLoading(false);
@@ -314,6 +317,180 @@ export default function EventsPlanningPage() {
             Plan and track upcoming club events
           </p>
         </header>
+
+        {/* Add new event form */}
+        <section className="mb-6 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
+          <div className="border-b border-zinc-200 px-4 py-3 sm:px-6 lg:px-8">
+            <h2 className="text-lg font-semibold text-zinc-900">
+              Add new event
+            </h2>
+          </div>
+          <div className="px-4 py-4 sm:px-6 lg:px-8">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700">
+                  Event title
+                </label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="e.g. Summer BBQ"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-700">
+                  Event month (yyyy-MM)
+                </label>
+                <input
+                  type="month"
+                  value={eventMonth}
+                  onChange={(e) => setEventMonth(e.target.value)}
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-700">
+                  Suggested date
+                </label>
+                <input
+                  type="date"
+                  value={suggestedDate}
+                  onChange={(e) => setSuggestedDate(e.target.value)}
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-700">
+                  Lead person
+                </label>
+                <input
+                  type="text"
+                  value={lead}
+                  onChange={(e) => setLead(e.target.value)}
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="Person responsible"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-700">
+                  Status
+                </label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                >
+                  <option value="Idea">Idea</option>
+                  <option value="Planning">Planning</option>
+                  <option value="Confirmed">Confirmed</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Cancelled">Cancelled</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-700">
+                  Budget (£)
+                </label>
+                <input
+                  type="number"
+                  value={budget}
+                  onChange={(e) => setBudget(e.target.value)}
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="0.00"
+                  step="0.01"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-700">
+                  Expected revenue (£)
+                </label>
+                <input
+                  type="number"
+                  value={expectedRevenue}
+                  onChange={(e) => setExpectedRevenue(e.target.value)}
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="0.00"
+                  step="0.01"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-700">
+                  Link to meeting
+                </label>
+                <select
+                  value={meetingId || ''}
+                  onChange={(e) => setMeetingId(e.target.value || null)}
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                >
+                  <option value="">None</option>
+                  {meetings.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {new Date(m.meeting_date).toLocaleDateString('en-GB')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-zinc-700">
+                  Setmore booking URL
+                </label>
+                <input
+                  type="url"
+                  value={setmoreUrl}
+                  onChange={(e) => setSetmoreUrl(e.target.value)}
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="https://aldwiniansrufc.setmore.com/..."
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-zinc-700">
+                  Notes
+                </label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={2}
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="Additional notes..."
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-zinc-700">
+                  Discussion points for meeting
+                </label>
+                <textarea
+                  value={discussionPoints}
+                  onChange={(e) => setDiscussionPoints(e.target.value)}
+                  rows={4}
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="Add discussion points to raise at the trustees meeting..."
+                />
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <button
+                onClick={addEvent}
+                disabled={loading || !title.trim()}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+              >
+                {loading ? 'Adding...' : 'Add event'}
+              </button>
+            </div>
+          </div>
+        </section>
 
         {/* Calendar view */}
         <section className="mt-0 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
