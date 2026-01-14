@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { parseTradingCompanyPDF } from "../../../lib/pdf/tradingCompanyParser";
+import { parseTradingCompanyPDF } from "../../lib/pdf/tradingCompanyParser";
 
 type ReqBody = {
   filename?: string;
