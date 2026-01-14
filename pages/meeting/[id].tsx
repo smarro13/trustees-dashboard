@@ -23,7 +23,6 @@ export default function MeetingPage() {
   const [trading, setTrading] = useState<any[]>([]);
   const [treasury, setTreasury] = useState<any[]>([]);
   const [actions, setActions] = useState<any[]>([]);
-
   const [mattersArising, setMattersArising] = useState<any[]>([]);
   const [aob, setAob] = useState<any[]>([]);
   const [rugby, setRugby] = useState<any[]>([]);
@@ -35,19 +34,13 @@ export default function MeetingPage() {
     const load = async () => {
       setLoading(true);
 
-      const { data: meetingData, error: meetingError } = await supabase
+      const { data: meetingData } = await supabase
         .from('meetings')
         .select('id, meeting_date, is_locked')
         .eq('id', meetingId)
         .single();
 
-      if (meetingError) {
-        console.error(meetingError);
-        setLoading(false);
-        return;
-      }
-
-      setMeeting(meetingData);
+      setMeeting(meetingData ?? null);
 
       const [
         apol,
@@ -64,87 +57,34 @@ export default function MeetingPage() {
         rugbyItems,
         mins,
       ] = await Promise.all([
-        supabase.from('apologies')
-          .select('id, name, note, created_at')
-          .eq('meeting_id', meetingId)
-          .order('created_at', { ascending: false }),
-
-        supabase.from('conflicts_of_interest')
-          .select('id, trustee_name, interest_description, standing, action_taken, created_at')
-          .eq('meeting_id', meetingId)
-          .order('created_at', { ascending: false }),
-
-        supabase.from('correspondence')
-          .select('id, subject, sender, summary, received_date, created_at')
-          .eq('meeting_id', meetingId)
-          .order('created_at', { ascending: false }),
-
-        supabase.from('safeguarding_updates')
-          .select('id, title, summary, status, review_date, team, created_at')
-          .eq('meeting_id', meetingId)
-          .order('created_at', { ascending: false }),
-
-        supabase.from('events_planning')
-          .select('id, title, event_date, suggested_date, lead, status, notes, setmore_url, created_at')
-          .eq('meeting_id', meetingId)
-          .order('created_at', { ascending: false }),
-
-        supabase.from('membership_reports')
-          .select('*')
-          .eq('meeting_id', meetingId)
-          .order('created_at', { ascending: false }),
-
-        supabase.from('trading_reports')
-          .select('*')
-          .eq('meeting_id', meetingId)
-          .order('created_at', { ascending: false }),
-
-        supabase.from('treasury_reports')
-          .select('*')
-          .eq('meeting_id', meetingId)
-          .order('created_at', { ascending: false }),
-
-        supabase.from('action_items')
-          .select('id, title, owner, due_date, status')
-          .eq('meeting_id', meetingId)
-          .neq('status', 'Completed')
-          .order('due_date', { ascending: true })
-          .order('created_at', { ascending: false }),
-
-        supabase.from('matters_arising')
-          .select('*')
-          .eq('meeting_id', meetingId)
-          .order('created_at', { ascending: false }),
-
-        supabase.from('aob_items')
-          .select('*')
-          .eq('meeting_id', meetingId)
-          .order('created_at', { ascending: false }),
-
-        supabase.from('rugby_reports')
-          .select('*')
-          .eq('meeting_id', meetingId)
-          .order('created_at', { ascending: false }),
-
-        supabase.from('minutes')
-          .select('*')
-          .eq('meeting_id', meetingId)
-          .order('created_at', { ascending: false }),
+        supabase.from('apologies').select('*').eq('meeting_id', meetingId),
+        supabase.from('conflicts_of_interest').select('*').eq('meeting_id', meetingId),
+        supabase.from('correspondence').select('*').eq('meeting_id', meetingId),
+        supabase.from('safeguarding_updates').select('*').eq('meeting_id', meetingId),
+        supabase.from('events_planning').select('*').eq('meeting_id', meetingId),
+        supabase.from('membership_reports').select('*').eq('meeting_id', meetingId),
+        supabase.from('trading_reports').select('*').eq('meeting_id', meetingId),
+        supabase.from('treasury_reports').select('*').eq('meeting_id', meetingId),
+        supabase.from('action_items').select('*').eq('meeting_id', meetingId),
+        supabase.from('matters_arising').select('*').eq('meeting_id', meetingId),
+        supabase.from('aob_items').select('*').eq('meeting_id', meetingId),
+        supabase.from('rugby_reports').select('*').eq('meeting_id', meetingId),
+        supabase.from('minutes').select('*').eq('meeting_id', meetingId),
       ]);
 
-      if (apol.data) setApologies(apol.data);
-      if (conf.data) setConflicts(conf.data);
-      if (corr.data) setCorrespondence(corr.data);
-      if (safe.data) setSafeguarding(safe.data);
-      if (ev.data) setEvents(ev.data);
-      if (mem.data) setMembership(mem.data);
-      if (trad.data) setTrading(trad.data);
-      if (tres.data) setTreasury(tres.data);
-      if (act.data) setActions(act.data);
-      if (ma.data) setMattersArising(ma.data);
-      if (aobItems.data) setAob(aobItems.data);
-      if (rugbyItems.data) setRugby(rugbyItems.data);
-      if (mins.data) setMinutes(mins.data);
+      setApologies(apol.data ?? []);
+      setConflicts(conf.data ?? []);
+      setCorrespondence(corr.data ?? []);
+      setSafeguarding(safe.data ?? []);
+      setEvents(ev.data ?? []);
+      setMembership(mem.data ?? []);
+      setTrading(trad.data ?? []);
+      setTreasury(tres.data ?? []);
+      setActions(act.data ?? []);
+      setMattersArising(ma.data ?? []);
+      setAob(aobItems.data ?? []);
+      setRugby(rugbyItems.data ?? []);
+      setMinutes(mins.data ?? []);
 
       setLoading(false);
     };
@@ -157,33 +97,81 @@ export default function MeetingPage() {
   }
 
   const dateLabel = meeting?.meeting_date
-    ? new Date(meeting.meeting_date).toLocaleDateString('en-GB')
+    ? new Date(meeting.meeting_date).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
     : '';
 
+  const empty = (text: string) => (
+    <p className="text-sm text-zinc-500">{text}</p>
+  );
+
   const sectionBody = (key: string, emptyText: string) => {
-    const dataMap: Record<string, any[]> = {
-      apologies,
-      conflicts,
-      correspondence,
-      safeguarding,
-      events,
-      membership,
-      trading,
-      treasury,
-      actions,
-      matters_arising: mattersArising,
-      aob,
-      rugby_reports: rugby,
-      minutes,
-    };
+    switch (key) {
+      case 'apologies':
+        if (!apologies.length) return empty(emptyText);
+        return (
+          <div className="space-y-2">
+            {apologies.map((a) => (
+              <div key={a.id} className="rounded-md border p-3">
+                <p className="font-semibold">{a.name}</p>
+                {a.note && <p className="text-sm text-zinc-700">{a.note}</p>}
+              </div>
+            ))}
+          </div>
+        );
 
-    const data = dataMap[key] ?? [];
+      case 'conflicts':
+        if (!conflicts.length) return empty(emptyText);
+        return (
+          <div className="space-y-2">
+            {conflicts.map((c) => (
+              <div key={c.id} className="rounded-md border p-3">
+                <p className="font-semibold">{c.trustee_name}</p>
+                <p className="text-sm text-zinc-700">{c.interest_description}</p>
+              </div>
+            ))}
+          </div>
+        );
 
-    if (!data.length) {
-      return <p className="text-sm text-zinc-500">{emptyText}</p>;
+      case 'correspondence':
+        if (!correspondence.length) return empty(emptyText);
+        return (
+          <div className="space-y-2">
+            {correspondence.map((c) => (
+              <div key={c.id} className="rounded-md border p-3">
+                <p className="font-semibold">{c.subject}</p>
+                <p className="text-sm text-zinc-700 whitespace-pre-wrap">{c.summary}</p>
+              </div>
+            ))}
+          </div>
+        );
+
+      case 'actions':
+        if (!actions.length) return empty(emptyText);
+        return (
+          <ul className="space-y-1 text-sm">
+            {actions.map((a) => (
+              <li key={a.id}>
+                <strong>{a.title}</strong> — {a.status}
+              </li>
+            ))}
+          </ul>
+        );
+
+      case 'minutes':
+        if (!minutes.length) return empty(emptyText);
+        return (
+          <div className="rounded-md border p-3 whitespace-pre-wrap text-sm">
+            {minutes[0].content}
+          </div>
+        );
+
+      default:
+        return empty(emptyText);
     }
-
-    return <pre className="text-sm whitespace-pre-wrap">{JSON.stringify(data, null, 2)}</pre>;
   };
 
   return (
@@ -193,7 +181,12 @@ export default function MeetingPage() {
           <Link href="/" className="text-sm text-blue-600 hover:underline">
             ← Back to dashboard
           </Link>
-          <h1 className="mt-2 text-3xl font-extrabold">Meeting {dateLabel}</h1>
+          <h1 className="mt-2 text-3xl font-extrabold">
+            Meeting {dateLabel}
+          </h1>
+          <p className="text-zinc-600">
+            {meeting?.is_locked ? '🔒 Locked' : 'Open for updates'}
+          </p>
         </header>
 
         <section className="space-y-6">
