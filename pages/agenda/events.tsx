@@ -302,7 +302,7 @@ export default function EventsPlanningPage() {
           </Link>
 
           <h1 className="text-2xl sm:text-3xl font-extrabold text-zinc-900">
-            Events Planning
+            🎉 Events Planning
           </h1>
           <p className="mt-1 text-sm sm:text-base text-zinc-600">
             Plan and track upcoming club events
@@ -313,7 +313,7 @@ export default function EventsPlanningPage() {
         <section className="mb-6 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="border-b border-zinc-200 px-4 py-3 sm:px-6 lg:px-8">
             <h2 className="text-lg font-semibold text-zinc-900">
-              Add new event
+              ➕ Add new event
             </h2>
           </div>
           <div className="px-4 py-4 sm:px-6 lg:px-8">
@@ -446,7 +446,7 @@ export default function EventsPlanningPage() {
         <section className="mt-0 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 sm:px-6 lg:px-8">
             <h2 className="text-base sm:text-lg font-semibold text-zinc-900">
-              Events calendar
+              📅 Events calendar
             </h2>
             <div className="flex items-center gap-2">
               <button
@@ -579,7 +579,7 @@ export default function EventsPlanningPage() {
         <section className="mt-4 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="px-4 py-4 sm:px-6 lg:px-8">
             <h2 className="text-lg font-semibold text-zinc-900">
-              Book a function
+              🎫 Book a function
             </h2>
             <p className="mt-1 text-sm text-zinc-600">
               Use the booking system to book events.
@@ -589,9 +589,9 @@ export default function EventsPlanningPage() {
                 href="https://aldwiniansrufc.setmore.com/bookings"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-red-700"
+                className="inline-flex items-center gap-2 rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-red-700"
               >
-                Book functions online
+                <span>📆</span> Book functions online
               </a>
             </div>
           </div>

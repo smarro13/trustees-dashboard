@@ -299,7 +299,7 @@ export default function TreasuryPage() {
           </Link>
 
           <h1 className="text-3xl font-extrabold text-zinc-900">
-            Treasury Report
+            💰 Treasury Report
           </h1>
           <p className="mt-1 text-zinc-600">
             Financial overview for Aldwinians RUFC - Monthly Update
@@ -310,7 +310,7 @@ export default function TreasuryPage() {
         <section className="mb-10 w-full rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="border-b border-zinc-200 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
             <h2 className="text-xl font-semibold text-zinc-900">
-              Add treasury report
+              ➕ Add treasury report
             </h2>
           </div>
 
