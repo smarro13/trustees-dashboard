@@ -301,8 +301,8 @@ export default function EventsPlanningPage() {
 
   return (
     <main className="min-h-screen bg-zinc-50">
-      <div className="mx-auto w-full max-w-6xl sm:max-w-7xl lg:max-w-[1200px] px-2 sm:px-4 lg:px-6 py-6 sm:py-8 lg:py-10">
-        <header className="mb-8">
+      <div className="mx-auto w-full max-w-6xl sm:max-w-7xl lg:max-w-[1200px] px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-10">
+        <header className="mb-6 sm:mb-8">
           <Link
             href="/"
             className="mb-3 inline-block text-sm font-medium text-blue-600 hover:underline"
@@ -310,10 +310,10 @@ export default function EventsPlanningPage() {
             ← Back to dashboard
           </Link>
 
-          <h1 className="text-3xl font-extrabold text-zinc-900">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-zinc-900">
             Events Planning
           </h1>
-          <p className="mt-1 text-zinc-600">
+          <p className="mt-1 text-sm sm:text-base text-zinc-600">
             Plan and track upcoming club events
           </p>
         </header>
@@ -328,63 +328,63 @@ export default function EventsPlanningPage() {
           <div className="px-4 py-4 sm:px-6 lg:px-8">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-zinc-700">
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
                   Event title
                 </label>
                 <input
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
                   placeholder="e.g. Summer BBQ"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-zinc-700">
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
                   Event month (yyyy-MM)
                 </label>
                 <input
                   type="month"
                   value={eventMonth}
                   onChange={(e) => setEventMonth(e.target.value)}
-                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-zinc-700">
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
                   Suggested date
                 </label>
                 <input
                   type="date"
                   value={suggestedDate}
                   onChange={(e) => setSuggestedDate(e.target.value)}
-                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-zinc-700">
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
                   Lead person
                 </label>
                 <input
                   type="text"
                   value={lead}
                   onChange={(e) => setLead(e.target.value)}
-                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
                   placeholder="Person responsible"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-zinc-700">
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
                   Status
                 </label>
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
-                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
                 >
                   <option value="Idea">Idea</option>
                   <option value="Planning">Planning</option>
@@ -395,41 +395,41 @@ export default function EventsPlanningPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-zinc-700">
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
                   Budget (£)
                 </label>
                 <input
                   type="number"
                   value={budget}
                   onChange={(e) => setBudget(e.target.value)}
-                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
                   placeholder="0.00"
                   step="0.01"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-zinc-700">
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
                   Expected revenue (£)
                 </label>
                 <input
                   type="number"
                   value={expectedRevenue}
                   onChange={(e) => setExpectedRevenue(e.target.value)}
-                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
                   placeholder="0.00"
                   step="0.01"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-zinc-700">
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
                   Link to meeting
                 </label>
                 <select
                   value={meetingId || ''}
                   onChange={(e) => setMeetingId(e.target.value || null)}
-                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
                 >
                   <option value="">None</option>
                   {meetings.map((m) => (
@@ -441,40 +441,40 @@ export default function EventsPlanningPage() {
               </div>
 
               <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-zinc-700">
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
                   Setmore booking URL
                 </label>
                 <input
                   type="url"
                   value={setmoreUrl}
                   onChange={(e) => setSetmoreUrl(e.target.value)}
-                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
                   placeholder="https://aldwiniansrufc.setmore.com/..."
                 />
               </div>
 
               <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-zinc-700">
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
                   Notes
                 </label>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={2}
-                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
                   placeholder="Additional notes..."
                 />
               </div>
 
               <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-zinc-700">
+                <label className="block text-sm font-medium text-zinc-700 mb-1">
                   Discussion points for meeting
                 </label>
                 <textarea
                   value={discussionPoints}
                   onChange={(e) => setDiscussionPoints(e.target.value)}
                   rows={4}
-                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
                   placeholder="Add discussion points to raise at the trustees meeting..."
                 />
               </div>
@@ -484,7 +484,7 @@ export default function EventsPlanningPage() {
               <button
                 onClick={addEvent}
                 disabled={loading || !title.trim()}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+                className="min-h-[44px] w-full sm:w-auto rounded-md bg-blue-600 px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
               >
                 {loading ? 'Adding...' : 'Add event'}
               </button>
@@ -495,22 +495,26 @@ export default function EventsPlanningPage() {
         {/* Calendar view */}
         <section className="mt-0 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 sm:px-6 lg:px-8">
-            <h2 className="text-lg font-semibold text-zinc-900">
+            <h2 className="text-base sm:text-lg font-semibold text-zinc-900">
               Events calendar
             </h2>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => changeMonth(-1)}
-                className="rounded border px-2 py-1 text-sm"
+                className="min-h-[44px] min-w-[44px] rounded border border-zinc-300 bg-white px-3 py-2 text-lg font-medium hover:bg-zinc-50"
+                aria-label="Previous month"
               >
                 ‹
               </button>
-              <span className="text-sm font-medium">{monthName}</span>
+              <span className="text-xs sm:text-sm font-medium whitespace-nowrap px-2">
+                {monthName}
+              </span>
               <button
                 type="button"
                 onClick={() => changeMonth(1)}
-                className="rounded border px-2 py-1 text-sm"
+                className="min-h-[44px] min-w-[44px] rounded border border-zinc-300 bg-white px-3 py-2 text-lg font-medium hover:bg-zinc-50"
+                aria-label="Next month"
               >
                 ›
               </button>
