@@ -238,6 +238,7 @@ export default function MeetingPage() {
         );
 
       case 'rugby':
+      case 'rugby_reports':
         if (!rugby.length) return empty(emptyText);
         return (
           <div className="space-y-3 text-sm">
