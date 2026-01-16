@@ -400,8 +400,11 @@ export default function TradingPage() {
               </p>
 
               {/* Styled like Save report, now red */}
-              <label className="inline-flex cursor-pointer items-center rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">
-                Choose PDF…
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                {tillFile ? tillFile.name : 'Choose PDF…'}
                 <input
                   type="file"
                   accept="application/pdf"
@@ -411,7 +414,7 @@ export default function TradingPage() {
               </label>
               {tillFile && (
                 <span className="ml-2 text-xs text-zinc-600 align-middle">
-                  {tillFile.name}
+                  {(tillFile.size / 1024 / 1024).toFixed(2)} MB
                 </span>
               )}
 
