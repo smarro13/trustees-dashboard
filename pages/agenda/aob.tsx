@@ -43,13 +43,20 @@ export default function AOBPage() {
 
     setLoading(true);
 
-    await supabase.from('aob_items').insert({
+    const { data, error } = await supabase.from('aob_items').insert({
       title,
       description: description || null,
       meeting_id: meetingId,
       add_to_action_tracker: addToActionTracker,
       action_notes: addToActionTracker ? actionNotes : null,
     });
+
+    if (error) {
+      console.error('Error saving AOB item:', error);
+      alert('Failed to save AOB item: ' + error.message);
+      setLoading(false);
+      return;
+    }
 
     setTitle('');
     setDescription('');
@@ -58,6 +65,7 @@ export default function AOBPage() {
 
     setLoading(false);
     loadData();
+    alert('AOB item saved successfully!');
   };
 
   return (

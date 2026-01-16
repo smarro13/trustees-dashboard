@@ -333,6 +333,81 @@ export default function MeetingPage() {
           </div>
         );
 
+      case 'safeguarding':
+        if (!safeguarding.length) return empty(emptyText);
+        return (
+          <div className="space-y-2">
+            {safeguarding.map((s) => (
+              <div key={s.id} className="rounded-md border p-3">
+                <p className="text-sm text-zinc-700 whitespace-pre-wrap">{s.update_text}</p>
+              </div>
+            ))}
+          </div>
+        );
+
+      case 'events':
+        if (!events.length) return empty(emptyText);
+        return (
+          <div className="space-y-2">
+            {events.map((e) => (
+              <div key={e.id} className="rounded-md border p-3">
+                <p className="font-semibold">{e.event_name}</p>
+                {e.event_date && (
+                  <p className="text-xs text-zinc-500">
+                    {new Date(e.event_date).toLocaleDateString('en-GB')}
+                  </p>
+                )}
+                {e.description && (
+                  <p className="text-sm text-zinc-700 whitespace-pre-wrap">{e.description}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+
+      case 'trading':
+        if (!trading.length) return empty(emptyText);
+        return (
+          <div className="space-y-2">
+            {trading.map((t) => (
+              <div key={t.id} className="rounded-md border p-3">
+                {t.summary && (
+                  <p className="text-sm text-zinc-700 whitespace-pre-wrap">{t.summary}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+
+      case 'treasury':
+        if (!treasury.length) return empty(emptyText);
+        return (
+          <div className="space-y-2">
+            {treasury.map((t) => (
+              <div key={t.id} className="rounded-md border p-3">
+                {t.summary && (
+                  <p className="text-sm text-zinc-700 whitespace-pre-wrap">{t.summary}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+
+      case 'aob':
+        if (!aob.length) return empty(emptyText);
+        return (
+          <div className="space-y-2">
+            {aob.map((a) => (
+              <div key={a.id} className="rounded-md border p-3">
+                <p className="font-semibold">{a.title}</p>
+                {a.description && (
+                  <p className="text-sm text-zinc-700 whitespace-pre-wrap">{a.description}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+
       default:
         return empty(emptyText);
     }
