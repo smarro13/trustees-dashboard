@@ -4,14 +4,19 @@ import { supabase } from '../../lib/supabaseClient';
 
 export default function SafeguardingPage() {
   const [updates, setUpdates] = useState<any[]>([]);
+  const [meetings, setMeetings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
   const [status, setStatus] = useState('Information');
   const [reviewDate, setReviewDate] = useState('');
   const [team, setTeam] = useState('Under 7s');
+  const [meetingId, setMeetingId] = useState<string | null>(null);
 
   const loadData = async () => {
+    setLoading(true);
+
     const { data } = await supabase
       .from('safeguarding_updates')
       .select(`
@@ -21,6 +26,15 @@ export default function SafeguardingPage() {
       .order('created_at', { ascending: false });
 
     if (data) setUpdates(data);
+
+    const { data: meetingsData } = await supabase
+      .from('meetings')
+      .select('id, meeting_date')
+      .order('meeting_date', { ascending: true });
+
+    if (meetingsData) setMeetings(meetingsData);
+
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -30,21 +44,34 @@ export default function SafeguardingPage() {
   const saveUpdate = async () => {
     if (!title || !summary) return;
 
-    await supabase.from('safeguarding_updates').insert({
+    setLoading(true);
+
+    const { data, error } = await supabase.from('safeguarding_updates').insert({
       title,
       summary,
       status,
       review_date: reviewDate || null,
       team,
+      meeting_id: meetingId,
     });
+
+    if (error) {
+      console.error('Error saving safeguarding update:', error);
+      alert('Failed to save safeguarding update: ' + error.message);
+      setLoading(false);
+      return;
+    }
 
     setTitle('');
     setSummary('');
     setStatus('Information');
     setReviewDate('');
     setTeam('Under 7s');
+    setMeetingId(null);
 
+    setLoading(false);
     loadData();
+    alert('Safeguarding update saved successfully!');
   };
 
   const teamBuckets = [
@@ -96,6 +123,23 @@ export default function SafeguardingPage() {
           </div>
 
           <div className="w-full px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6 space-y-4">
+            <select
+              value={meetingId ?? ''}
+              onChange={(e) => setMeetingId(e.target.value || null)}
+              className="w-full rounded-md border border-zinc-300 px-3 py-2"
+            >
+              <option value="">Link to meeting (optional)</option>
+              {meetings.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {new Date(m.meeting_date).toLocaleDateString('en-GB', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                  })}
+                </option>
+              ))}
+            </select>
+
             <input
               placeholder="Title"
               value={title}
@@ -146,9 +190,10 @@ export default function SafeguardingPage() {
             <div className="flex justify-end">
               <button
                 onClick={saveUpdate}
-                className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700"
+                disabled={loading}
+                className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
-                Save safeguarding update
+                {loading ? 'Saving…' : 'Save safeguarding update'}
               </button>
             </div>
           </div>
