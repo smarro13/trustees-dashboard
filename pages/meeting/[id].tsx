@@ -188,6 +188,22 @@ export default function MeetingPage() {
           </ul>
         );
 
+      case 'matters_arising':
+        if (!mattersArising.length) return empty(emptyText);
+        return (
+          <div className="space-y-2">
+            {mattersArising.map((m) => (
+              <div key={m.id} className="rounded-md border p-3">
+                <p className="font-semibold">{m.title}</p>
+                <p className="text-sm text-zinc-700 whitespace-pre-wrap">{m.description}</p>
+                {m.status && (
+                  <p className="text-xs text-zinc-500 mt-1">Status: {m.status}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+
       case 'membership':
         if (!membership.length) return empty(emptyText);
         return (
