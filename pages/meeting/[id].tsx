@@ -90,7 +90,11 @@ export default function MeetingPage() {
         supabase.from('matters_arising').select('*').eq('meeting_id', meetingId),
         supabase.from('aob_items').select('*').eq('meeting_id', meetingId),
         supabase.from('rugby_reports').select('*').eq('meeting_id', meetingId),
-        supabase.from('minutes').select('*').eq('meeting_id', meetingId),
+        supabase
+          .from('minutes')
+          .select('*')
+          .eq('meeting_id', meetingId)
+          .order('created_at', { ascending: false }),
       ]);
 
       setApologies(apol.data ?? []);
@@ -187,8 +191,42 @@ export default function MeetingPage() {
       case 'minutes':
         if (!minutes.length) return empty(emptyText);
         return (
-          <div className="rounded-md border p-3 whitespace-pre-wrap text-sm">
-            {minutes[0].content}
+          <div className="space-y-3 text-sm">
+            {minutes.map((m) => (
+              <div key={m.id} className="rounded-md border p-3">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="font-semibold">
+                    {m.title || 'Minutes file'}
+                  </p>
+                  {m.created_at && (
+                    <span className="text-xs text-zinc-500">
+                      Uploaded {new Date(m.created_at).toLocaleString('en-GB', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  )}
+                </div>
+
+                {m.file_url ? (
+                  <a
+                    href={m.file_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center text-blue-600 hover:underline"
+                  >
+                    Open minutes →
+                  </a>
+                ) : (
+                  <p className="mt-2 text-zinc-600 whitespace-pre-wrap">
+                    {m.content || 'No content available.'}
+                  </p>
+                )}
+              </div>
+            ))}
           </div>
         );
 
