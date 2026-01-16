@@ -365,7 +365,9 @@ export default function MembershipReportPage() {
               ))}
             </select>
           </div>
+        </section>
 
+        {/* Global save button */}
         <section className="mt-6 flex justify-end">
           <button
             onClick={saveReport}
