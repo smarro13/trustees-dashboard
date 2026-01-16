@@ -7,7 +7,6 @@ export default function SafeguardingPage() {
   const [meetings, setMeetings] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
   const [status, setStatus] = useState('Information');
   const [reviewDate, setReviewDate] = useState('');
@@ -42,12 +41,12 @@ export default function SafeguardingPage() {
   }, []);
 
   const saveUpdate = async () => {
-    if (!title || !summary) return;
+    if (!summary) return;
 
     setLoading(true);
 
     const { data, error } = await supabase.from('safeguarding_updates').insert({
-      title,
+      title: `${team} - ${status}`,
       summary,
       status,
       review_date: reviewDate || null,
@@ -62,7 +61,6 @@ export default function SafeguardingPage() {
       return;
     }
 
-    setTitle('');
     setSummary('');
     setStatus('Information');
     setReviewDate('');
@@ -139,13 +137,6 @@ export default function SafeguardingPage() {
                 </option>
               ))}
             </select>
-
-            <input
-              placeholder="Title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full rounded-md border px-3 py-2"
-            />
 
             <textarea
               placeholder="Summary (high-level, no personal detail)"
