@@ -246,14 +246,24 @@ export default function MembershipReportPage() {
 
             {/* CSV upload */}
             <div className="space-y-1">
-              <label className="block text-sm font-medium text-zinc-700">
+              <label className="block text-sm font-medium text-zinc-700 mb-2">
                 Upload CSV
               </label>
+              <label
+                htmlFor="csv-upload"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-red-600 text-white font-medium hover:bg-red-700 cursor-pointer transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                Choose file…
+              </label>
               <input
+                id="csv-upload"
                 type="file"
                 accept=".csv"
                 onChange={handleCsvUpload}
-                className="block w-full text-sm text-zinc-700 file:mr-3 file:rounded-md file:border-0 file:bg-red-600 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-red-700"
+                className="hidden"
               />
             </div>
           </div>
