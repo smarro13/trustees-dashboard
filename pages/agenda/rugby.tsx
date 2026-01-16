@@ -41,13 +41,20 @@ export default function RugbyReportPage() {
   const saveReport = async () => {
     setLoading(true);
 
-    await supabase.from('rugby_reports').insert({
+    const { data, error } = await supabase.from('rugby_reports').insert({
       meeting_id: meetingId,
       mini_report: miniReport || null,
       junior_report: juniorReport || null,
       senior_report: seniorReport || null,
       management_requests: managementRequests || null,
     });
+
+    if (error) {
+      console.error('Error saving rugby report:', error);
+      alert('Failed to save rugby report: ' + error.message);
+      setLoading(false);
+      return;
+    }
 
     setMeetingId(null);
     setMiniReport('');
@@ -57,6 +64,7 @@ export default function RugbyReportPage() {
 
     setLoading(false);
     loadData();
+    alert('Rugby report saved successfully!');
   };
 
   return (

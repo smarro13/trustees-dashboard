@@ -237,6 +237,41 @@ export default function MeetingPage() {
           </div>
         );
 
+      case 'rugby':
+        if (!rugby.length) return empty(emptyText);
+        return (
+          <div className="space-y-3 text-sm">
+            {rugby.map((r) => (
+              <div key={r.id} className="rounded-md border p-3 space-y-2">
+                {r.mini_report && (
+                  <div>
+                    <p className="font-semibold">Mini Rugby:</p>
+                    <p className="text-zinc-700 whitespace-pre-wrap">{r.mini_report}</p>
+                  </div>
+                )}
+                {r.junior_report && (
+                  <div>
+                    <p className="font-semibold">Junior Rugby:</p>
+                    <p className="text-zinc-700 whitespace-pre-wrap">{r.junior_report}</p>
+                  </div>
+                )}
+                {r.senior_report && (
+                  <div>
+                    <p className="font-semibold">Senior Rugby:</p>
+                    <p className="text-zinc-700 whitespace-pre-wrap">{r.senior_report}</p>
+                  </div>
+                )}
+                {r.management_requests && (
+                  <div>
+                    <p className="font-semibold">Management Requests:</p>
+                    <p className="text-zinc-700 whitespace-pre-wrap">{r.management_requests}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+
       case 'minutes':
         if (!minutes.length) return empty(emptyText);
         return (
