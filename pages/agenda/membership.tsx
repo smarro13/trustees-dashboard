@@ -392,7 +392,7 @@ export default function MembershipReportPage() {
                 <div className="mt-2 text-sm text-zinc-700 space-y-1">
                   {r.num_people != null && (
                     <p>
-                      <span className="font-semibold">Number of people:</span>{' '}
+                      <span className="font-semibold">Number of people from Bottomline:</span>{' '}
                       {r.num_people}
                     </p>
                   )}
