@@ -36,9 +36,9 @@ export default function MattersArisingPage() {
   };
 
   useEffect(() => {
-    loadData();
+    const loadAll = async () => {
+      await loadData();
 
-    const loadNextMeeting = async () {
       const { data } = await supabase
         .from('meetings')
         .select('id')
@@ -50,7 +50,7 @@ export default function MattersArisingPage() {
       if (data) setNextMeetingId(data.id);
     };
 
-    loadNextMeeting();
+    loadAll();
   }, []);
 
   const saveMatter = async () => {
