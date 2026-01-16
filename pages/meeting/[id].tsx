@@ -339,7 +339,11 @@ export default function MeetingPage() {
           <div className="space-y-2">
             {safeguarding.map((s) => (
               <div key={s.id} className="rounded-md border p-3">
-                <p className="text-sm text-zinc-700 whitespace-pre-wrap">{s.update_text}</p>
+                <p className="font-semibold">{s.title}</p>
+                <p className="text-sm text-zinc-700 whitespace-pre-wrap">{s.summary}</p>
+                <p className="text-xs text-zinc-500 mt-1">
+                  Status: {s.status} • Team: {s.team}
+                </p>
               </div>
             ))}
           </div>

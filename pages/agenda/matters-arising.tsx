@@ -95,6 +95,7 @@ export default function MattersArisingPage() {
     setAddToActions(false);
     setLoading(false);
     loadData();
+    alert('Matter arising saved successfully!');
   };
 
   return (
