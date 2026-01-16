@@ -244,27 +244,7 @@ export default function MembershipReportPage() {
               />
             </div>
 
-            {/* File upload */}
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-zinc-700 mb-2">
-                Upload file
-              </label>
-              <label
-                htmlFor="file-upload"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-red-600 text-white font-medium hover:bg-red-700 cursor-pointer transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                Choose file…
-              </label>
-              <input
-                id="file-upload"
-                type="file"
-                onChange={handleCsvUpload}
-                className="hidden"
-              />
-            </div>
+
 
           </div>
         </section>
@@ -306,82 +286,6 @@ export default function MembershipReportPage() {
               />
             </div>
 
-            {/* Outstanding payments: category selector + expandable fields */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-zinc-700">
-                Outstanding payments category
-              </label>
-              <select
-                value={selectedOutstandingCategory}
-                onChange={(e) =>
-                  setSelectedOutstandingCategory(
-                    e.target.value as OutstandingCategory | '',
-                  )
-                }
-                className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
-              >
-                <option value="">Select a category (optional)</option>
-                {outstandingCategories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-
-              {/* Only allow adding / editing when a category is selected */}
-              {selectedOutstandingCategory && (
-                <div className="mt-2 space-y-2">
-                  <button
-                    type="button"
-                    onClick={addOutstandingLine}
-                    className="rounded-md bg-zinc-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-900"
-                  >
-                    Add outstanding payment
-                  </button>
-
-                  {linesForSelectedCategory.length > 0 && (
-                    <div className="mt-2 space-y-2">
-                      {linesForSelectedCategory.map((line) => (
-                        <div
-                          key={line.id}
-                          className="flex flex-col gap-2 rounded-md border border-zinc-200 p-2 sm:flex-row sm:items-center"
-                        >
-                          <input
-                            type="text"
-                            placeholder="Member name"
-                            value={line.memberName}
-                            onChange={(e) =>
-                              updateOutstandingLine(
-                                line.id,
-                                'memberName',
-                                e.target.value,
-                              )
-                            }
-                            className="w-full rounded-md border border-zinc-300 px-2 py-1 text-sm"
-                          />
-                          <input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            placeholder="Amount (£)"
-                            value={line.amount}
-                            onChange={(e) =>
-                              updateOutstandingLine(
-                                line.id,
-                                'amount',
-                                e.target.value,
-                              )
-                            }
-                            className="w-full rounded-md border border-zinc-300 px-2 py-1 text-sm sm:w-32"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
             {/* Outstanding payments total */}
             <div className="space-y-1">
               <label className="block text-sm font-medium text-zinc-700">
@@ -413,104 +317,7 @@ export default function MembershipReportPage() {
               />
             </div>
 
-            {/* New: cancellations by category – just number of people */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-zinc-700">
-                Cancellations category
-              </label>
-              <select
-                value={selectedCancellationCategory}
-                onChange={(e) =>
-                  setSelectedCancellationCategory(
-                    e.target.value as OutstandingCategory | '',
-                  )
-                }
-                className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
-              >
-                <option value="">Select a category (optional)</option>
-                {outstandingCategories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-
-              {selectedCancellationCategory && (
-                <div className="mt-2 space-y-2">
-                  <button
-                    type="button"
-                    onClick={addCancellationLine}
-                    className="rounded-md bg-zinc-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-900"
-                  >
-                    Add cancellations count
-                  </button>
-
-                  {cancellationsForSelectedCategory.length > 0 && (
-                    <div className="mt-2 space-y-2">
-                      {cancellationsForSelectedCategory.map((line) => (
-                        <div
-                          key={line.id}
-                          className="flex items-center gap-2 rounded-md border border-zinc-200 p-2"
-                        >
-                          <span className="text-xs text-zinc-600">
-                            {line.category}
-                          </span>
-                          <input
-                            type="number"
-                            min={0}
-                            placeholder="Number of people"
-                            value={line.count}
-                            onChange={(e) =>
-                              updateCancellationLine(line.id, e.target.value)
-                            }
-                            className="w-full rounded-md border border-zinc-300 px-2 py-1 text-sm sm:w-40"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
           </div>
-        </section>
-
-        {/* Reports list */}
-        <section className="space-y-4">
-          {loading && (
-            <p className="text-zinc-500 text-sm">Loading membership reports…</p>
-          )}
-          {!loading &&
-            reports.map((r) => (
-              <div key={r.id} className="player-card">
-                {r.meetings?.meeting_date && (
-                  <p className="pc-meta">
-                    Meeting: {new Date(r.meetings.meeting_date).toLocaleDateString('en-GB')}
-                  </p>
-                )}
-
-                {(r.bottom_line || r.num_people != null) && (
-                  <div className="mt-2 text-sm text-zinc-700 space-y-1">
-                    {r.bottom_line && (
-                      <p>
-                        <span className="font-semibold">Bottom line:</span>{' '}
-                        {r.bottom_line}
-                      </p>
-                    )}
-                    {r.num_people != null && (
-                      <p>
-                        <span className="font-semibold">Number of people:</span>{' '}
-                        {r.num_people}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <p className="mt-2 text-xs text-zinc-400">
-                  Added {new Date(r.created_at).toLocaleString('en-GB')}
-                </p>
-              </div>
-            ))}
         </section>
 
         {/* Money total summary section */}
@@ -558,9 +365,7 @@ export default function MembershipReportPage() {
               ))}
             </select>
           </div>
-        </section>
 
-        {/* Global save button */}
         <section className="mt-6 flex justify-end">
           <button
             onClick={saveReport}
@@ -568,6 +373,66 @@ export default function MembershipReportPage() {
           >
             Save membership report
           </button>
+        </section>
+
+        {/* Reports list */}
+        <section className="mt-10 space-y-4">
+          {loading && (
+            <p className="text-zinc-500 text-sm">Loading membership reports…</p>
+          )}
+          {!loading &&
+            reports.map((r) => (
+              <div key={r.id} className="player-card">
+                {r.meetings?.meeting_date && (
+                  <p className="pc-meta">
+                    Meeting: {new Date(r.meetings.meeting_date).toLocaleDateString('en-GB')}
+                  </p>
+                )}
+
+                <div className="mt-2 text-sm text-zinc-700 space-y-1">
+                  {r.num_people != null && (
+                    <p>
+                      <span className="font-semibold">Number of people:</span>{' '}
+                      {r.num_people}
+                    </p>
+                  )}
+                  {r.money_total != null && (
+                    <p>
+                      <span className="font-semibold">Bottomline Total (£):</span>{' '}
+                      {r.money_total}
+                    </p>
+                  )}
+                  {r.loveadmin_new_signups != null && (
+                    <p>
+                      <span className="font-semibold">LoveAdmin New sign ups:</span>{' '}
+                      {r.loveadmin_new_signups}
+                    </p>
+                  )}
+                  {r.loveadmin_total != null && (
+                    <p>
+                      <span className="font-semibold">LoveAdmin Total (£):</span>{' '}
+                      {r.loveadmin_total}
+                    </p>
+                  )}
+                  {r.loveadmin_outstanding_total != null && (
+                    <p>
+                      <span className="font-semibold">Outstanding payments total (£):</span>{' '}
+                      {r.loveadmin_outstanding_total}
+                    </p>
+                  )}
+                  {r.loveadmin_cancellations != null && (
+                    <p>
+                      <span className="font-semibold">Number of cancellations:</span>{' '}
+                      {r.loveadmin_cancellations}
+                    </p>
+                  )}
+                </div>
+
+                <p className="mt-2 text-xs text-zinc-400">
+                  Added {new Date(r.created_at).toLocaleString('en-GB')}
+                </p>
+              </div>
+            ))}
         </section>
       </div>
     </main>
