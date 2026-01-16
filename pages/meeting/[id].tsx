@@ -195,9 +195,11 @@ export default function MeetingPage() {
             {mattersArising.map((m) => (
               <div key={m.id} className="rounded-md border p-3">
                 <p className="font-semibold">{m.title}</p>
-                <p className="text-sm text-zinc-700 whitespace-pre-wrap">{m.description}</p>
-                {m.status && (
-                  <p className="text-xs text-zinc-500 mt-1">Status: {m.status}</p>
+                {m.details && (
+                  <p className="text-sm text-zinc-700 whitespace-pre-wrap">{m.details}</p>
+                )}
+                {m.raised_by && (
+                  <p className="text-xs text-zinc-500 mt-1">Raised by: {m.raised_by}</p>
                 )}
               </div>
             ))}
