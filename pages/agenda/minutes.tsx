@@ -34,36 +34,60 @@ export default function MinutesPage() {
   }, []);
 
   const uploadMinutes = async () => {
-    if (!file || !title.trim()) return;
-
-    setLoading(true);
-
-    const filePath = `${Date.now()}-${file.name}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('minutes')
-      .upload(filePath, file);
-
-    if (uploadError) {
-      setLoading(false);
+    if (!title.trim()) {
+      alert('Please enter a title for the minutes');
       return;
     }
 
-    const { data } = supabase.storage
-      .from('minutes')
-      .getPublicUrl(filePath);
+    if (!file) {
+      alert('Please select a file to upload');
+      return;
+    }
 
-    await supabase.from('minutes').insert({
-      title,
-      file_url: data.publicUrl,
-      meeting_id: meetingId
-    });
+    setLoading(true);
 
-    setTitle('');
-    setMeetingId(null);
-    setFile(null);
-    setLoading(false);
-    loadData();
+    try {
+      const filePath = `${Date.now()}-${file.name}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('minutes')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        alert('Failed to upload file: ' + uploadError.message);
+        setLoading(false);
+        return;
+      }
+
+      const { data } = supabase.storage
+        .from('minutes')
+        .getPublicUrl(filePath);
+
+      const { error: insertError } = await supabase.from('minutes').insert({
+        title,
+        file_url: data.publicUrl,
+        meeting_id: meetingId
+      });
+
+      if (insertError) {
+        console.error('Insert error:', insertError);
+        alert('Failed to save minutes: ' + insertError.message);
+        setLoading(false);
+        return;
+      }
+
+      setTitle('');
+      setMeetingId(null);
+      setFile(null);
+      setLoading(false);
+      loadData();
+      alert('Minutes uploaded successfully!');
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('An error occurred while uploading');
+      setLoading(false);
+    }
   };
 
   return (
@@ -135,7 +159,15 @@ export default function MinutesPage() {
                 id="file-upload"
                 type="file"
                 accept=".pdf,.doc,.docx"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => {
+                  const selectedFile = e.target.files?.[0] ?? null;
+                  setFile(selectedFile);
+                  if (selectedFile && !title.trim()) {
+                    // Remove file extension and set as title
+                    const fileName = selectedFile.name.replace(/\.[^/.]+$/, '');
+                    setTitle(fileName);
+                  }
+                }}
                 className="hidden"
               />
               {file && (
