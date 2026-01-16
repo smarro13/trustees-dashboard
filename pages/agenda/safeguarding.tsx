@@ -16,15 +16,16 @@ export default function SafeguardingPage() {
   const loadData = async () => {
     setLoading(true);
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('safeguarding_updates')
-      .select(`
-        *,
-        safeguarding_references ( label, url )
-      `)
+      .select('*')
       .order('created_at', { ascending: false });
 
-    if (data) setUpdates(data);
+    if (error) {
+      console.error('Error loading safeguarding updates:', error);
+    } else if (data) {
+      setUpdates(data);
+    }
 
     const { data: meetingsData } = await supabase
       .from('meetings')
@@ -221,22 +222,6 @@ export default function SafeguardingPage() {
                       <p className="mt-3 whitespace-pre-wrap text-zinc-700">
                         {u.summary}
                       </p>
-
-                      {u.safeguarding_references?.length > 0 && (
-                        <ul className="mt-3 list-disc pl-5 text-sm">
-                          {u.safeguarding_references.map((r: any) => (
-                            <li key={r.url}>
-                              <a
-                                href={r.url}
-                                target="_blank"
-                                className="text-blue-600 hover:underline"
-                              >
-                                {r.label}
-                              </a>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
                     </div>
                   ))}
                 {updates.filter((u) => u.team === bucket).length === 0 && (
