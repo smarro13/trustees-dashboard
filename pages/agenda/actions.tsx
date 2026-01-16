@@ -7,6 +7,7 @@ const STATUS_OPTIONS = ['Open', 'In Progress', 'Completed'];
 export default function ActionTrackerPage() {
   const [actions, setActions] = useState<any[]>([]);
   const [meetings, setMeetings] = useState<any[]>([]);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   // manual entry
   const [title, setTitle] = useState('');
@@ -17,6 +18,18 @@ export default function ActionTrackerPage() {
   const [createdBy, setCreatedBy] = useState('');
 
   const [loading, setLoading] = useState(false);
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -225,16 +238,44 @@ export default function ActionTrackerPage() {
                 {actions.map((a) => (
                   <div
                     key={a.id}
-                    className="rounded-lg border border-zinc-200 bg-white p-4"
+                    className="rounded-lg border border-zinc-200 bg-white"
                   >
-                    <div className="mb-3 flex items-start justify-between">
-                      <h3 className="flex-1 font-semibold text-zinc-900">
-                        {a.title}
-                      </h3>
+                    <button
+                      onClick={() => toggleExpanded(a.id)}
+                      className="w-full p-4 text-left"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="flex-1 font-semibold text-zinc-900">
+                          {a.title}
+                        </h3>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs px-2 py-1 rounded ${
+                            a.status === 'Completed' ? 'bg-green-100 text-green-800' :
+                            a.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                            'bg-zinc-100 text-zinc-800'
+                          }`}>
+                            {a.status}
+                          </span>
+                          <svg
+                            className={`w-5 h-5 text-zinc-400 transition-transform ${
+                              expandedIds.has(a.id) ? 'rotate-180' : ''
+                            }`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </button>
+
+                    {expandedIds.has(a.id) && (
+                      <div className="px-4 pb-4 border-t pt-3">
                       <select
                         value={a.status}
                         onChange={(e) => updateStatus(a.id, e.target.value)}
-                        className="ml-2 min-h-[44px] rounded-md border px-3 py-2 text-sm"
+                        className="w-full mb-3 min-h-[44px] rounded-md border px-3 py-2 text-sm"
                       >
                         {STATUS_OPTIONS.map((s) => (
                           <option key={s} value={s}>
@@ -242,9 +283,8 @@ export default function ActionTrackerPage() {
                           </option>
                         ))}
                       </select>
-                    </div>
                     
-                    <div className="space-y-2 text-sm text-zinc-600">
+                      <div className="space-y-2 text-sm text-zinc-600">
                       {a.description && (
                         <p className="text-zinc-700">{a.description}</p>
                       )}
@@ -274,7 +314,9 @@ export default function ActionTrackerPage() {
                           {a.source || '—'}
                         </p>
                       </div>
-                    </div>
+                      </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
