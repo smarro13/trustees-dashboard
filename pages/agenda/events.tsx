@@ -38,7 +38,7 @@ export default function EventsPlanningPage() {
     const { data: meetingsData } = await supabase
       .from('meetings')
       .select('id, meeting_date')
-      .order('meeting_date', { ascending: false });
+      .order('meeting_date', { ascending: true });
 
     if (meetingsData) setMeetings(meetingsData);
   };
