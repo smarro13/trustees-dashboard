@@ -83,12 +83,21 @@ export default function MeetingPage() {
         supabase.from('conflicts_of_interest').select('*').eq('meeting_id', meetingId),
         supabase.from('correspondence').select('*').eq('meeting_id', meetingId),
         supabase.from('safeguarding_updates').select('*').eq('meeting_id', meetingId),
-        supabase.from('events_planning').select('*').eq('meeting_id', meetingId),
+        supabase
+          .from('events_planning')
+          .select('*')
+          .or(`meeting_id.eq.${meetingId},meeting_id.is.null`)
+          .order('suggested_date', { ascending: true, nullsLast: false })
+          .order('event_date', { ascending: true, nullsLast: true }),
         supabase.from('membership_reports').select('*').eq('meeting_id', meetingId),
         supabase.from('trading_reports').select('*').eq('meeting_id', meetingId),
         supabase.from('treasury_reports').select('*').eq('meeting_id', meetingId),
         supabase.from('action_items').select('*').eq('meeting_id', meetingId),
-        supabase.from('matters_arising').select('*').eq('meeting_id', meetingId),
+        supabase
+          .from('matters_arising')
+          .select('*')
+          .or(`meeting_id.eq.${meetingId},meeting_id.is.null`)
+          .order('created_at', { ascending: false }),
         supabase.from('aob_items').select('*').eq('meeting_id', meetingId),
         supabase.from('rugby_reports').select('*').eq('meeting_id', meetingId),
         supabase
