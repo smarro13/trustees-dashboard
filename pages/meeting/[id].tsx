@@ -34,6 +34,7 @@ export default function MeetingPage() {
 
   const [meeting, setMeeting] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [lockSaving, setLockSaving] = useState(false);
 
   const [apologies, setApologies] = useState<any[]>([]);
   const [conflicts, setConflicts] = useState<any[]>([]);
@@ -116,6 +117,28 @@ export default function MeetingPage() {
 
     load();
   }, [meetingId]);
+
+  const toggleLock = async () => {
+    if (!meetingId || !meeting) return;
+    setLockSaving(true);
+
+    const newLocked = !meeting.is_locked;
+    const { data, error } = await supabase
+      .from('meetings')
+      .update({ is_locked: newLocked })
+      .eq('id', meetingId)
+      .select('id, meeting_date, is_locked')
+      .single();
+
+    if (error) {
+      console.error('Failed to toggle lock', error);
+      alert('Could not update lock status.');
+    } else if (data) {
+      setMeeting(data);
+    }
+
+    setLockSaving(false);
+  };
 
   if (!meetingId || loading) {
     return <p className="p-6 text-sm text-zinc-500">Loading meeting…</p>;
@@ -353,19 +376,55 @@ export default function MeetingPage() {
         if (!events.length) return empty(emptyText);
         return (
           <div className="space-y-2">
-            {events.map((e) => (
-              <div key={e.id} className="rounded-md border p-3">
-                <p className="font-semibold">{e.event_name}</p>
-                {e.event_date && (
-                  <p className="text-xs text-zinc-500">
-                    {new Date(e.event_date).toLocaleDateString('en-GB')}
-                  </p>
-                )}
-                {e.description && (
-                  <p className="text-sm text-zinc-700 whitespace-pre-wrap">{e.description}</p>
-                )}
-              </div>
-            ))}
+            {events
+              .slice()
+              .sort((a, b) => {
+                const aDate = a.suggested_date || a.event_date;
+                const bDate = b.suggested_date || b.event_date;
+                if (!aDate && !bDate) return 0;
+                if (!aDate) return 1;
+                if (!bDate) return -1;
+                return new Date(aDate).getTime() - new Date(bDate).getTime();
+              })
+              .map((e) => {
+                const primaryDate = e.suggested_date || e.event_date;
+                const secondaryDate = e.suggested_date && e.event_date ? e.event_date : null;
+
+                return (
+                  <div key={e.id} className="rounded-md border p-3 space-y-1">
+                    <p className="font-semibold">{e.title || 'Event'}</p>
+
+                    {primaryDate ? (
+                      <p className="text-xs text-zinc-500">
+                        {new Date(primaryDate).toLocaleDateString('en-GB')}
+                        {secondaryDate
+                          ? ` (target month ${new Date(secondaryDate).toLocaleDateString('en-GB', {
+                              month: 'short',
+                              year: 'numeric',
+                            })})`
+                          : ''}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-zinc-500">Date TBC</p>
+                    )}
+
+                    <div className="text-xs text-zinc-600">
+                      {e.status && <span className="mr-2">Status: {e.status}</span>}
+                      {e.lead && <span>Lead: {e.lead}</span>}
+                    </div>
+
+                    {e.notes && (
+                      <p className="text-sm text-zinc-700 whitespace-pre-wrap">{e.notes}</p>
+                    )}
+
+                    {e.discussion_points && (
+                      <p className="text-sm text-zinc-700 whitespace-pre-wrap">
+                        Discussion: {e.discussion_points}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
           </div>
         );
 
@@ -421,9 +480,22 @@ export default function MeetingPage() {
     <main className="min-h-screen bg-zinc-50">
       <div className="mx-auto max-w-[1200px] px-4 py-6 sm:py-10">
         <header className="mb-6 sm:mb-8">
-          <Link href="/" className="text-sm text-blue-600 hover:underline">
-            ← Back to dashboard
-          </Link>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <Link href="/" className="text-sm text-blue-600 hover:underline">
+              ← Back to dashboard
+            </Link>
+            <button
+              onClick={toggleLock}
+              disabled={lockSaving}
+              className="inline-flex items-center justify-center rounded-md bg-zinc-900 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-zinc-800 disabled:opacity-60"
+            >
+              {lockSaving
+                ? 'Updating…'
+                : meeting?.is_locked
+                  ? 'Unlock meeting'
+                  : 'Lock meeting'}
+            </button>
+          </div>
           <h1 className="mt-2 text-2xl sm:text-3xl font-extrabold">
             Meeting {dateLabel}
           </h1>

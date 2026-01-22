@@ -34,7 +34,7 @@ export default function LandingPage() {
       .from('meetings')
       .select('*')
       .order('meeting_date', { ascending: true })
-      .limit(5);
+      .limit(1000);
 
     if (data) setMeetings(data);
   };
