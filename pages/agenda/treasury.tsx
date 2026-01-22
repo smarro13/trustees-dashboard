@@ -339,7 +339,7 @@ export default function TreasuryPage() {
                       month: '2-digit',
                       year: 'numeric',
                     })}
-                  </option>
+                  </option> 
                 ))}
               </select>
             </div>
