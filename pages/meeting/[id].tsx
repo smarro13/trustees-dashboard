@@ -87,8 +87,8 @@ export default function MeetingPage() {
           .from('events_planning')
           .select('*')
           .or(`meeting_id.eq.${meetingId},meeting_id.is.null`)
-          .order('suggested_date', { ascending: true, nullsLast: false })
-          .order('event_date', { ascending: true, nullsLast: true }),
+          .order('suggested_date', { ascending: true })
+          .order('event_date', { ascending: true }),
         supabase.from('membership_reports').select('*').eq('meeting_id', meetingId),
         supabase.from('trading_reports').select('*').eq('meeting_id', meetingId),
         supabase.from('treasury_reports').select('*').eq('meeting_id', meetingId),
