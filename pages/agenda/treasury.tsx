@@ -728,6 +728,7 @@ export default function TreasuryPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
 
               {/* Grouped totals */}
               <div className="mt-3 text-sm">
@@ -816,12 +817,12 @@ export default function TreasuryPage() {
                 </p>
               )}
 
-              <table className="mt-3 w-full border text-sm">
+              <table className="mt-3 w-full border text-sm overflow-x-auto">
                 <tbody>
                   {r.treasury_report_items.map((i: any) => (
                     <tr key={i.label}>
-                      <td className="border px-2 py-1">{i.label}</td>
-                      <td className="border px-2 py-1 text-right">
+                      <td className="border px-2 py-1 whitespace-nowrap">{i.label}</td>
+                      <td className="border px-2 py-1 text-right whitespace-nowrap">
                         £{Number(i.amount).toFixed(2)}
                       </td>
                     </tr>
