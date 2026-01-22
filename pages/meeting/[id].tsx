@@ -35,6 +35,7 @@ export default function MeetingPage() {
   const [meeting, setMeeting] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [lockSaving, setLockSaving] = useState(false);
+  const [metaOpen, setMetaOpen] = useState(true);
 
   const [apologies, setApologies] = useState<any[]>([]);
   const [conflicts, setConflicts] = useState<any[]>([]);
@@ -505,12 +506,26 @@ export default function MeetingPage() {
                   : 'Lock meeting'}
             </button>
           </div>
-          <h1 className="mt-2 text-2xl sm:text-3xl font-extrabold">
-            Meeting {dateLabel}
-          </h1>
-          <p className="text-sm sm:text-base text-zinc-600">
-            {meeting?.is_locked ? '🔒 Locked' : 'Open for updates'}
-          </p>
+
+          <div className="mt-3 rounded-lg bg-white ring-1 ring-zinc-200 shadow-sm">
+            <button
+              onClick={() => setMetaOpen((o) => !o)}
+              className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-zinc-900"
+            >
+              <span>Meeting details</span>
+              <span className="flex items-center gap-2 text-zinc-600">
+                <span>{dateLabel}</span>
+                <span aria-hidden>▾</span>
+              </span>
+            </button>
+
+            {metaOpen && (
+              <div className="border-t border-zinc-200 px-4 py-3 text-sm text-zinc-700 space-y-1">
+                <p className="font-semibold">Meeting {dateLabel}</p>
+                <p>{meeting?.is_locked ? '🔒 Locked' : 'Open for updates'}</p>
+              </div>
+            )}
+          </div>
         </header>
 
         <section className="space-y-4 sm:space-y-6">
