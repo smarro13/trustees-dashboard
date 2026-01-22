@@ -345,22 +345,15 @@ export default function TreasuryPage() {
             </div>
 
             {/* Month / Money table */}
-            <div>
-              <table className="w-full text-sm border table-fixed">
-                <colgroup>
-                  <col className="w-[30%]" />
-                  <col className="w-[20%]" />
-                  <col className="w-[20%]" />
-                  <col className="w-[15%]" />
-                  <col className="w-[15%]" />
-                </colgroup>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border min-w-max sm:table-fixed">
                 <thead className="bg-zinc-50">
                   <tr>
-                    <th className="border px-2 py-1 text-left">Month</th>
-                    <th className="border px-2 py-1 text-right">Money In (£)</th>
-                    <th className="border px-2 py-1 text-right">Money Out (£)</th>
-                    <th className="border px-2 py-1 text-right">Difference</th>
-                    <th className="border px-2 py-1 text-right">Balance</th>
+                    <th className="border px-2 py-1 text-left whitespace-nowrap">Month</th>
+                    <th className="border px-2 py-1 text-right whitespace-nowrap">Money In (£)</th>
+                    <th className="border px-2 py-1 text-right whitespace-nowrap">Money Out (£)</th>
+                    <th className="border px-2 py-1 text-right whitespace-nowrap">Difference</th>
+                    <th className="border px-2 py-1 text-right whitespace-nowrap">Balance</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -470,14 +463,15 @@ export default function TreasuryPage() {
               <h3 className="mb-2 text-sm font-semibold text-zinc-800">
                 Regular income
               </h3>
-              <table className="w-full text-sm border">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm border min-w-max">
                 <thead className="bg-zinc-50">
                   <tr>
-                    <th className="border px-2 py-1 text-left">Regular Payments</th>
-                    <th className="border px-2 py-1 text-left">Frequency</th>
-                    <th className="border px-2 py-1 text-right">Amount (£)</th>
-                    <th className="border px-2 py-1 text-left">Notes</th>
-                    <th className="border px-2 py-1 text-center w-20">Actions</th>
+                    <th className="border px-2 py-1 text-left whitespace-nowrap">Regular Payments</th>
+                    <th className="border px-2 py-1 text-left whitespace-nowrap">Frequency</th>
+                    <th className="border px-2 py-1 text-right whitespace-nowrap">Amount (£)</th>
+                    <th className="border px-2 py-1 text-left whitespace-nowrap">Notes</th>
+                    <th className="border px-2 py-1 text-center whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -542,7 +536,8 @@ export default function TreasuryPage() {
                   ))}
                 </tbody>
               </table>
-              <div className="mt-2 flex items-center justify-between text-sm">
+              </div>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-sm">
                 <button
                   type="button"
                   onClick={addRegularIncomeRow}
@@ -550,7 +545,7 @@ export default function TreasuryPage() {
                 >
                   + Add regular income
                 </button>
-                <span className="font-semibold">
+                <span className="font-semibold whitespace-nowrap">
                   Total regular income:{' '}
                   £
                   {regularIncomes
@@ -568,12 +563,13 @@ export default function TreasuryPage() {
               <h3 className="mb-2 text-sm font-semibold text-zinc-800">
                 Monies owed
               </h3>
-              <table className="w-full text-sm border">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm border min-w-max">
                 <thead className="bg-zinc-50">
                   <tr>
-                    <th className="border px-2 py-1 text-left">Name</th>
-                    <th className="border px-2 py-1 text-right">Amount (£)</th>
-                    <th className="border px-2 py-1 text-center w-20">Actions</th>
+                    <th className="border px-2 py-1 text-left whitespace-nowrap">Name</th>
+                    <th className="border px-2 py-1 text-right whitespace-nowrap">Amount (£)</th>
+                    <th className="border px-2 py-1 text-center whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -616,7 +612,8 @@ export default function TreasuryPage() {
                   ))}
                 </tbody>
               </table>
-              <div className="mt-2 flex items-center justify-between text-sm">
+              </div>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-sm">
                 <button
                   type="button"
                   onClick={addMoneyOwedRow}
@@ -624,7 +621,7 @@ export default function TreasuryPage() {
                 >
                   + Add monies owed
                 </button>
-                <span className="font-semibold">
+                <span className="font-semibold whitespace-nowrap">
                   Total owed:{' '}
                   £
                   {moniesOwed
@@ -642,14 +639,15 @@ export default function TreasuryPage() {
               <h3 className="mb-2 text-sm font-semibold text-zinc-800">
                 Regular payments
               </h3>
-              <table className="w-full text-sm border">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm border min-w-max">
                 <thead className="bg-zinc-50">
                   <tr>
-                    <th className="border px-2 py-1 text-left">Description</th>
-                    <th className="border px-2 py-1 text-left">Frequency</th>
-                    <th className="border px-2 py-1 text-right">Amount (£)</th>
-                    <th className="border px-2 py-1 text-left">Notes</th>
-                    <th className="border px-2 py-1 text-center w-20">Actions</th>
+                    <th className="border px-2 py-1 text-left whitespace-nowrap">Description</th>
+                    <th className="border px-2 py-1 text-left whitespace-nowrap">Frequency</th>
+                    <th className="border px-2 py-1 text-right whitespace-nowrap">Amount (£)</th>
+                    <th className="border px-2 py-1 text-left whitespace-nowrap">Notes</th>
+                    <th className="border px-2 py-1 text-center whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
