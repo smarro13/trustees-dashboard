@@ -9,6 +9,7 @@ export default function LandingPage() {
   const [meetings, setMeetings] = useState<any[]>([]);
   const [dueActions, setDueActions] = useState<any[]>([]);
   const [userEmail, setUserEmail] = useState<string>('');
+  const [meetingsOpen, setMeetingsOpen] = useState(true);
   const router = useRouter();
 
   // Get user session
@@ -131,59 +132,51 @@ export default function LandingPage() {
           <AgendaMenu />
           <div className="flex-1 min-w-0 w-full">
             {/* Upcoming Meetings */}
-            <section className="mb-12">
-              <div className="mb-5 flex items-center justify-between">
-                <h2 className="text-2xl font-semibold text-zinc-900">
-                  📅 Upcoming Meetings
-                </h2>
-              </div>
+            <section className="mb-12 rounded-lg bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
+              <button
+                onClick={() => setMeetingsOpen((o) => !o)}
+                className="flex w-full items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3 text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">📅</span>
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Upcoming Meetings</h2>
+                    <p className="text-xs text-slate-500">{meetings.length} meeting{meetings.length !== 1 ? 's' : ''}</p>
+                  </div>
+                </div>
+                <span className="text-slate-600 font-semibold">
+                  {meetingsOpen ? '▾' : '▸'}
+                </span>
+              </button>
 
-              {meetings.length === 0 ? (
-                <p className="rounded-lg border border-dashed border-zinc-200 bg-white p-6 text-zinc-500">
-                  No meetings scheduled.
-                </p>
-              ) : (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-                  {meetings.map((m) => {
-                    const dateLabel = new Date(m.meeting_date).toLocaleDateString(
-                      'en-GB',
-                    );
-                    const isLocked = Boolean(m.is_locked);
+              {meetingsOpen && (
+                <div className="px-4 py-4 bg-white">
+                  {meetings.length === 0 ? (
+                    <p className="text-sm text-zinc-500">No meetings scheduled.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {meetings.map((m) => {
+                        const dateLabel = new Date(m.meeting_date).toLocaleDateString(
+                          'en-GB',
+                        );
+                        const isLocked = Boolean(m.is_locked);
 
-                    return (
-                      <Link
-                        key={m.id}
-                        href={`/meeting/${m.id}`}
-                        className="player-card meeting-card transition-base hover:-translate-y-0.5 hover:shadow-md block"
-                      >
-                        <div className="pc-wrap">
-                          <div className="pc-image">
-                            <div className="inline-flex h-12 w-12 items-center justify-center rounded-lg bg-zinc-100 text-xl">
-                              📅
+                        return (
+                          <Link
+                            key={m.id}
+                            href={`/meeting/${m.id}`}
+                            className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 p-3 hover:bg-slate-100 transition"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-slate-900">{dateLabel}</span>
+                              {isLocked && <span className="text-xs bg-red-100 text-red-700 rounded px-2 py-1">🔒 Locked</span>}
                             </div>
-                          </div>
-
-                          <div className="pc-mobile-header">
-                            <h3 className="pc-name">{dateLabel}</h3>
-                            <p className="pc-sponsor-text">
-                              {isLocked
-                                ? '🔒 Locked for editing'
-                                : 'Open for agenda updates'}
-                            </p>
-                          </div>
-
-                          <div className="pc-details">
-                            <h3 className="pc-name">
-                              {dateLabel}
-                            </h3>
-                            <p className="pc-meta">
-                              {isLocked ? '🔒 Locked' : 'Open for updates'}
-                            </p>
-                          </div>
-                        </div>
-                      </Link>
-                    );
-                  })}
+                            <span className="text-slate-400">→</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </section>
