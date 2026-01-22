@@ -173,95 +173,143 @@ export default function TreasuryPage() {
   };
 
   const saveReport = async () => {
-    if (!period.trim()) return;
+    if (!period.trim()) {
+      alert('Please enter a reporting period');
+      return;
+    }
 
     setLoading(true);
 
-    const { data: report } = await supabase
-      .from('treasury_reports')
-      .insert({
-        reporting_period: period,
-        meeting_id: meetingId,
-        notes,
-      })
-      .select()
-      .single();
+    try {
+      const { data: report, error: reportError } = await supabase
+        .from('treasury_reports')
+        .insert({
+          reporting_period: period,
+          meeting_id: meetingId,
+          notes,
+        })
+        .select()
+        .single();
 
-    if (report) {
-      const rows = items
-        .filter(
-          (i) =>
-            (i.moneyIn && Number(i.moneyIn)) ||
-            (i.moneyOut && Number(i.moneyOut))
-        )
-        .map((i, idx) => {
-          const moneyIn = Number(i.moneyIn || '0');
-          const moneyOut = Number(i.moneyOut || '0');
-          const diff = moneyIn - moneyOut;
-          const baseLabel = i.dateRange || `Entry ${idx + 1}`;
-          return {
-            report_id: report.id,
-            label: baseLabel,
-            amount: diff,
-          };
-        });
-
-      const regularRows = regularPayments
-        .filter((rp) => rp.description && rp.amount)
-        .map((rp) => ({
-          report_id: report.id,
-          label: `Regular: ${rp.description} (${rp.frequency}${
-            rp.notes ? ` – ${rp.notes}` : ''
-          })`,
-          amount: Number(rp.amount || '0'),
-        }));
-
-      const regularIncomeRows = regularIncomes
-        .filter((ri) => ri.description && ri.amount)
-        .map((ri) => ({
-          report_id: report.id,
-          label: `Regular income: ${ri.description} (${ri.frequency}${
-            ri.notes ? ` – ${ri.notes}` : ''
-          })`,
-          amount: Number(ri.amount || '0'),
-        }));
-
-      const moniesOwedRows = moniesOwed
-        .filter((m) => m.name && m.amount)
-        .map((m) => ({
-          report_id: report.id,
-          label: `Monies owed: ${m.name}`,
-          amount: -Number(m.amount || '0'), // negative because this is owed
-        }));
-
-      const allRows = [
-        ...rows,
-        ...regularRows,
-        ...regularIncomeRows,
-        ...moniesOwedRows,
-      ];
-
-      if (allRows.length) {
-        await supabase.from('treasury_report_items').insert(allRows);
+      if (reportError) {
+        alert(`Error creating report: ${reportError.message}`);
+        setLoading(false);
+        return;
       }
+
+      if (report) {
+        const rows = items
+          .filter(
+            (i) =>
+              (i.moneyIn && Number(i.moneyIn)) ||
+              (i.moneyOut && Number(i.moneyOut))
+          )
+          .map((i, idx) => {
+            const moneyIn = Number(i.moneyIn || '0');
+            const moneyOut = Number(i.moneyOut || '0');
+            const diff = moneyIn - moneyOut;
+            const baseLabel = i.dateRange || `Entry ${idx + 1}`;
+            return {
+              report_id: report.id,
+              label: baseLabel,
+              amount: diff,
+            };
+          });
+
+        const regularRows = regularPayments
+          .filter((rp) => rp.description && rp.amount)
+          .map((rp) => ({
+            report_id: report.id,
+            label: `Regular: ${rp.description} (${rp.frequency}${
+              rp.notes ? ` – ${rp.notes}` : ''
+            })`,
+            amount: Number(rp.amount || '0'),
+          }));
+
+        const regularIncomeRows = regularIncomes
+          .filter((ri) => ri.description && ri.amount)
+          .map((ri) => ({
+            report_id: report.id,
+            label: `Regular income: ${ri.description} (${ri.frequency}${
+              ri.notes ? ` – ${ri.notes}` : ''
+            })`,
+            amount: Number(ri.amount || '0'),
+          }));
+
+        const moniesOwedRows = moniesOwed
+          .filter((m) => m.name && m.amount)
+          .map((m) => ({
+            report_id: report.id,
+            label: `Monies owed: ${m.name}`,
+            amount: -Number(m.amount || '0'), // negative because this is owed
+          }));
+
+        const allRows = [
+          ...rows,
+          ...regularRows,
+          ...regularIncomeRows,
+          ...moniesOwedRows,
+        ];
+
+        if (allRows.length) {
+          const { error: itemsError } = await supabase
+            .from('treasury_report_items')
+            .insert(allRows);
+
+          if (itemsError) {
+            alert(`Error saving report items: ${itemsError.message}`);
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
+      // Reset form after successful save
+      setPeriod('');
+      setMeetingId(null);
+      setNotes('');
+      setItems([{ dateRange: '', moneyIn: '', moneyOut: '' }]);
+      setRegularPayments([
+        { description: 'Gas', frequency: 'Monthly', amount: '300', notes: 'Monthly Readings' },
+        { description: 'Water', frequency: 'Monthly', amount: '580', notes: 'Catch Up Payments' },
+        { description: 'BT Group (Phone)', frequency: 'Monthly TC', amount: '99', notes: '' },
+        { description: 'BT Group (Broadband)', frequency: 'Monthly TC', amount: '246', notes: '' },
+        { description: '3 Mobile', frequency: 'Monthly TC', amount: '30', notes: 'Steward Mobile' },
+        { description: 'Bottom Line', frequency: 'Monthly', amount: '85', notes: 'On Average' },
+        { description: 'Sky TV', frequency: 'Monthly TC', amount: '450', notes: '' },
+        { description: 'Coaching Staff', frequency: 'Monthly', amount: '1353', notes: '' },
+        { description: 'Laundry', frequency: 'Monthly', amount: '650', notes: 'Average over the year' },
+        { description: 'DK Services', frequency: 'Monthly TC', amount: '104', notes: 'Pot Washers' },
+        { description: 'FDMS', frequency: 'Monthly TC', amount: '520', notes: 'Varies on the amount taken' },
+        { description: 'Mark Bates', frequency: 'Monthly', amount: '140', notes: 'Average' },
+        { description: 'Physio', frequency: 'Monthly', amount: '320', notes: '' },
+        { description: 'Concept Hygiene', frequency: 'Monthly', amount: '270', notes: '' },
+        { description: 'Aldermore Bank PLC', frequency: 'Monthly TC', amount: '255.60', notes: 'Club Control' },
+        { description: 'Biffa Waste', frequency: 'Monthly TC', amount: '557', notes: '' },
+        { description: 'HMRC', frequency: 'Monthly', amount: '355', notes: 'PAYE for RM (Increased)' },
+        { description: 'Club Insure', frequency: 'Monthly', amount: '858.33', notes: '' },
+        { description: 'Coporate Asset Sols', frequency: 'Monthly TC', amount: '400.80', notes: '' },
+      ]);
+      setRegularIncomes([
+        { description: 'Road Riders', frequency: 'Monthly', amount: '450', notes: '' },
+        { description: 'LoveAdmin', frequency: 'Monthly', amount: '4800', notes: '' },
+        { description: 'BottomLine', frequency: 'Monthly', amount: '800', notes: '' },
+        { description: 'Aldwinians TC', frequency: 'Monthly', amount: '1000', notes: '' },
+      ]);
+      setMoniesOwed([
+        { name: 'TGL Solutions', amount: '2500' },
+        { name: 'Smirfit Sponsorship', amount: '1000' },
+        { name: '6 Nations Tickets', amount: '2280' },
+      ]);
+
+      alert('Report saved successfully!');
+      await loadData();
+    } catch (error) {
+      console.error('Error saving report:', error);
+      alert(`An unexpected error occurred: ${error}`);
+    } finally {
+      setLoading(false);
     }
-
-    setPeriod('');
-    setMeetingId(null);
-    setNotes('');
-    setItems([{ dateRange: '', moneyIn: '', moneyOut: '' }]);
-    setRegularPayments([
-      { description: '', frequency: '', amount: '', notes: '' },
-    ]);
-    setRegularIncomes([
-      { description: '', frequency: '', amount: '', notes: '' },
-    ]);
-    setMoniesOwed([
-      { name: '', amount: '' },
-    ]);
-    setLoading(false);
-
-    loadData();
   };
 
   // helper to sort for UX without mutating state
