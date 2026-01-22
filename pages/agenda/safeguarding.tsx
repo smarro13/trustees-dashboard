@@ -13,6 +13,8 @@ export default function SafeguardingPage() {
   const [team, setTeam] = useState('Under 7s');
   const [meetingId, setMeetingId] = useState<string | null>(null);
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+
   const loadData = async () => {
     setLoading(true);
 
@@ -46,20 +48,43 @@ export default function SafeguardingPage() {
 
     setLoading(true);
 
-    const { data, error } = await supabase.from('safeguarding_updates').insert({
-      title: `${team} - ${status}`,
-      summary,
-      status,
-      review_date: reviewDate || null,
-      team,
-      meeting_id: meetingId,
-    });
+    if (editingId) {
+      // Update existing
+      const { error } = await supabase
+        .from('safeguarding_updates')
+        .update({
+          title: `${team} - ${status}`,
+          summary,
+          status,
+          review_date: reviewDate || null,
+          team,
+          meeting_id: meetingId,
+        })
+        .eq('id', editingId);
 
-    if (error) {
-      console.error('Error saving safeguarding update:', error);
-      alert('Failed to save safeguarding update: ' + error.message);
-      setLoading(false);
-      return;
+      if (error) {
+        console.error('Error updating safeguarding update:', error);
+        alert('Failed to update safeguarding update: ' + error.message);
+        setLoading(false);
+        return;
+      }
+    } else {
+      // Create new
+      const { data, error } = await supabase.from('safeguarding_updates').insert({
+        title: `${team} - ${status}`,
+        summary,
+        status,
+        review_date: reviewDate || null,
+        team,
+        meeting_id: meetingId,
+      });
+
+      if (error) {
+        console.error('Error saving safeguarding update:', error);
+        alert('Failed to save safeguarding update: ' + error.message);
+        setLoading(false);
+        return;
+      }
     }
 
     setSummary('');
@@ -67,10 +92,51 @@ export default function SafeguardingPage() {
     setReviewDate('');
     setTeam('Under 7s');
     setMeetingId(null);
+    setEditingId(null);
 
     setLoading(false);
     loadData();
-    alert('Safeguarding update saved successfully!');
+    alert(editingId ? 'Safeguarding update updated successfully!' : 'Safeguarding update saved successfully!');
+  };
+
+  const startEdit = (u: any) => {
+    setEditingId(u.id);
+    setSummary(u.summary || '');
+    setStatus(u.status || 'Information');
+    setReviewDate(u.review_date || '');
+    setTeam(u.team || 'Under 7s');
+    setMeetingId(u.meeting_id || null);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setSummary('');
+    setStatus('Information');
+    setReviewDate('');
+    setTeam('Under 7s');
+    setMeetingId(null);
+  };
+
+  const deleteUpdate = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this safeguarding update?')) return;
+
+    setLoading(true);
+
+    const { error } = await supabase
+      .from('safeguarding_updates')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting safeguarding update:', error);
+      alert('Failed to delete safeguarding update: ' + error.message);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(false);
+    loadData();
+    alert('Safeguarding update deleted successfully!');
   };
 
   const teamBuckets = [
@@ -117,7 +183,7 @@ export default function SafeguardingPage() {
           <div className="border-b border-zinc-200 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
             {/* keep pc-name for consistent red styling if defined globally */}
             <h2 className="pc-name text-xl font-semibold">
-              Add safeguarding update
+              {editingId ? 'Edit safeguarding update' : 'Add safeguarding update'}
             </h2>
           </div>
 
@@ -179,13 +245,22 @@ export default function SafeguardingPage() {
               </select>
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              {editingId && (
+                <button
+                  onClick={cancelEdit}
+                  disabled={loading}
+                  className="rounded-md bg-zinc-300 px-4 py-2 font-medium text-zinc-800 hover:bg-zinc-400 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              )}
               <button
                 onClick={saveUpdate}
                 disabled={loading}
                 className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
-                {loading ? 'Saving…' : 'Save safeguarding update'}
+                {loading ? 'Saving…' : editingId ? 'Update safeguarding update' : 'Save safeguarding update'}
               </button>
             </div>
           </div>
@@ -207,7 +282,7 @@ export default function SafeguardingPage() {
                   .map((u) => (
                     <div key={u.id} className="player-card">
                       <div className="flex items-start justify-between gap-4">
-                        <div>
+                        <div className="flex-1">
                           <h3 className="pc-name text-lg">{u.title}</h3>
                           <p className="pc-meta">
                             Status: <strong>{u.status}</strong>
@@ -216,6 +291,20 @@ export default function SafeguardingPage() {
                                 u.review_date
                               ).toLocaleDateString()}`}
                           </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => startEdit(u)}
+                            className="rounded-md bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => deleteUpdate(u.id)}
+                            className="rounded-md bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"
+                          >
+                            Delete
+                          </button>
                         </div>
                       </div>
 
