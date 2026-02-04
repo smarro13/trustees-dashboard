@@ -48,10 +48,16 @@ export async function parseTradingCompanyPDF(
   
   let textContent = '';
   try {
+    // Disable worker for serverless environment (Vercel)
     // Load PDF document using pdfjs-dist
-    const loadingTask = pdfjsLib.getDocument({ data: pdfBytes });
+    const loadingTask = pdfjsLib.getDocument({ 
+      data: pdfBytes,
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true
+    });
     const pdfDocument = await loadingTask.promise;
-    console.log('PDF loaded successfully, pages: - tradingCompanyParser.ts:54', pdfDocument.numPages);
+    console.log('PDF loaded successfully, pages: - tradingCompanyParser.ts:60', pdfDocument.numPages);
     
     // Extract text from all pages
     for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
@@ -66,9 +72,9 @@ export async function parseTradingCompanyPDF(
       textContent += pageText + '\n';
     }
     
-    console.log('PDF parsed successfully, text length: - tradingCompanyParser.ts:69', textContent.length);
+    console.log('PDF parsed successfully, text length: - tradingCompanyParser.ts:75', textContent.length);
   } catch (err) {
-    console.error('PDF parse error: - tradingCompanyParser.ts:71', err);
+    console.error('PDF parse error: - tradingCompanyParser.ts:77', err);
     throw new Error(`Failed to parse PDF: ${err instanceof Error ? err.message : 'Unknown error'}`);
   }
 
@@ -77,7 +83,7 @@ export async function parseTradingCompanyPDF(
     .map((l) => l.trim())
     .filter(Boolean);
 
-  console.log('Extracted - tradingCompanyParser.ts:80', lines.length, 'lines from PDF');
+  console.log('Extracted - tradingCompanyParser.ts:86', lines.length, 'lines from PDF');
 
   const items: ParsedItem[] = [];
 

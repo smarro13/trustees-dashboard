@@ -204,7 +204,7 @@ export default function TradingPage() {
       try {
         const responseText = await res.text();
         if (!responseText) {
-          setTillError('Server returned empty response. Check if pdf-parse is installed: npm install pdf-parse');
+          setTillError('Server returned empty response. The PDF library may not be working in the serverless environment. Contact support.');
           return;
         }
         data = JSON.parse(responseText);
