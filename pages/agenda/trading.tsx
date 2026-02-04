@@ -13,10 +13,12 @@ type TillSummary = {
   highestProfitItem?: {
     name: string;
     profit: number;
+    salesValue: number;
   } | null;
   mostPopularItems?: {
     name: string;
     quantity: number;
+    salesValue: number;
   }[];
 };
 
@@ -233,8 +235,12 @@ export default function TradingPage() {
       setTillSummary({
         highestProfitItem: data.highestProfitItem ?? null,
         mostPopularItems: data.mostPopularItems ?? [],
-      });
-    } catch (err: any) {
+      });      
+      // Also save till summary to turnover_notes for persistence
+      if (data.highestProfitItem) {
+        const tillNote = `\n🏆 Till Analysis:\n  Top Item: ${data.highestProfitItem.name}\n  Sales: £${data.highestProfitItem.salesValue.toFixed(2)}\n  Profit: £${data.highestProfitItem.profit.toFixed(2)}`;
+        setTurnoverNotes(prev => prev + (prev ? '\n' : '') + tillNote);
+      }    } catch (err: any) {
       setTillError(err.message || 'Error analysing till PDF');
     } finally {
       setTillParsing(false);
@@ -498,8 +504,8 @@ export default function TradingPage() {
                   {tillSummary.highestProfitItem && (
                     <p>
                       <span className="font-semibold">Highest profit item: </span>
-                      {tillSummary.highestProfitItem.name} (
-                      £{tillSummary.highestProfitItem.profit.toFixed(2)})
+                      {tillSummary.highestProfitItem.name}<br />
+                      <span className="text-xs text-zinc-600">Sales: £{tillSummary.highestProfitItem.salesValue.toFixed(2)} | Profit: £{tillSummary.highestProfitItem.profit.toFixed(2)}</span>
                     </p>
                   )}
                   {tillSummary.mostPopularItems &&
@@ -509,7 +515,7 @@ export default function TradingPage() {
                         <ul className="list-disc pl-5 space-y-0.5">
                           {tillSummary.mostPopularItems.map((it) => (
                             <li key={it.name}>
-                              {it.name} – {it.quantity} sold
+                              {it.name} – {it.quantity} sold (£{it.salesValue.toFixed(2)})
                             </li>
                           ))}
                         </ul>
