@@ -118,13 +118,40 @@ export default function TradingPage() {
 
     setLoading(true);
 
+    // Build monthly balance summary
+    let monthlyBalanceSummary = '';
+    if (items.length > 0 && items.some(item => item.dateRange)) {
+      monthlyBalanceSummary = '📊 Monthly Balances:\n\n';
+      items.forEach((row, idx) => {
+        if (row.dateRange) {
+          const moneyIn = Number(row.moneyIn || '0');
+          const moneyOut = Number(row.moneyOut || '0');
+          const diff = moneyIn - moneyOut;
+          const balance = items.slice(0, idx + 1).reduce((acc, r) => {
+            const mi = Number(r.moneyIn || '0');
+            const mo = Number(r.moneyOut || '0');
+            return acc + (mi - mo);
+          }, 0);
+          
+          monthlyBalanceSummary += `${row.dateRange}:\n`;
+          monthlyBalanceSummary += `  Opening: £${moneyIn.toFixed(2)}\n`;
+          monthlyBalanceSummary += `  Closing: £${moneyOut.toFixed(2)}\n`;
+          monthlyBalanceSummary += `  Difference: £${diff.toFixed(2)}\n`;
+          monthlyBalanceSummary += `  Running Balance: £${balance.toFixed(2)}\n\n`;
+        }
+      });
+    }
+
+    const fullSummary = monthlyBalanceSummary + (notes ? '\n' + notes : '');
+
     const { data: report } = await supabase
       .from('trading_reports')
       .insert({
         reporting_period: period,
         meeting_id: meetingId,
-        summary: notes,
+        summary: fullSummary,
         turnover_notes: turnoverNotes || null,
+        monthly_balances: JSON.stringify(items.filter(item => item.dateRange)),
         user_id: user.id,
       })
       .select()
