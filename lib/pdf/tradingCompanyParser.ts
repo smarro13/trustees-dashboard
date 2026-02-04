@@ -21,9 +21,23 @@ export type ParsedResult = {
 
 function parseNumber(input: string): number {
   if (!input) return 0;
-  const cleaned = input.replace(/,/g, "").trim();
+  const cleaned = input
+    .replace(/[,£$]/g, "")
+    .replace(/%/g, "")
+    .replace(/\((.*)\)/, "-$1")
+    .trim();
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : 0;
+}
+
+function isNumericToken(token: string): boolean {
+  if (!token) return false;
+  const cleaned = token
+    .replace(/[,£$]/g, "")
+    .replace(/%/g, "")
+    .replace(/\((.*)\)/, "-$1")
+    .trim();
+  return /^-?\d+(\.\d+)?$/.test(cleaned);
 }
 
 function isSkippableLine(line: string): boolean {
@@ -44,7 +58,7 @@ function isSkippableLine(line: string): boolean {
 export async function parseTradingCompanyPDF(
   pdfBytes: Buffer
 ): Promise<ParsedResult> {
-  console.log('Starting PDF parse, buffer size: - tradingCompanyParser.ts:47', pdfBytes.length);
+  console.log('Starting PDF parse, buffer size: - tradingCompanyParser.ts:61', pdfBytes.length);
   
   let textContent = '';
   try {
@@ -110,9 +124,9 @@ export async function parseTradingCompanyPDF(
     });
 
     textContent = await parsePromise;
-    console.log('PDF parsed successfully, text length: - tradingCompanyParser.ts:113', textContent.length);
+    console.log('PDF parsed successfully, text length: - tradingCompanyParser.ts:127', textContent.length);
   } catch (err) {
-    console.error('PDF parse error: - tradingCompanyParser.ts:115', err);
+    console.error('PDF parse error: - tradingCompanyParser.ts:129', err);
     throw new Error(`Failed to parse PDF: ${err instanceof Error ? err.message : 'Unknown error'}`);
   }
 
@@ -121,7 +135,7 @@ export async function parseTradingCompanyPDF(
     .map((l) => l.trim())
     .filter(Boolean);
 
-  console.log('Extracted - tradingCompanyParser.ts:124', lines.length, 'lines from PDF');
+  console.log('Extracted - tradingCompanyParser.ts:138', lines.length, 'lines from PDF');
 
   const items: ParsedItem[] = [];
 
@@ -186,6 +200,60 @@ export async function parseTradingCompanyPDF(
       gpPercent,
       salesRatioPercent,
     });
+  }
+
+  // Fallback parser: parse from end of line using numeric tokens
+  if (items.length === 0) {
+    for (const line of lines) {
+      if (isSkippableLine(line)) continue;
+
+      const tokens = line.split(/\s+/).filter(Boolean);
+      if (tokens.length < 6) continue;
+
+      const numericTokens: string[] = [];
+      let idx = tokens.length - 1;
+      while (idx >= 0 && numericTokens.length < 7) {
+        if (isNumericToken(tokens[idx])) {
+          numericTokens.unshift(tokens[idx]);
+          idx -= 1;
+        } else if (numericTokens.length > 0) {
+          break;
+        } else {
+          idx -= 1;
+        }
+      }
+
+      if (numericTokens.length < 6) continue;
+
+      const nameTokens = tokens.slice(0, idx + 1);
+      const maybePlu = nameTokens[0] && isNumericToken(nameTokens[0]);
+      const name = (maybePlu ? nameTokens.slice(1) : nameTokens).join(" ").trim();
+      if (!name) continue;
+
+      const numbers = numericTokens.map(parseNumber);
+      const lastSeven = numbers.length >= 7 ? numbers.slice(-7) : numbers;
+
+      const [
+        avgCost,
+        lineCost,
+        quantity,
+        value,
+        profitPercent,
+        gpPercent,
+        salesRatioPercent = 0,
+      ] = lastSeven;
+
+      items.push({
+        name,
+        avgCost,
+        lineCost,
+        quantity,
+        value,
+        profitPercent,
+        gpPercent,
+        salesRatioPercent,
+      });
+    }
   }
 
   /* ------------------------- derived values ------------------------- */
