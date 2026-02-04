@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
+import { User } from '@supabase/supabase-js';
 
 type Item = {
   dateRange?: string; // now a single month (e.g. "March 2025")
@@ -33,6 +34,7 @@ export default function TreasuryPage() {
   const [period, setPeriod] = useState('');
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
+  const [user, setUser] = useState<User | null>(null);
   const [items, setItems] = useState<Item[]>([
     { dateRange: '', moneyIn: '', moneyOut: '' },
   ]);
@@ -71,6 +73,10 @@ export default function TreasuryPage() {
   const [loading, setLoading] = useState(false);
 
   const loadData = async () => {
+    // Get current user
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    setUser(currentUser);
+
     const { data } = await supabase
       .from('treasury_reports')
       .select(`
@@ -178,6 +184,11 @@ export default function TreasuryPage() {
       return;
     }
 
+    if (!user) {
+      alert('You must be logged in to save a report');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -187,6 +198,7 @@ export default function TreasuryPage() {
           reporting_period: period,
           meeting_id: meetingId,
           notes,
+          user_id: user.id,
         })
         .select()
         .single();
@@ -213,6 +225,7 @@ export default function TreasuryPage() {
               report_id: report.id,
               label: baseLabel,
               amount: diff,
+              user_id: user.id,
             };
           });
 
@@ -224,6 +237,7 @@ export default function TreasuryPage() {
               rp.notes ? ` – ${rp.notes}` : ''
             })`,
             amount: Number(rp.amount || '0'),
+            user_id: user.id,
           }));
 
         const regularIncomeRows = regularIncomes
@@ -234,6 +248,7 @@ export default function TreasuryPage() {
               ri.notes ? ` – ${ri.notes}` : ''
             })`,
             amount: Number(ri.amount || '0'),
+            user_id: user.id,
           }));
 
         const moniesOwedRows = moniesOwed
@@ -242,6 +257,7 @@ export default function TreasuryPage() {
             report_id: report.id,
             label: `Monies owed: ${m.name}`,
             amount: -Number(m.amount || '0'), // negative because this is owed
+            user_id: user.id,
           }));
 
         const allRows = [
