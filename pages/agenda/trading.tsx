@@ -39,6 +39,7 @@ export default function TradingPage() {
   const [tillSummary, setTillSummary] = useState<TillSummary | null>(null);
   const [tillParsing, setTillParsing] = useState(false);
   const [tillError, setTillError] = useState<string | null>(null);
+  const [includeTillAnalysis, setIncludeTillAnalysis] = useState(false);
 
   const loadData = async () => {
     // Get current user
@@ -146,6 +147,14 @@ export default function TradingPage() {
 
     const fullSummary = monthlyBalanceSummary + (notes ? '\n' + notes : '');
 
+    // Build till analysis notes if needed
+    let tillNotes = '';
+    if (includeTillAnalysis && tillSummary?.highestProfitItem) {
+      const salesValue = Number(tillSummary.highestProfitItem.salesValue) || 0;
+      const profit = Number(tillSummary.highestProfitItem.profit) || 0;
+      tillNotes = `🏆 Till Analysis:\n  Top Item: ${tillSummary.highestProfitItem.name}\n  Sales: £${salesValue.toFixed(2)}\n  Profit: £${profit.toFixed(2)}`;
+    }
+
     const { data: report } = await supabase
       .from('trading_reports')
       .insert({
@@ -153,6 +162,7 @@ export default function TradingPage() {
         meeting_id: meetingId,
         summary: fullSummary,
         turnover_notes: turnoverNotes || null,
+        till_analysis: tillNotes || null,
         monthly_balances: JSON.stringify(items.filter(item => item.dateRange)),
         user_id: user.id,
       })
@@ -168,6 +178,7 @@ export default function TradingPage() {
     setMeetingId(null);
     setNotes('');
     setTurnoverNotes(''); // reset turnover
+    setIncludeTillAnalysis(false); // reset till checkbox
     setItems([{ dateRange: '', moneyIn: '', moneyOut: '' }]);
     setLoading(false);
 
@@ -235,14 +246,7 @@ export default function TradingPage() {
       setTillSummary({
         highestProfitItem: data.highestProfitItem ?? null,
         mostPopularItems: data.mostPopularItems ?? [],
-      });      
-      // Also save till summary to turnover_notes for persistence
-      if (data.highestProfitItem) {
-        const salesValue = Number(data.highestProfitItem.salesValue) || 0;
-        const profit = Number(data.highestProfitItem.profit) || 0;
-        const tillNote = `\n🏆 Till Analysis:\n  Top Item: ${data.highestProfitItem.name}\n  Sales: £${salesValue.toFixed(2)}\n  Profit: £${profit.toFixed(2)}`;
-        setTurnoverNotes(prev => prev + (prev ? '\n' : '') + tillNote);
-      }
+      });
     } catch (err: any) {
       setTillError(err.message || 'Error analysing till PDF');
     } finally {
@@ -531,6 +535,18 @@ export default function TradingPage() {
                         No summary could be extracted from this PDF.
                       </p>
                     )}
+                  <div className="flex items-center gap-2 pt-2 border-t">
+                    <input
+                      type="checkbox"
+                      id="includeTill"
+                      checked={includeTillAnalysis}
+                      onChange={(e) => setIncludeTillAnalysis(e.target.checked)}
+                      className="rounded"
+                    />
+                    <label htmlFor="includeTill" className="text-xs font-medium cursor-pointer">
+                      Include this till analysis in the report
+                    </label>
+                  </div>
                 </div>
               )}
             </div>
@@ -583,6 +599,13 @@ export default function TradingPage() {
                 <p className="mt-3 whitespace-pre-wrap text-zinc-700">
                   <span className="font-semibold">Turnover updates: </span>
                   {r.turnover_notes}
+                </p>
+              )}
+
+              {r.till_analysis && (
+                <p className="mt-3 whitespace-pre-wrap text-zinc-700">
+                  <span className="font-semibold">Till Analysis: </span>
+                  {r.till_analysis}
                 </p>
               )}
             </div>
