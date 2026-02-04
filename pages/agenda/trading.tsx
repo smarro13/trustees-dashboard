@@ -512,7 +512,7 @@ export default function TradingPage() {
                   {tillSummary.mostPopularItems &&
                     tillSummary.mostPopularItems.length > 0 && (
                       <div>
-                        <p className="font-semibold mb-1">Most popular items:</p>
+                        <p className="font-semibold mb-1">Top 10 items:</p>
                         <ul className="list-disc pl-5 space-y-0.5">
                           {tillSummary.mostPopularItems.map((it) => (
                             <li key={it.name}>
