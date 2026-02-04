@@ -177,6 +177,13 @@ export default function TradingPage() {
       }
 
       const data = await res.json();
+      
+      // Check if the API returned an error (even with 200 status)
+      if (data.error) {
+        setTillError(data.error);
+        return;
+      }
+      
       // Expect shape: { highestProfitItem: { name, profit }, mostPopularItems: [{ name, quantity }, ...] }
       setTillSummary({
         highestProfitItem: data.highestProfitItem ?? null,
