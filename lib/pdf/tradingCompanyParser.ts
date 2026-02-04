@@ -1,5 +1,5 @@
-// Using pdfjs-dist for serverless compatibility (Vercel)
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+// Using pdf2json for serverless compatibility (Vercel)
+import PDFParser from 'pdf2json';
 
 export type ParsedItem = {
   name: string;
@@ -44,37 +44,53 @@ function isSkippableLine(line: string): boolean {
 export async function parseTradingCompanyPDF(
   pdfBytes: Buffer
 ): Promise<ParsedResult> {
-  console.log('Starting PDF parse, buffer size: - tradingCompanyParser.ts:47', pdfBytes.length);
+  console.log('Starting PDF parse, buffer size:', pdfBytes.length);
   
   let textContent = '';
   try {
-    // Disable worker for serverless environment (Vercel)
-    // Load PDF document using pdfjs-dist
-    const loadingTask = pdfjsLib.getDocument({ 
-      data: pdfBytes,
-      useWorkerFetch: false,
-      isEvalSupported: false,
-      useSystemFonts: true
+    // Extract text using pdf2json (serverless-compatible)
+    const pdfParser = new PDFParser();
+    
+    // Parse PDF from buffer
+    const parsePromise = new Promise<string>((resolve, reject) => {
+      pdfParser.on('pdfParser_dataReady', (pdfData: any) => {
+        try {
+          // Extract text from all pages
+          let allText = '';
+          if (pdfData.Pages) {
+            for (const page of pdfData.Pages) {
+              if (page.Texts) {
+                for (const text of page.Texts) {
+                  if (text.R) {
+                    for (const run of text.R) {
+                      if (run.T) {
+                        // Decode URI-encoded text
+                        allText += decodeURIComponent(run.T) + ' ';
+                      }
+                    }
+                  }
+                }
+                allText += '\n';
+              }
+            }
+          }
+          resolve(allText);
+        } catch (err) {
+          reject(err);
+        }
+      });
+
+      pdfParser.on('pdfParser_dataError', (errData: any) => {
+        reject(new Error(errData.parserError || 'PDF parsing failed'));
+      });
+
+      pdfParser.parseBuffer(pdfBytes);
     });
-    const pdfDocument = await loadingTask.promise;
-    console.log('PDF loaded successfully, pages: - tradingCompanyParser.ts:60', pdfDocument.numPages);
-    
-    // Extract text from all pages
-    for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
-      const page = await pdfDocument.getPage(pageNum);
-      const content = await page.getTextContent();
-      
-      // Combine text items into lines
-      const pageText = content.items
-        .map((item: any) => item.str)
-        .join(' ');
-      
-      textContent += pageText + '\n';
-    }
-    
-    console.log('PDF parsed successfully, text length: - tradingCompanyParser.ts:75', textContent.length);
+
+    textContent = await parsePromise;
+    console.log('PDF parsed successfully, text length:', textContent.length);
   } catch (err) {
-    console.error('PDF parse error: - tradingCompanyParser.ts:77', err);
+    console.error('PDF parse error:', err);
     throw new Error(`Failed to parse PDF: ${err instanceof Error ? err.message : 'Unknown error'}`);
   }
 
@@ -83,7 +99,7 @@ export async function parseTradingCompanyPDF(
     .map((l) => l.trim())
     .filter(Boolean);
 
-  console.log('Extracted - tradingCompanyParser.ts:86', lines.length, 'lines from PDF');
+  console.log('Extracted', lines.length, 'lines from PDF');
 
   const items: ParsedItem[] = [];
 
