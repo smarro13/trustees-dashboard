@@ -14,7 +14,7 @@ export type ParsedItem = {
 
 export type ParsedResult = {
   items: ParsedItem[];
-  highestProfitItem: { name: string; profit: number } | null;
+  highestProfitItem: { name: string; profit: number; value: number } | null;
 };
 
 /* ----------------------------- helpers ----------------------------- */
@@ -268,6 +268,7 @@ export async function parseTradingCompanyPDF(
       highestProfitItem = {
         name: item.name,
         profit: item.value,
+        value: item.value,
       };
     }
   }
