@@ -252,6 +252,8 @@ export default function TreasuryPage() {
               label: baseLabel,
               amount: diff,
               user_id: user.id,
+              moneyIn,
+              moneyOut,
             };
           });
 
@@ -305,16 +307,8 @@ export default function TreasuryPage() {
           }
 
           // Build summary from items for display on meeting page
-          const moneyInTotal = rows.reduce((sum, r) => {
-            const moneyIn = Number(r.amount === undefined ? 0 : (r.amount > 0 ? r.amount : 0));
-            return sum + moneyIn;
-          }, 0);
-
-          const moneyOutTotal = rows.reduce((sum, r) => {
-            const moneyIn = Number(r.amount === undefined ? 0 : (r.amount < 0 ? -r.amount : 0));
-            return sum + moneyIn;
-          }, 0);
-
+          const moneyInTotal = rows.reduce((sum, r) => sum + r.moneyIn, 0);
+          const moneyOutTotal = rows.reduce((sum, r) => sum + r.moneyOut, 0);
           const difference = Math.round((moneyInTotal - moneyOutTotal) * 100) / 100;
 
           // Monthly entries summary
