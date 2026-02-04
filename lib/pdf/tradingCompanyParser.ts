@@ -261,13 +261,16 @@ export async function parseTradingCompanyPDF(
   let highestProfitItem: ParsedResult["highestProfitItem"] = null;
 
   for (const item of items) {
+    // Profit = Value - Line Cost (actual profit in £)
+    const profit = item.value - item.lineCost;
+    
     if (
       highestProfitItem === null ||
-      item.value > highestProfitItem.profit
+      profit > highestProfitItem.profit
     ) {
       highestProfitItem = {
         name: item.name,
-        profit: item.value,
+        profit: profit,
         value: item.value,
       };
     }
