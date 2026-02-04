@@ -1,4 +1,6 @@
-import pdf from "pdf-parse";
+// pdf-parse is CommonJS — must be required for proper compatibility
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const pdfParse = require("pdf-parse");
 
 export type ParsedItem = {
   name: string;
@@ -43,7 +45,7 @@ function isSkippableLine(line: string): boolean {
 export async function parseTradingCompanyPDF(
   pdfBytes: Buffer
 ): Promise<ParsedResult> {
-  const data = await pdf(pdfBytes);
+  const data = await pdfParse(pdfBytes);
 
   const lines = data.text
     .split("\n")
