@@ -44,7 +44,7 @@ function isSkippableLine(line: string): boolean {
 export async function parseTradingCompanyPDF(
   pdfBytes: Buffer
 ): Promise<ParsedResult> {
-  console.log('Starting PDF parse, buffer size:', pdfBytes.length);
+  console.log('Starting PDF parse, buffer size: - tradingCompanyParser.ts:47', pdfBytes.length);
   
   let textContent = '';
   try {
@@ -53,29 +53,46 @@ export async function parseTradingCompanyPDF(
     
     // Parse PDF from buffer
     const parsePromise = new Promise<string>((resolve, reject) => {
+      const decodeText = (raw: string): string => {
+        if (!raw) return '';
+        try {
+          return decodeURIComponent(raw);
+        } catch {
+          return raw.replace(/%/g, '');
+        }
+      };
+
       pdfParser.on('pdfParser_dataReady', (pdfData: any) => {
         try {
-          // Extract text from all pages
+          // Extract text from all pages, preserving row/column layout
           let allText = '';
           if (pdfData.Pages) {
             for (const page of pdfData.Pages) {
+              const rows = new Map<number, { x: number; text: string }[]>();
+
               if (page.Texts) {
                 for (const text of page.Texts) {
+                  const rowKey = Math.round(text.y * 10) / 10; // normalize row positions
+                  const row = rows.get(rowKey) ?? [];
+
                   if (text.R) {
                     for (const run of text.R) {
-                      if (run.T) {
-                        // Decode URI-encoded text, with fallback for malformed URIs
-                        try {
-                          allText += decodeURIComponent(run.T) + ' ';
-                        } catch (decodeError) {
-                          // If decode fails, use the text as-is
-                          allText += run.T.replace(/%/g, '') + ' ';
-                        }
+                      const value = decodeText(run.T || '');
+                      if (value) {
+                        row.push({ x: text.x ?? 0, text: value });
                       }
                     }
                   }
+
+                  if (row.length > 0) rows.set(rowKey, row);
                 }
-                allText += '\n';
+              }
+
+              const orderedRows = [...rows.entries()].sort((a, b) => a[0] - b[0]);
+              for (const [, rowItems] of orderedRows) {
+                rowItems.sort((a, b) => a.x - b.x);
+                const line = rowItems.map((i) => i.text).join(' ').trim();
+                if (line) allText += line + '\n';
               }
             }
           }
@@ -93,9 +110,9 @@ export async function parseTradingCompanyPDF(
     });
 
     textContent = await parsePromise;
-    console.log('PDF parsed successfully, text length:', textContent.length);
+    console.log('PDF parsed successfully, text length: - tradingCompanyParser.ts:113', textContent.length);
   } catch (err) {
-    console.error('PDF parse error:', err);
+    console.error('PDF parse error: - tradingCompanyParser.ts:115', err);
     throw new Error(`Failed to parse PDF: ${err instanceof Error ? err.message : 'Unknown error'}`);
   }
 
@@ -104,7 +121,7 @@ export async function parseTradingCompanyPDF(
     .map((l) => l.trim())
     .filter(Boolean);
 
-  console.log('Extracted', lines.length, 'lines from PDF');
+  console.log('Extracted - tradingCompanyParser.ts:124', lines.length, 'lines from PDF');
 
   const items: ParsedItem[] = [];
 
