@@ -147,12 +147,13 @@ export default function TradingPage() {
 
     const fullSummary = monthlyBalanceSummary + (notes ? '\n' + notes : '');
 
-    // Build till analysis notes if needed
-    let tillNotes = '';
+    // Build turnover notes - include till analysis if checkbox is checked
+    let finalTurnoverNotes = turnoverNotes;
     if (includeTillAnalysis && tillSummary?.highestProfitItem) {
       const salesValue = Number(tillSummary.highestProfitItem.salesValue) || 0;
       const profit = Number(tillSummary.highestProfitItem.profit) || 0;
-      tillNotes = `🏆 Till Analysis:\n  Top Item: ${tillSummary.highestProfitItem.name}\n  Sales: £${salesValue.toFixed(2)}\n  Profit: £${profit.toFixed(2)}`;
+      const tillNote = `\n🏆 Till Analysis:\n  Top Item: ${tillSummary.highestProfitItem.name}\n  Sales: £${salesValue.toFixed(2)}\n  Profit: £${profit.toFixed(2)}`;
+      finalTurnoverNotes = turnoverNotes + (turnoverNotes ? '' : '') + tillNote;
     }
 
     const { data: report } = await supabase
@@ -161,8 +162,7 @@ export default function TradingPage() {
         reporting_period: period,
         meeting_id: meetingId,
         summary: fullSummary,
-        turnover_notes: turnoverNotes || null,
-        till_analysis: tillNotes || null,
+        turnover_notes: finalTurnoverNotes || null,
         monthly_balances: JSON.stringify(items.filter(item => item.dateRange)),
         user_id: user.id,
       })
@@ -599,13 +599,6 @@ export default function TradingPage() {
                 <p className="mt-3 whitespace-pre-wrap text-zinc-700">
                   <span className="font-semibold">Turnover updates: </span>
                   {r.turnover_notes}
-                </p>
-              )}
-
-              {r.till_analysis && (
-                <p className="mt-3 whitespace-pre-wrap text-zinc-700">
-                  <span className="font-semibold">Till Analysis: </span>
-                  {r.till_analysis}
                 </p>
               )}
             </div>
