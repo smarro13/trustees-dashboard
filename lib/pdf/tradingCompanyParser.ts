@@ -64,8 +64,13 @@ export async function parseTradingCompanyPDF(
                   if (text.R) {
                     for (const run of text.R) {
                       if (run.T) {
-                        // Decode URI-encoded text
-                        allText += decodeURIComponent(run.T) + ' ';
+                        // Decode URI-encoded text, with fallback for malformed URIs
+                        try {
+                          allText += decodeURIComponent(run.T) + ' ';
+                        } catch (decodeError) {
+                          // If decode fails, use the text as-is
+                          allText += run.T.replace(/%/g, '') + ' ';
+                        }
                       }
                     }
                   }
