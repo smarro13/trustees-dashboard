@@ -257,6 +257,9 @@ export default function TreasuryPage() {
             };
           });
 
+        // Extract rows for database insertion (without moneyIn/moneyOut)
+        const rowsForDb = rows.map(({ moneyIn, moneyOut, ...rest }) => rest);
+
         const regularRows = regularPayments
           .filter((rp) => rp.description && rp.amount)
           .map((rp) => ({
@@ -289,7 +292,7 @@ export default function TreasuryPage() {
           }));
 
         const allRows = [
-          ...rows,
+          ...rowsForDb,
           ...regularRows,
           ...regularIncomeRows,
           ...moniesOwedRows,
