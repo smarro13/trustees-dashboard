@@ -1,7 +1,5 @@
-// pdf-parse is CommonJS — must be required for proper compatibility
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const pdfParseModule = require("pdf-parse");
-const pdfParse = pdfParseModule.default || pdfParseModule;
+// Using pdfjs-dist for serverless compatibility (Vercel)
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 export type ParsedItem = {
   name: string;
@@ -46,23 +44,40 @@ function isSkippableLine(line: string): boolean {
 export async function parseTradingCompanyPDF(
   pdfBytes: Buffer
 ): Promise<ParsedResult> {
-  console.log('Starting PDF parse, buffer size: - tradingCompanyParser.ts:49', pdfBytes.length);
+  console.log('Starting PDF parse, buffer size: - tradingCompanyParser.ts:47', pdfBytes.length);
   
-  let data;
+  let textContent = '';
   try {
-    data = await pdfParse(pdfBytes);
-    console.log('PDF parsed successfully, text length: - tradingCompanyParser.ts:54', data.text?.length || 0);
+    // Load PDF document using pdfjs-dist
+    const loadingTask = pdfjsLib.getDocument({ data: pdfBytes });
+    const pdfDocument = await loadingTask.promise;
+    console.log('PDF loaded successfully, pages: - tradingCompanyParser.ts:54', pdfDocument.numPages);
+    
+    // Extract text from all pages
+    for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
+      const page = await pdfDocument.getPage(pageNum);
+      const content = await page.getTextContent();
+      
+      // Combine text items into lines
+      const pageText = content.items
+        .map((item: any) => item.str)
+        .join(' ');
+      
+      textContent += pageText + '\n';
+    }
+    
+    console.log('PDF parsed successfully, text length: - tradingCompanyParser.ts:69', textContent.length);
   } catch (err) {
-    console.error('PDF parse error: - tradingCompanyParser.ts:56', err);
+    console.error('PDF parse error: - tradingCompanyParser.ts:71', err);
     throw new Error(`Failed to parse PDF: ${err instanceof Error ? err.message : 'Unknown error'}`);
   }
 
-  const lines = data.text
+  const lines = textContent
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean);
 
-  console.log('Extracted - tradingCompanyParser.ts:65', lines.length, 'lines from PDF');
+  console.log('Extracted - tradingCompanyParser.ts:80', lines.length, 'lines from PDF');
 
   const items: ParsedItem[] = [];
 
