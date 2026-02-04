@@ -1,132 +1,138 @@
-// pdf-parse is CommonJS — must be required for Turbopack compatibility
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const pdfParse = require("pdf-parse");
+import pdf from "pdf-parse";
 
-export type TradingItem = {
+export type ParsedItem = {
   name: string;
   avgCost: number;
   lineCost: number;
   quantity: number;
   value: number;
-  profit: number;
+  profitPercent: number;
   gpPercent: number;
   salesRatioPercent: number;
 };
 
-export type TradingParseResult = {
-  items: TradingItem[];
-  highestProfitItem: TradingItem | null;
-  mostPopularItems: TradingItem[];
+export type ParsedResult = {
+  items: ParsedItem[];
+  highestProfitItem: { name: string; profit: number } | null;
 };
 
-export async function parseTradingCompanyPDF(
-  buffer: Buffer
-): Promise<TradingParseResult> {
-  const data = await pdfParse(buffer);
-  const text = data.text || "";
+/* ----------------------------- helpers ----------------------------- */
 
-  const lines = text
-    .split(/\r?\n/)
-    .map((l: string) => l.replace(/\u00A0/g, " ").trim())
-    .filter(Boolean);
-
-  const headerIdx = lines.findIndex((l: string) => {
-    const s = l.toLowerCase();
-    return (
-      s.includes("avg") &&
-      s.includes("cost") &&
-      s.includes("line") &&
-      s.includes("quantity") &&
-      s.includes("value") &&
-      s.includes("profit") &&
-      (s.includes("gp") || s.includes("gp%")) &&
-      (s.includes("sales") || s.includes("ratio"))
-    );
-  });
-
-  const candidateLines = headerIdx >= 0 ? lines.slice(headerIdx + 1) : lines;
-
-  const items: TradingItem[] = [];
-  for (const line of candidateLines) {
-    const parsed = parseRowLine(line);
-    if (parsed) items.push(parsed);
-  }
-
-  const highestProfitItem =
-    items.length > 0
-      ? items.reduce((best, cur) =>
-          cur.profit > best.profit ? cur : best
-        )
-      : null;
-
-  const mostPopularItems = [...items]
-    .sort((a, b) => b.salesRatioPercent - a.salesRatioPercent)
-    .slice(0, 5);
-
-  return { items, highestProfitItem, mostPopularItems };
+function parseNumber(input: string): number {
+  if (!input) return 0;
+  const cleaned = input.replace(/,/g, "").trim();
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
 }
 
-function parseRowLine(line: string): TradingItem | null {
-  if (!/\d/.test(line)) return null;
+function isSkippableLine(line: string): boolean {
+  return (
+    !line ||
+    line.startsWith("Report Created") ||
+    line.startsWith("Page ") ||
+    line.startsWith("PLU Sales") ||
+    line.startsWith("Date Range") ||
+    line.startsWith("Site:") ||
+    line.startsWith("PLU Name") ||
+    line.startsWith("Grand Total")
+  );
+}
 
-  const rawTokens = line.split(/\s+/).filter(Boolean);
-  if (rawTokens.length < 8) return null;
+/* ----------------------------- parser ----------------------------- */
 
-  const tail = rawTokens.slice(-7);
-  const name = rawTokens.slice(0, -7).join(" ").trim();
-  if (!name) return null;
+export async function parseTradingCompanyPDF(
+  pdfBytes: Buffer
+): Promise<ParsedResult> {
+  const data = await pdf(pdfBytes);
 
-  const [
-    avgCostStr,
-    lineCostStr,
-    quantityStr,
-    valueStr,
-    profitStr,
-    gpStr,
-    salesRatioStr,
-  ] = tail;
+  const lines = data.text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
 
-  const avgCost = toNumber(avgCostStr);
-  const lineCost = toNumber(lineCostStr);
-  const quantity = toInt(quantityStr);
-  const value = toNumber(valueStr);
-  const profit = toNumber(profitStr);
-  const gpPercent = toPercent(gpStr);
-  const salesRatioPercent = toPercent(salesRatioStr);
+  const items: ParsedItem[] = [];
 
-  if (
-    !Number.isFinite(avgCost) ||
-    !Number.isFinite(lineCost) ||
-    !Number.isFinite(quantity) ||
-    !Number.isFinite(value) ||
-    !Number.isFinite(profit) ||
-    !Number.isFinite(gpPercent) ||
-    !Number.isFinite(salesRatioPercent)
-  ) {
-    return null;
+  for (const line of lines) {
+    if (isSkippableLine(line)) continue;
+
+    // split by whitespace (TC PDFs are space-aligned)
+    const cols = line.split(/\s+/);
+
+    // minimum viable row length
+    if (cols.length < 8) continue;
+
+    /**
+     * Expected Trading Company row pattern:
+     *
+     * [0] PLU
+     * [1...] Name (can be 1+ tokens)
+     * [x] Random Code
+     * [x+1] Avg Cost
+     * [x+2] Line Cost
+     * [x+3] Quantity
+     * [x+4] Value
+     * [x+5] Profit %
+     * [x+6] GP %
+     * [x+7] Sales Ratio
+     */
+
+    // Find first numeric column (Random Code)
+    const firstNumberIdx = cols.findIndex((c) => /^[\d,.-]+$/.test(c));
+
+    if (firstNumberIdx === -1 || firstNumberIdx < 2) continue;
+
+    const name = cols
+      .slice(1, firstNumberIdx)
+      .join(" ")
+      .trim();
+
+    if (!name) continue;
+
+    const numbers = cols.slice(firstNumberIdx).map(parseNumber);
+
+    if (numbers.length < 7) continue;
+
+    const [
+      _randomCode,
+      avgCost,
+      lineCost,
+      quantity,
+      value,
+      profitPercent,
+      gpPercent,
+      salesRatioPercent = 0,
+    ] = numbers;
+
+    items.push({
+      name,
+      avgCost,
+      lineCost,
+      quantity,
+      value,
+      profitPercent,
+      gpPercent,
+      salesRatioPercent,
+    });
+  }
+
+  /* ------------------------- derived values ------------------------- */
+
+  let highestProfitItem: ParsedResult["highestProfitItem"] = null;
+
+  for (const item of items) {
+    if (
+      highestProfitItem === null ||
+      item.value > highestProfitItem.profit
+    ) {
+      highestProfitItem = {
+        name: item.name,
+        profit: item.value,
+      };
+    }
   }
 
   return {
-    name,
-    avgCost,
-    lineCost,
-    quantity,
-    value,
-    profit,
-    gpPercent,
-    salesRatioPercent,
+    items,
+    highestProfitItem,
   };
-}
-
-function toNumber(s: string): number {
-  const cleaned = s.replace(/[,£$]/g, "").replace(/\((.*)\)/, "-$1");
-  return parseFloat(cleaned);
-}
-
-function toInt(s: string): number {
-  return parseInt(s.replace(/,/g, ""), 10);
-}
-
-function toPercent(s: string): number {
-  return parseFloat(s.replace("%", "").replace(/,/g, ""));
 }
