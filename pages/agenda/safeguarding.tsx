@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
+import { User } from '@supabase/supabase-js';
 
 export default function SafeguardingPage() {
   const [updates, setUpdates] = useState<any[]>([]);
   const [meetings, setMeetings] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
 
   const [summary, setSummary] = useState('');
   const [status, setStatus] = useState('Information');
@@ -17,6 +19,10 @@ export default function SafeguardingPage() {
 
   const loadData = async () => {
     setLoading(true);
+
+    // Get current user
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    setUser(currentUser);
 
     const { data, error } = await supabase
       .from('safeguarding_updates')
@@ -45,6 +51,11 @@ export default function SafeguardingPage() {
 
   const saveUpdate = async () => {
     if (!summary) return;
+
+    if (!user) {
+      alert('You must be logged in to save');
+      return;
+    }
 
     setLoading(true);
 
@@ -77,6 +88,7 @@ export default function SafeguardingPage() {
         review_date: reviewDate || null,
         team,
         meeting_id: meetingId,
+        user_id: user.id,
       });
 
       if (error) {

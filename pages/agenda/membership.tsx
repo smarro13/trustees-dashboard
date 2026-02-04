@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
+import { User } from '@supabase/supabase-js';
 
 export default function MembershipReportPage() {
   const [reports, setReports] = useState<any[]>([]);
@@ -8,8 +9,7 @@ export default function MembershipReportPage() {
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [numPeople, setNumPeople] = useState<string>('');
   const [moneyTotal, setMoneyTotal] = useState<string>(''); // Bottomline only
-  const [loading, setLoading] = useState(false);
-  const [loveAdminNewSignups, setLoveAdminNewSignups] = useState<string>('');
+  const [loading, setLoading] = useState(false);  const [user, setUser] = useState<User | null>(null);  const [loveAdminNewSignups, setLoveAdminNewSignups] = useState<string>('');
   const [loveAdminOutstandingTotal, setLoveAdminOutstandingTotal] = useState<string>('');
   const [loveAdminCancellations, setLoveAdminCancellations] = useState<string>('');
   const [loveAdminTotal, setLoveAdminTotal] = useState<string>(''); // LoveAdmin only
@@ -67,6 +67,10 @@ export default function MembershipReportPage() {
 
   const loadData = async () => {
     setLoading(true);
+
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    setUser(currentUser);
+
     const { data } = await supabase
       .from('membership_reports')
       .select(`*, meetings ( meeting_date )`)
@@ -88,6 +92,11 @@ export default function MembershipReportPage() {
   }, []);
 
   const saveReport = async () => {
+    if (!user) {
+      alert('You must be logged in to save');
+      return;
+    }
+
     await supabase.from('membership_reports').insert({
       meeting_id: meetingId,
       bottom_line: null,
@@ -98,6 +107,7 @@ export default function MembershipReportPage() {
       money_total: moneyTotal ? Number(moneyTotal) : null,
 
       // LoveAdmin
+      user_id: user.id,
       loveadmin_total: loveAdminTotal ? Number(loveAdminTotal) : null,
       loveadmin_new_signups: loveAdminNewSignups
         ? Number(loveAdminNewSignups)
