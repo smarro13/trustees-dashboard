@@ -305,9 +305,53 @@ export default function TreasuryPage() {
           }
 
           // Build summary from items for display on meeting page
-          const summary = allRows
+          const moneyInTotal = rows.reduce((sum, r) => {
+            const moneyIn = Number(r.amount === undefined ? 0 : (r.amount > 0 ? r.amount : 0));
+            return sum + moneyIn;
+          }, 0);
+
+          const moneyOutTotal = rows.reduce((sum, r) => {
+            const moneyIn = Number(r.amount === undefined ? 0 : (r.amount < 0 ? -r.amount : 0));
+            return sum + moneyIn;
+          }, 0);
+
+          const difference = Math.round((moneyInTotal - moneyOutTotal) * 100) / 100;
+
+          // Monthly entries summary
+          const monthlyEntriesSummary = rows
+            .map((row) => {
+              const moneyIn = Number(row.moneyIn || '0');
+              const moneyOut = Number(row.moneyOut || '0');
+              const diff = Math.round((moneyIn - moneyOut) * 100) / 100;
+              return `${row.label}: In £${moneyIn.toFixed(2)} | Out £${moneyOut.toFixed(2)} | Diff £${diff.toFixed(2)}`;
+            })
+            .join('\n');
+
+          const regularSummary = regularRows
             .map((row) => `${row.label}: £${Number(row.amount).toFixed(2)}`)
             .join('\n');
+
+          const incomesSummary = regularIncomeRows
+            .map((row) => `${row.label}: £${Number(row.amount).toFixed(2)}`)
+            .join('\n');
+
+          const owedSummary = moniesOwedRows
+            .map((row) => `${row.label}: £${Math.abs(Number(row.amount)).toFixed(2)}`)
+            .join('\n');
+
+          const summary = [
+            `💰 Money In: £${moneyInTotal.toFixed(2)}`,
+            `💸 Money Out: £${moneyOutTotal.toFixed(2)}`,
+            `📊 Difference: £${difference.toFixed(2)}`,
+            '',
+            monthlyEntriesSummary ? `Monthly Entries:\n${monthlyEntriesSummary}` : '',
+            regularSummary ? `Regular Payments:\n${regularSummary}` : '',
+            incomesSummary ? `Regular Incomes:\n${incomesSummary}` : '',
+            owedSummary ? `Monies Owed:\n${owedSummary}` : '',
+            notes ? `Additional Comments:\n${notes}` : '',
+          ]
+            .filter((s) => s)
+            .join('\n\n');
 
           // Update report with summary
           await supabase
