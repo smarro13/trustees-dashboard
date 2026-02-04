@@ -199,7 +199,19 @@ export default function TradingPage() {
         }),
       });
 
-      const data = await res.json();
+      // Try to parse JSON response
+      let data;
+      try {
+        const responseText = await res.text();
+        if (!responseText) {
+          setTillError('Server returned empty response. Check if pdf-parse is installed: npm install pdf-parse');
+          return;
+        }
+        data = JSON.parse(responseText);
+      } catch (jsonError) {
+        setTillError(`Failed to parse server response: ${jsonError instanceof Error ? jsonError.message : 'Invalid JSON'}`);
+        return;
+      }
       
       // Check if the API returned an error (works for both error status codes and 200 with error field)
       if (data.error) {
