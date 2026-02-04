@@ -199,19 +199,21 @@ export default function TradingPage() {
         }),
       });
 
-      if (!res.ok) {
-        throw new Error('Failed to analyse till PDF');
-      }
-
       const data = await res.json();
       
-      // Check if the API returned an error (even with 200 status)
+      // Check if the API returned an error (works for both error status codes and 200 with error field)
       if (data.error) {
         // Build detailed error message
         const errorMsg = data.details 
           ? `${data.error}\n\nDetails: ${data.details}`
           : data.error;
         setTillError(errorMsg);
+        return;
+      }
+      
+      // If response wasn't ok and we didn't get an error field, show generic error
+      if (!res.ok) {
+        setTillError(`Server error: ${res.status} ${res.statusText}`);
         return;
       }
       
