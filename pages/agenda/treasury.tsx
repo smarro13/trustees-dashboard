@@ -303,6 +303,17 @@ export default function TreasuryPage() {
             setLoading(false);
             return;
           }
+
+          // Build summary from items for display on meeting page
+          const summary = allRows
+            .map((row) => `${row.label}: £${Number(row.amount).toFixed(2)}`)
+            .join('\n');
+
+          // Update report with summary
+          await supabase
+            .from('treasury_reports')
+            .update({ summary })
+            .eq('id', report.id);
         }
       }
 
