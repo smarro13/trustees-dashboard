@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
+import { User } from '@supabase/supabase-js';
 
 export default function RugbyReportPage() {
   const [reports, setReports] = useState<any[]>([]);
   const [meetings, setMeetings] = useState<any[]>([]);
   const [meetingId, setMeetingId] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
 
   const [miniReport, setMiniReport] = useState('');
   const [juniorReport, setJuniorReport] = useState('');
@@ -16,6 +18,9 @@ export default function RugbyReportPage() {
 
   const loadData = async () => {
     setLoading(true);
+
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    setUser(currentUser);
 
     const { data } = await supabase
       .from('rugby_reports')
@@ -39,6 +44,11 @@ export default function RugbyReportPage() {
   }, []);
 
   const saveReport = async () => {
+    if (!user) {
+      alert('You must be logged in to save');
+      return;
+    }
+
     setLoading(true);
 
     const { data, error } = await supabase.from('rugby_reports').insert({
@@ -47,6 +57,7 @@ export default function RugbyReportPage() {
       junior_report: juniorReport || null,
       senior_report: seniorReport || null,
       management_requests: managementRequests || null,
+      user_id: user.id,
     });
 
     if (error) {

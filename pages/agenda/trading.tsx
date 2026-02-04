@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
+import { User } from '@supabase/supabase-js';
 
 type Item = {
   dateRange?: string; // now a single month (e.g. "March 2025")
@@ -29,7 +30,8 @@ export default function TradingPage() {
     { dateRange: '', moneyIn: '', moneyOut: '' },
   ]);
   const [loading, setLoading] = useState(false);
-  const [turnoverNotes, setTurnoverNotes] = useState(''); // new turnover section
+  const [turnoverNotes, setTurnoverNotes] = useState('');
+  const [user, setUser] = useState<User | null>(null); // new turnover section
 
   const [tillFile, setTillFile] = useState<File | null>(null);
   const [tillSummary, setTillSummary] = useState<TillSummary | null>(null);
@@ -37,9 +39,13 @@ export default function TradingPage() {
   const [tillError, setTillError] = useState<string | null>(null);
 
   const loadData = async () => {
-    // Fetch reports (RLS will filter to user's only)
+    // Get current user
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    setUser(currentUser);
+
+    // Fetch trading reports
     const { data: reportsData } = await supabase
-      .from('treasury_reports')
+      .from('trading_reports')
       .select('*')
       .order('created_at', { ascending: false });
 
@@ -48,11 +54,6 @@ export default function TradingPage() {
     if (reportsData) {
       reportsWithItems = await Promise.all(
         reportsData.map(async (report) => {
-          const { data: items = [] } = await supabase
-            .from('treasury_report_items')
-            .select('label, amount')
-            .eq('report_id', report.id);
-
           let meeting = null;
           if (report.meeting_id) {
             const { data: meetingData } = await supabase
@@ -66,7 +67,6 @@ export default function TradingPage() {
           return {
             ...report,
             meetings: meeting,
-            treasury_report_items: items || [],
           };
         })
       );
@@ -111,41 +111,28 @@ export default function TradingPage() {
   const saveReport = async () => {
     if (!period.trim()) return;
 
+    if (!user) {
+      alert('You must be logged in to save');
+      return;
+    }
+
     setLoading(true);
 
     const { data: report } = await supabase
-      .from('treasury_reports')
+      .from('trading_reports')
       .insert({
         reporting_period: period,
         meeting_id: meetingId,
-        notes,
-        turnover_notes: turnoverNotes || null, // save turnover text
+        summary: notes,
+        turnover_notes: turnoverNotes || null,
+        user_id: user.id,
       })
       .select()
       .single();
 
     if (report) {
-      const rows = items
-        .filter(
-          (i) =>
-            (i.moneyIn && Number(i.moneyIn)) ||
-            (i.moneyOut && Number(i.moneyOut))
-        )
-        .map((i, idx) => {
-          const moneyIn = Number(i.moneyIn || '0');
-          const moneyOut = Number(i.moneyOut || '0');
-          const diff = moneyIn - moneyOut;
-          const baseLabel = i.dateRange || `Entry ${idx + 1}`;
-          return {
-            report_id: report.id,
-            label: baseLabel,
-            amount: diff,
-          };
-        });
-
-      if (rows.length) {
-        await supabase.from('treasury_report_items').insert(rows);
-      }
+      // Trading reports don't use separate items table
+      // All data is in the summary and turnover_notes fields
     }
 
     setPeriod('');
@@ -294,8 +281,8 @@ export default function TradingPage() {
                 <thead className="bg-zinc-50">
                   <tr>
                     <th className="border px-2 py-1 text-left">Month</th>
-                    <th className="border px-2 py-1 text-right">Money In (£)</th>
-                    <th className="border px-2 py-1 text-right">Money Out (£)</th>
+                    <th className="border px-2 py-1 text-right">Opening Balance (£)</th>
+                    <th className="border px-2 py-1 text-right">Closing Balance (£)</th>
                     <th className="border px-2 py-1 text-right">Difference</th>
                     <th className="border px-2 py-1 text-right">Balance</th>
                   </tr>
@@ -522,29 +509,16 @@ export default function TradingPage() {
                 </p>
               )}
 
-              <table className="mt-3 w-full border text-sm">
-                <tbody>
-                  {r.treasury_report_items.map((i: any) => (
-                    <tr key={i.label}>
-                      <td className="border px-2 py-1">{i.label}</td>
-                      <td className="border px-2 py-1 text-right">
-                        £{Number(i.amount).toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {r.summary && (
+                <p className="mt-3 whitespace-pre-wrap text-zinc-700">
+                  {r.summary}
+                </p>
+              )}
 
               {r.turnover_notes && (
                 <p className="mt-3 whitespace-pre-wrap text-zinc-700">
                   <span className="font-semibold">Turnover updates: </span>
                   {r.turnover_notes}
-                </p>
-              )}
-
-              {r.notes && (
-                <p className="mt-3 whitespace-pre-wrap text-zinc-700">
-                  {r.notes}
                 </p>
               )}
             </div>
