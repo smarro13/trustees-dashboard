@@ -1,6 +1,7 @@
 // pdf-parse is CommonJS — must be required for proper compatibility
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const pdfParse = require("pdf-parse");
+const pdfParseModule = require("pdf-parse");
+const pdfParse = pdfParseModule.default || pdfParseModule;
 
 export type ParsedItem = {
   name: string;
@@ -45,12 +46,23 @@ function isSkippableLine(line: string): boolean {
 export async function parseTradingCompanyPDF(
   pdfBytes: Buffer
 ): Promise<ParsedResult> {
-  const data = await pdfParse(pdfBytes);
+  console.log('Starting PDF parse, buffer size: - tradingCompanyParser.ts:49', pdfBytes.length);
+  
+  let data;
+  try {
+    data = await pdfParse(pdfBytes);
+    console.log('PDF parsed successfully, text length: - tradingCompanyParser.ts:54', data.text?.length || 0);
+  } catch (err) {
+    console.error('PDF parse error: - tradingCompanyParser.ts:56', err);
+    throw new Error(`Failed to parse PDF: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  }
 
   const lines = data.text
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean);
+
+  console.log('Extracted - tradingCompanyParser.ts:65', lines.length, 'lines from PDF');
 
   const items: ParsedItem[] = [];
 
