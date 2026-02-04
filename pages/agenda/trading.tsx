@@ -240,7 +240,8 @@ export default function TradingPage() {
       if (data.highestProfitItem) {
         const tillNote = `\n🏆 Till Analysis:\n  Top Item: ${data.highestProfitItem.name}\n  Sales: £${data.highestProfitItem.salesValue.toFixed(2)}\n  Profit: £${data.highestProfitItem.profit.toFixed(2)}`;
         setTurnoverNotes(prev => prev + (prev ? '\n' : '') + tillNote);
-      }    } catch (err: any) {
+      }
+    } catch (err: any) {
       setTillError(err.message || 'Error analysing till PDF');
     } finally {
       setTillParsing(false);
