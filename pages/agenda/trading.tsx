@@ -207,7 +207,11 @@ export default function TradingPage() {
       
       // Check if the API returned an error (even with 200 status)
       if (data.error) {
-        setTillError(data.error);
+        // Build detailed error message
+        const errorMsg = data.details 
+          ? `${data.error}\n\nDetails: ${data.details}`
+          : data.error;
+        setTillError(errorMsg);
         return;
       }
       
@@ -469,7 +473,10 @@ export default function TradingPage() {
                 <p className="text-xs text-zinc-500">Analyzing till PDF…</p>
               )}
               {tillError && (
-                <p className="text-xs text-red-600">{tillError}</p>
+                <div className="mt-2 rounded border border-red-300 bg-red-50 p-3">
+                  <p className="text-sm font-semibold text-red-800 mb-1">PDF Analysis Error:</p>
+                  <p className="text-sm text-red-700 whitespace-pre-wrap">{tillError}</p>
+                </div>
               )}
 
               {tillSummary && (
