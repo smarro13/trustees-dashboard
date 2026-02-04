@@ -77,16 +77,42 @@ export default function TreasuryPage() {
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     setUser(currentUser);
 
-    const { data } = await supabase
+    // Fetch reports (RLS will filter to user's only)
+    const { data: reportsData } = await supabase
       .from('treasury_reports')
-      .select(`
-        *,
-        meetings ( meeting_date ),
-        treasury_report_items ( label, amount )
-      `)
+      .select('*')
       .order('created_at', { ascending: false });
 
-    if (data) setReports(data);
+    // Fetch items separately
+    let reportsWithItems: any[] = [];
+    if (reportsData) {
+      reportsWithItems = await Promise.all(
+        reportsData.map(async (report) => {
+          const { data: items = [] } = await supabase
+            .from('treasury_report_items')
+            .select('label, amount')
+            .eq('report_id', report.id);
+
+          let meeting = null;
+          if (report.meeting_id) {
+            const { data: meetingData } = await supabase
+              .from('meetings')
+              .select('meeting_date')
+              .eq('id', report.meeting_id)
+              .single();
+            meeting = meetingData;
+          }
+
+          return {
+            ...report,
+            meetings: meeting,
+            treasury_report_items: items || [],
+          };
+        })
+      );
+    }
+
+    if (reportsWithItems) setReports(reportsWithItems);
 
     // only fetch meetings that are not yet linked OR (if you prefer) that exist at all.
     // Here: fetch meetings in the future or with no linked report yet.
