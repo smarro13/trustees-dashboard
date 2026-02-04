@@ -66,25 +66,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
 
-      // Match what your UI expects:
-      const highestProfitItem = parsed.highestProfitItem
-        ? { 
-            name: parsed.highestProfitItem.name, 
-            profit: parsed.highestProfitItem.profit,
-            salesValue: parsed.highestProfitItem.value
-          }
-        : null;
-
-      const mostPopularItems = [...(parsed.items ?? [])]
+      // Get top 10 items by sales ratio
+      const topTenItems = [...(parsed.items ?? [])]
         .sort((a, b) => b.salesRatioPercent - a.salesRatioPercent)
-        .slice(0, 10)
-        .map((i) => ({ name: i.name, quantity: i.quantity, salesValue: i.value }));
+        .slice(0, 10);
 
-      console.log('Success  highest profit: - till-sales-summary.ts:83', highestProfitItem, '- popular items:', mostPopularItems.length);
+      const mostPopularItems = topTenItems.map((i) => ({ name: i.name, quantity: i.quantity, salesValue: i.value }));
+
+      // Calculate totals for top 10 items
+      let highestProfitItem = null;
+      if (topTenItems.length > 0) {
+        let totalSales = 0;
+        let totalProfit = 0;
+        
+        for (const item of topTenItems) {
+          totalSales += item.value;
+          totalProfit += (item.value - item.lineCost);
+        }
+        
+        highestProfitItem = {
+          name: `Top 10 Items Combined`,
+          profit: totalProfit,
+          salesValue: totalSales
+        };
+      }
+
+      console.log('Success  highest profit: - till-sales-summary.ts:94', highestProfitItem, '- popular items:', mostPopularItems.length);
 
       return res.status(200).json({ highestProfitItem, mostPopularItems });
     } catch (e: any) {
-      console.error('Unexpected error parsing PDF: - till-sales-summary.ts:87', e);
+      console.error('Unexpected error parsing PDF: - till-sales-summary.ts:98', e);
       return res.status(500).json({ 
         error: 'Unexpected error processing PDF',
         details: e?.message ?? "Unknown error",
@@ -93,7 +104,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   } catch (outerError: any) {
     // Catch any errors that occur before we can send a proper JSON response
-    console.error('Critical error in API handler: - till-sales-summary.ts:96', outerError);
+    console.error('Critical error in API handler: - till-sales-summary.ts:107', outerError);
     try {
       return res.status(500).json({
         error: 'Server error - API handler failed',
