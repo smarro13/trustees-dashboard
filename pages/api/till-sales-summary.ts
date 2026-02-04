@@ -68,13 +68,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Match what your UI expects:
       const highestProfitItem = parsed.highestProfitItem
-        ? { name: parsed.highestProfitItem.name, profit: parsed.highestProfitItem.profit }
+        ? { 
+            name: parsed.highestProfitItem.name, 
+            profit: parsed.highestProfitItem.profit,
+            salesValue: parsed.highestProfitItem.value
+          }
         : null;
 
       const mostPopularItems = [...(parsed.items ?? [])]
         .sort((a, b) => b.salesRatioPercent - a.salesRatioPercent)
         .slice(0, 5)
-        .map((i) => ({ name: i.name, quantity: i.quantity }));
+        .map((i) => ({ name: i.name, quantity: i.quantity, salesValue: i.value }));
 
       console.log('Success - highest profit:', highestProfitItem, '- popular items:', mostPopularItems.length);
 
