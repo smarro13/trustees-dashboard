@@ -66,8 +66,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
 
+      // Group FR items with their non-FR counterparts
+      const groupedItems = [...(parsed.items ?? [])];
+      const itemMap = new Map<string, any>();
+      
+      for (const item of groupedItems) {
+        // Remove " FR" suffix to get base name
+        const baseName = item.name.replace(/\s+FR\s*$/i, '');
+        
+        if (itemMap.has(baseName)) {
+          // Combine with existing item
+          const existing = itemMap.get(baseName);
+          existing.quantity += item.quantity;
+          existing.value += item.value;
+          existing.lineCost += item.lineCost;
+          existing.salesRatioPercent = Math.max(existing.salesRatioPercent, item.salesRatioPercent);
+        } else {
+          itemMap.set(baseName, { ...item, name: baseName });
+        }
+      }
+
+      const mergedItems = Array.from(itemMap.values());
+
       // Get top 10 items by sales ratio
-      const topTenItems = [...(parsed.items ?? [])]
+      const topTenItems = [...mergedItems]
         .sort((a, b) => b.salesRatioPercent - a.salesRatioPercent)
         .slice(0, 10);
 
@@ -91,11 +113,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         };
       }
 
-      console.log('Success  highest profit: - till-sales-summary.ts:94', highestProfitItem, '- popular items:', mostPopularItems.length);
+      console.log('Success  highest profit: - till-sales-summary.ts:116', highestProfitItem, '- popular items:', mostPopularItems.length);
 
-      return res.status(200).json({ highestProfitItem, mostPopularItems });
+      // Build summary text for saving
+      let summaryText = '';
+      if (highestProfitItem) {
+        summaryText = `🏆 Top 10 Items Summary:\n  Total Sales: £${highestProfitItem.salesValue.toFixed(2)}\n  Total Profit: £${highestProfitItem.profit.toFixed(2)}\n\n`;
+        summaryText += `📊 Top 10 Items:\n`;
+        mostPopularItems.forEach((item, idx) => {
+          summaryText += `  ${idx + 1}. ${item.name} - ${item.quantity} sold (£${item.salesValue.toFixed(2)})\n`;
+        });
+      }
+
+      return res.status(200).json({ highestProfitItem, mostPopularItems, summaryText });
     } catch (e: any) {
-      console.error('Unexpected error parsing PDF: - till-sales-summary.ts:98', e);
+      console.error('Unexpected error parsing PDF: - till-sales-summary.ts:130', e);
       return res.status(500).json({ 
         error: 'Unexpected error processing PDF',
         details: e?.message ?? "Unknown error",
@@ -104,7 +136,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   } catch (outerError: any) {
     // Catch any errors that occur before we can send a proper JSON response
-    console.error('Critical error in API handler: - till-sales-summary.ts:107', outerError);
+    console.error('Critical error in API handler: - till-sales-summary.ts:139', outerError);
     try {
       return res.status(500).json({
         error: 'Server error - API handler failed',

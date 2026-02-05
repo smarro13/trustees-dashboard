@@ -40,6 +40,7 @@ export default function TradingPage() {
   const [tillParsing, setTillParsing] = useState(false);
   const [tillError, setTillError] = useState<string | null>(null);
   const [includeTillAnalysis, setIncludeTillAnalysis] = useState(false);
+  const [tillSummaryText, setTillSummaryText] = useState<string>('');
 
   const loadData = async () => {
     // Get current user
@@ -149,11 +150,8 @@ export default function TradingPage() {
 
     // Build turnover notes - include till analysis if checkbox is checked
     let finalTurnoverNotes = turnoverNotes;
-    if (includeTillAnalysis && tillSummary?.highestProfitItem) {
-      const salesValue = Number(tillSummary.highestProfitItem.salesValue) || 0;
-      const profit = Number(tillSummary.highestProfitItem.profit) || 0;
-      const tillNote = `\n🏆 Till Analysis:\n  Top Item: ${tillSummary.highestProfitItem.name}\n  Sales: £${salesValue.toFixed(2)}\n  Profit: £${profit.toFixed(2)}`;
-      finalTurnoverNotes = turnoverNotes + (turnoverNotes ? '' : '') + tillNote;
+    if (includeTillAnalysis && tillSummaryText) {
+      finalTurnoverNotes = turnoverNotes + (turnoverNotes ? '\n' : '') + tillSummaryText;
     }
 
     const { data: report } = await supabase
@@ -179,6 +177,7 @@ export default function TradingPage() {
     setNotes('');
     setTurnoverNotes(''); // reset turnover
     setIncludeTillAnalysis(false); // reset till checkbox
+    setTillSummaryText(''); // reset till summary text
     setItems([{ dateRange: '', moneyIn: '', moneyOut: '' }]);
     setLoading(false);
 
@@ -242,11 +241,12 @@ export default function TradingPage() {
         return;
       }
       
-      // Expect shape: { highestProfitItem: { name, profit }, mostPopularItems: [{ name, quantity }, ...] }
+      // Expect shape: { highestProfitItem: { name, profit }, mostPopularItems: [{ name, quantity }, ...], summaryText }
       setTillSummary({
         highestProfitItem: data.highestProfitItem ?? null,
         mostPopularItems: data.mostPopularItems ?? [],
       });
+      setTillSummaryText(data.summaryText ?? '');
     } catch (err: any) {
       setTillError(err.message || 'Error analysing till PDF');
     } finally {
