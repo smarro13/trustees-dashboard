@@ -9,26 +9,51 @@ export default function AuthCallback() {
   useEffect(() => {
     // Exchange the code for a session
     const handleCallback = async () => {
-      // The exchangeCodeForSession happens automatically with Supabase
-      const { data: { session }, error } = await supabase.auth.getSession();
+      // Check if we have a code in the URL (from magic link)
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
 
-      if (error) {
-        console.error('Auth error:', error);
-        router.replace('/auth/login?error=authentication_failed');
-        return;
-      }
+      if (accessToken && refreshToken) {
+        // Set the session from the tokens
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
 
-      if (session) {
+        if (error) {
+          console.error('Auth error:', error);
+          router.replace('/auth/login?error=authentication_failed');
+          return;
+        }
+
         // Successfully authenticated
-        const redirectTo = router.query.redirect as string || '/';
-        router.replace(redirectTo);
+        router.replace('/');
       } else {
-        router.replace('/auth/login');
+        // No tokens found, check if already has session
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error) {
+          console.error('Auth error:', error);
+          router.replace('/auth/login?error=authentication_failed');
+          return;
+        }
+
+        if (session) {
+          // Already authenticated
+          router.replace('/');
+        } else {
+          // No session, redirect to login
+          router.replace('/auth/login');
+        }
       }
     };
 
-    handleCallback();
-  }, [router]);
+    // Only run when router is ready
+    if (router.isReady) {
+      handleCallback();
+    }
+  }, [router, router.isReady]);
 
   return (
     <div className="min-h-screen flex items-center justify-center">
