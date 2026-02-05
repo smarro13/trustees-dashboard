@@ -71,8 +71,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const itemMap = new Map<string, any>();
       
       for (const item of groupedItems) {
-        // Remove " FR" suffix to get base name
-        const baseName = item.name.replace(/\s+FR\s*$/i, '').trim();
+        // Remove "FR " prefix OR " FR" suffix to get base name
+        const baseName = item.name
+          .replace(/^FR\s+/i, '') // Remove "FR " at start
+          .replace(/\s+FR\s*$/i, '') // Remove " FR" at end
+          .trim();
         
         if (itemMap.has(baseName)) {
           // Combine with existing item
@@ -89,7 +92,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       const mergedItems = Array.from(itemMap.values());
-      console.log('Merged items count: - till-sales-summary.ts:92', mergedItems.length, 'from', parsed.items.length);
+      console.log('Merged items count: - till-sales-summary.ts:95', mergedItems.length, 'from', parsed.items.length);
 
       // Get top 10 items by sales ratio
       const topTenItems = [...mergedItems]
@@ -116,7 +119,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         };
       }
 
-      console.log('Success  highest profit: - till-sales-summary.ts:119', highestProfitItem, '- popular items:', mostPopularItems.length);
+      console.log('Success  highest profit: - till-sales-summary.ts:122', highestProfitItem, '- popular items:', mostPopularItems.length);
 
       // Build summary text for saving
       let summaryText = '';
@@ -130,7 +133,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       return res.status(200).json({ highestProfitItem, mostPopularItems, summaryText });
     } catch (e: any) {
-      console.error('Unexpected error parsing PDF: - till-sales-summary.ts:133', e);
+      console.error('Unexpected error parsing PDF: - till-sales-summary.ts:136', e);
       return res.status(500).json({ 
         error: 'Unexpected error processing PDF',
         details: e?.message ?? "Unknown error",
@@ -139,7 +142,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   } catch (outerError: any) {
     // Catch any errors that occur before we can send a proper JSON response
-    console.error('Critical error in API handler: - till-sales-summary.ts:142', outerError);
+    console.error('Critical error in API handler: - till-sales-summary.ts:145', outerError);
     try {
       return res.status(500).json({
         error: 'Server error - API handler failed',
