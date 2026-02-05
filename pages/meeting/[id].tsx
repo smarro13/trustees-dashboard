@@ -473,6 +473,13 @@ export default function MeetingPage() {
                 {t.summary && (
                   <p className="text-sm text-zinc-700 whitespace-pre-wrap">{t.summary}</p>
                 )}
+                {t.turnover_notes && (
+                  <p className="mt-3 text-sm text-zinc-700 whitespace-pre-wrap">
+                    <span className="font-semibold">Turnover updates:</span>
+                    <br />
+                    {t.turnover_notes}
+                  </p>
+                )}
               </div>
             ))}
           </div>
