@@ -1,11 +1,13 @@
 import { useState, useMemo } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import { useRouter } from 'next/router';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
+  const router = useRouter();
 
   // Random rugby-related greeting
   const greeting = useMemo(() => {
@@ -49,22 +51,25 @@ export default function LoginPage() {
       return;
     }
 
+    if (!password) {
+      setError('Please enter your password');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const { error: err } = await supabase.auth.signInWithOtp({
+      const { error: err } = await supabase.auth.signInWithPassword({
         email: email.toLowerCase(),
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
+        password,
       });
 
       if (err) throw err;
 
-      setSent(true);
-      setEmail('');
-    } catch {
-      setError('Unable to send access link. Please try again.');
+      // Redirect to home page on success
+      router.push('/');
+    } catch (err: any) {
+      setError(err.message || 'Unable to sign in. Please check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -102,8 +107,27 @@ export default function LoginPage() {
                 setEmail(e.target.value);
                 setError('');
               }}
-              disabled={loading || sent}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors disabled:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-500"
+              disabled={loading}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-colors disabled:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-500"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="password" className="block text-sm font-semibold text-gray-900 mb-2">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              placeholder="Your password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setError('');
+              }}
+              disabled={loading}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-colors disabled:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-500"
             />
           </div>
 
@@ -117,25 +141,10 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Success State */}
-          {sent && (
-            <div className="rounded-lg bg-green-50 border border-green-200 p-4 animate-in slide-in-from-top">
-              <div className="flex items-start">
-                <span className="text-xl mr-3">✓</span>
-                <div>
-                  <p className="text-sm font-semibold text-green-900 mb-1">Check your email!</p>
-                  <p className="text-sm text-green-800">
-                    If your email is registered, you'll receive an access link shortly. Don't forget to check your spam folder.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={loading || sent}
+            disabled={loading}
             className="w-full py-3 px-4 border border-transparent rounded-lg shadow-sm text-base font-semibold text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 disabled:hover:scale-100"
           >
             {loading ? (
@@ -144,18 +153,16 @@ export default function LoginPage() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Sending...
+                Signing in...
               </span>
-            ) : sent ? (
-              '✓ Link sent!'
             ) : (
-              'Send access link'
+              'Sign in'
             )}
           </button>
 
           {/* Helper Text */}
           <p className="text-xs text-gray-500 text-center">
-            This is a secure area. We'll send a magic link to your email.
+            This is a secure area. Please use your club credentials.
           </p>
         </form>
 
