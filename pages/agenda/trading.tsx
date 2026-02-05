@@ -151,7 +151,10 @@ export default function TradingPage() {
     // Build turnover notes - include till analysis if checkbox is checked
     let finalTurnoverNotes = turnoverNotes;
     if (includeTillAnalysis && tillSummaryText) {
-      finalTurnoverNotes = turnoverNotes + (turnoverNotes ? '\n' : '') + tillSummaryText;
+      console.log('Including till analysis. Current turnover notes:', turnoverNotes);
+      console.log('Till summary text:', tillSummaryText);
+      finalTurnoverNotes = (turnoverNotes ? turnoverNotes + '\n' : '') + tillSummaryText;
+      console.log('Final turnover notes:', finalTurnoverNotes);
     }
 
     const { data: report } = await supabase
