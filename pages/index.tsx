@@ -10,18 +10,23 @@ export default function LandingPage() {
   const [dueActions, setDueActions] = useState<any[]>([]);
   const [userEmail, setUserEmail] = useState<string>('');
   const [meetingsOpen, setMeetingsOpen] = useState(true);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  // Get user session
+  // Get user session and redirect if not authenticated
   useEffect(() => {
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setUserEmail(user.email || '');
+        setLoading(false);
+      } else {
+        // Redirect to login if not authenticated
+        router.push('/auth/login');
       }
     };
     getUser();
-  }, []);
+  }, [router]);
 
   // Logout function
   const handleLogout = async () => {
@@ -101,6 +106,18 @@ export default function LandingPage() {
   // split dueActions: with due date vs no due date
   const actionsWithDue = dueActions.filter((a) => a.due_date);
   const actionsWithoutDue = dueActions.filter((a) => !a.due_date);
+
+  // Show loading state while checking authentication
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <main className="min-h-screen">

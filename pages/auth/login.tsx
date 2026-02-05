@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 
 export default function LoginPage() {
@@ -6,6 +6,30 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
+
+  // Random rugby-related greeting
+  const greeting = useMemo(() => {
+    const greetings = [
+      'Prop-erly Secure',
+      'Full Back In',
+      'Forward Thinking',
+      'In Good Form',
+      'Backs In Business',
+      'Set Piece Ready',
+      'Second Row Access',
+      'Front Row Access',
+      'Lock In Now',
+      'On the Front Foot',
+      'Fly Half Ready',
+      'Gain Line Secured',
+      'Numbers Up',
+      'Phase In',
+      'Wing Access',
+      'Scrum Half Here',
+      'Side Step In',
+    ];
+    return greetings[Math.floor(Math.random() * greetings.length)];
+  }, []);
 
   const isValidEmail = (value: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -55,7 +79,7 @@ export default function LoginPage() {
             <span className="text-3xl">🔐</span>
           </div>
           <h1 className="text-4xl font-bold tracking-tight text-gray-900 mb-2">
-            Welcome Back
+            {greeting}
           </h1>
           <p className="text-gray-600">
             Access the Aldwinians RUFC dashboard
@@ -112,7 +136,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading || sent}
-            className="w-full py-3 px-4 border border-transparent rounded-lg shadow-sm text-base font-semibold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 disabled:hover:scale-100"
+            className="w-full py-3 px-4 border border-transparent rounded-lg shadow-sm text-base font-semibold text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 disabled:hover:scale-100"
           >
             {loading ? (
               <span className="flex items-center justify-center">
@@ -137,7 +161,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p className="mt-8 text-center text-sm text-gray-600">
-          Questions? Contact the Management Team<a href="mailto:info@aldwinians.co.uk" className="text-blue-600 hover:underline font-medium">info@aldwinians.co.uk</a>
+          Questions? Contact the Management Team <a href="mailto:info@aldwinians.co.uk" className="text-blue-600 hover:underline font-medium">info@aldwinians.co.uk</a>
         </p>
       </div>
     </div>
