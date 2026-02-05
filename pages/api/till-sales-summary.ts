@@ -72,7 +72,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       for (const item of groupedItems) {
         // Remove " FR" suffix to get base name
-        const baseName = item.name.replace(/\s+FR\s*$/i, '');
+        const baseName = item.name.replace(/\s+FR\s*$/i, '').trim();
         
         if (itemMap.has(baseName)) {
           // Combine with existing item
@@ -80,13 +80,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           existing.quantity += item.quantity;
           existing.value += item.value;
           existing.lineCost += item.lineCost;
-          existing.salesRatioPercent = Math.max(existing.salesRatioPercent, item.salesRatioPercent);
+          existing.avgCost = (existing.lineCost / existing.quantity); // recalculate avg cost
+          // Update salesRatioPercent proportionally
+          existing.salesRatioPercent = ((existing.value / item.value) * item.salesRatioPercent);
         } else {
           itemMap.set(baseName, { ...item, name: baseName });
         }
       }
 
       const mergedItems = Array.from(itemMap.values());
+      console.log('Merged items count: - till-sales-summary.ts:92', mergedItems.length, 'from', parsed.items.length);
 
       // Get top 10 items by sales ratio
       const topTenItems = [...mergedItems]
@@ -113,7 +116,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         };
       }
 
-      console.log('Success  highest profit: - till-sales-summary.ts:116', highestProfitItem, '- popular items:', mostPopularItems.length);
+      console.log('Success  highest profit: - till-sales-summary.ts:119', highestProfitItem, '- popular items:', mostPopularItems.length);
 
       // Build summary text for saving
       let summaryText = '';
@@ -127,7 +130,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       return res.status(200).json({ highestProfitItem, mostPopularItems, summaryText });
     } catch (e: any) {
-      console.error('Unexpected error parsing PDF: - till-sales-summary.ts:130', e);
+      console.error('Unexpected error parsing PDF: - till-sales-summary.ts:133', e);
       return res.status(500).json({ 
         error: 'Unexpected error processing PDF',
         details: e?.message ?? "Unknown error",
@@ -136,7 +139,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   } catch (outerError: any) {
     // Catch any errors that occur before we can send a proper JSON response
-    console.error('Critical error in API handler: - till-sales-summary.ts:139', outerError);
+    console.error('Critical error in API handler: - till-sales-summary.ts:142', outerError);
     try {
       return res.status(500).json({
         error: 'Server error - API handler failed',
