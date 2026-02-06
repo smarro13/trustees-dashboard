@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'next/router';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -160,6 +161,16 @@ export default function LoginPage() {
               'Sign in'
             )}
           </button>
+
+          {/* Forgot Password Link */}
+          <div className="mt-4 text-center">
+            <Link
+              href="/auth/forgot-password"
+              className="text-sm text-gray-600 hover:text-gray-900 font-medium"
+            >
+              Forgot your password?
+            </Link>
+          </div>
 
           {/* Helper Text */}
           <p className="text-xs text-gray-500 text-center">
