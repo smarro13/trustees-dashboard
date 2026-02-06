@@ -16,17 +16,33 @@ export default function LandingPage() {
   // Get user session and redirect if not authenticated
   useEffect(() => {
     const getUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUserEmail(session.user.email || '');
-        setLoading(false);
-      } else {
-        // Redirect to login if not authenticated
+      try {
+        console.log('[Auth] Checking session...');
+        const { data: { session } } = await supabase.auth.getSession();
+        console.log('[Auth] Session result:', { hasSession: !!session, user: session?.user?.email });
+        
+        if (session?.user) {
+          console.log('[Auth] User authenticated:', session.user.email);
+          setUserEmail(session.user.email || '');
+          setLoading(false);
+        } else {
+          console.log('[Auth] No session found, redirecting to login');
+          router.push('/auth/login');
+        }
+      } catch (err) {
+        console.error('[Auth] Error checking session:', err);
         router.push('/auth/login');
       }
     };
-    getUser();
-  }, [router]);
+    
+    // Only run if router is ready
+    if (router.isReady) {
+      console.log('[Auth] Router is ready, getting user...');
+      getUser();
+    } else {
+      console.log('[Auth] Waiting for router to be ready...');
+    }
+  }, [router, router.isReady]);
 
   // Logout function
   const handleLogout = async () => {
