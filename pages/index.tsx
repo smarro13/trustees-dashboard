@@ -16,9 +16,9 @@ export default function LandingPage() {
   // Get user session and redirect if not authenticated
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setUserEmail(user.email || '');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUserEmail(session.user.email || '');
         setLoading(false);
       } else {
         // Redirect to login if not authenticated
