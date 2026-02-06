@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'next/router';
 
@@ -7,16 +7,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [greeting, setGreeting] = useState('Welcome Back');
   const router = useRouter();
 
-  const addDebugLog = (message: string) => {
-    console.log(message);
-    setDebugLogs(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
-  };
-
-  // Random rugby-related greeting
-  const greeting = useMemo(() => {
+  // Random rugby-related greeting - set on client only to avoid hydration mismatch
+  useEffect(() => {
     const greetings = [
       'Prop-erly Secure',
       'Full Back In',
@@ -36,7 +31,7 @@ export default function LoginPage() {
       'Scrum Half Here',
       'Side Step In',
     ];
-    return greetings[Math.floor(Math.random() * greetings.length)];
+    setGreeting(greetings[Math.floor(Math.random() * greetings.length)]);
   }, []);
 
   const isValidEmail = (value: string) => {
@@ -46,7 +41,6 @@ export default function LoginPage() {
   const login = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    addDebugLog('[Login] Form submitted with email: ' + email);
 
     if (!email) {
       setError('Please enter your email address');
@@ -64,27 +58,18 @@ export default function LoginPage() {
     }
 
     setLoading(true);
-    addDebugLog('[Login] Starting authentication...');
 
     try {
-      addDebugLog('[Login] Calling signInWithPassword...');
-      const { error: err, data } = await supabase.auth.signInWithPassword({
+      const { error: err } = await supabase.auth.signInWithPassword({
         email: email.toLowerCase(),
         password,
       });
 
-      addDebugLog('[Login] Response received: hasError=' + !!err + ', hasData=' + !!data);
+      if (err) throw err;
 
-      if (err) {
-        addDebugLog('[Login] Auth error: ' + err.message);
-        throw err;
-      }
-
-      addDebugLog('[Login] Authentication successful, redirecting to home...');
-      // Redirect to home page on success
-      router.push('/');
+      // Redirect to callback page which handles the session
+      window.location.replace('/auth/callback');
     } catch (err: any) {
-      addDebugLog('[Login] Error caught: ' + err.message);
       setError(err.message || 'Unable to sign in. Please check your credentials.');
     } finally {
       setLoading(false);
@@ -181,16 +166,6 @@ export default function LoginPage() {
             This is a secure area. Please use your club credentials.
           </p>
         </form>
-
-        {/* Debug Logs - Temporary */}
-        {debugLogs.length > 0 && (
-          <div className="mt-6 bg-black rounded-lg p-4 text-white text-xs font-mono max-h-48 overflow-y-auto">
-            <p className="mb-2 text-gray-400">Debug Logs:</p>
-            {debugLogs.map((log, i) => (
-              <div key={i} className="text-green-400">{log}</div>
-            ))}
-          </div>
-        )}
 
         {/* Footer */}
         <p className="mt-8 text-center text-sm text-gray-600">
