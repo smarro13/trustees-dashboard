@@ -8,16 +8,9 @@ export default function AuthCallback() {
 
   useEffect(() => {
     const handleCallback = async () => {
-      // Check if user is already authenticated
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (session) {
-        // User is authenticated, redirect to home
-        router.replace('/');
-      } else {
-        // No session, redirect to login
-        router.replace('/auth/login');
-      }
+      // Just redirect to home page
+      // The home page will handle auth checks
+      router.replace('/');
     };
 
     if (router.isReady) {
