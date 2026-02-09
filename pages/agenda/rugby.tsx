@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
-import { User } from '@supabase/supabase-js';
 
 export default function RugbyReportPage() {
   const [reports, setReports] = useState<any[]>([]);
   const [meetings, setMeetings] = useState<any[]>([]);
   const [meetingId, setMeetingId] = useState<string | null>(null);
-  const [user, setUser] = useState<User | null>(null);
 
   const [miniReport, setMiniReport] = useState('');
   const [juniorReport, setJuniorReport] = useState('');
@@ -20,9 +18,6 @@ export default function RugbyReportPage() {
 
   const loadData = async () => {
     setLoading(true);
-
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
-    setUser(currentUser);
 
     const { data } = await supabase
       .from('rugby_reports')
@@ -45,20 +40,11 @@ export default function RugbyReportPage() {
     loadData();
   }, []);
 
-  const getCurrentUser = async () => {
-    if (user) return user;
-
+  const saveReport = async (section: 'mini' | 'junior' | 'senior') => {
     const { data: { user: currentUser }, error } = await supabase.auth.getUser();
     if (error) {
       console.error('Error fetching user:', error);
     }
-
-    if (currentUser) setUser(currentUser);
-    return currentUser ?? null;
-  };
-
-  const saveReport = async (section: 'mini' | 'junior' | 'senior') => {
-    const currentUser = await getCurrentUser();
     if (!currentUser) {
       alert('You must be logged in to save');
       return;
@@ -68,7 +54,6 @@ export default function RugbyReportPage() {
 
     const payload: Record<string, string | null> = {
       meeting_id: meetingId,
-      user_id: currentUser.id,
     };
 
     if (section === 'mini') {
