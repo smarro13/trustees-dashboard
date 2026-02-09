@@ -41,9 +41,9 @@ export default function RugbyReportPage() {
   }, []);
 
   const saveReport = async (section: 'mini' | 'junior' | 'senior') => {
-    const { data: { user: currentUser }, error } = await supabase.auth.getUser();
-    if (error) {
-      console.error('Error fetching user:', error);
+    const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
+    if (userError) {
+      console.error('Error fetching user:', userError);
     }
     if (!currentUser) {
       alert('You must be logged in to save');
