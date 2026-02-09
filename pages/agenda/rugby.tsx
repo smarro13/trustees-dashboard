@@ -12,7 +12,9 @@ export default function RugbyReportPage() {
   const [miniReport, setMiniReport] = useState('');
   const [juniorReport, setJuniorReport] = useState('');
   const [seniorReport, setSeniorReport] = useState('');
-  const [managementRequests, setManagementRequests] = useState('');
+  const [miniRequests, setMiniRequests] = useState('');
+  const [juniorRequests, setJuniorRequests] = useState('');
+  const [seniorRequests, setSeniorRequests] = useState('');
 
   const [loading, setLoading] = useState(false);
 
@@ -43,22 +45,46 @@ export default function RugbyReportPage() {
     loadData();
   }, []);
 
-  const saveReport = async () => {
-    if (!user) {
+  const getCurrentUser = async () => {
+    if (user) return user;
+
+    const { data: { user: currentUser }, error } = await supabase.auth.getUser();
+    if (error) {
+      console.error('Error fetching user:', error);
+    }
+
+    if (currentUser) setUser(currentUser);
+    return currentUser ?? null;
+  };
+
+  const saveReport = async (section: 'mini' | 'junior' | 'senior') => {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
       alert('You must be logged in to save');
       return;
     }
 
     setLoading(true);
 
-    const { data, error } = await supabase.from('rugby_reports').insert({
+    const payload: Record<string, string | null> = {
       meeting_id: meetingId,
-      mini_report: miniReport || null,
-      junior_report: juniorReport || null,
-      senior_report: seniorReport || null,
-      management_requests: managementRequests || null,
-      user_id: user.id,
-    });
+      user_id: currentUser.id,
+    };
+
+    if (section === 'mini') {
+      payload.mini_report = miniReport || null;
+      payload.management_requests = miniRequests || null;
+    }
+    if (section === 'junior') {
+      payload.junior_report = juniorReport || null;
+      payload.management_requests = juniorRequests || null;
+    }
+    if (section === 'senior') {
+      payload.senior_report = seniorReport || null;
+      payload.management_requests = seniorRequests || null;
+    }
+
+    const { data, error } = await supabase.from('rugby_reports').insert(payload);
 
     if (error) {
       console.error('Error saving rugby report:', error);
@@ -67,11 +93,18 @@ export default function RugbyReportPage() {
       return;
     }
 
-    setMeetingId(null);
-    setMiniReport('');
-    setJuniorReport('');
-    setSeniorReport('');
-    setManagementRequests('');
+    if (section === 'mini') {
+      setMiniReport('');
+      setMiniRequests('');
+    }
+    if (section === 'junior') {
+      setJuniorReport('');
+      setJuniorRequests('');
+    }
+    if (section === 'senior') {
+      setSeniorReport('');
+      setSeniorRequests('');
+    }
 
     setLoading(false);
     loadData();
@@ -103,7 +136,7 @@ export default function RugbyReportPage() {
             <h2 className="text-xl font-semibold">Add rugby report</h2>
           </div>
 
-          <div className="space-y-6 px-6 py-6">
+          <div className="space-y-8 px-6 py-6">
             {/* Meeting */}
             <select
               value={meetingId ?? ''}
@@ -119,7 +152,7 @@ export default function RugbyReportPage() {
             </select>
 
             {/* Mini */}
-            <div>
+            <div className="rounded-md border border-zinc-200 p-4">
               <label className="block text-sm font-medium text-zinc-700">
                 Mini Rugby Report
               </label>
@@ -129,10 +162,33 @@ export default function RugbyReportPage() {
                 onChange={(e) => setMiniReport(e.target.value)}
                 className="mt-1 w-full rounded-md border px-3 py-2"
               />
+              <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3">
+                <label className="block text-xs font-semibold text-amber-900">
+                  Mini requests to Management Team
+                </label>
+                <p className="mb-2 text-xs text-amber-700">
+                  Items entered here can later be linked to the Action Tracker.
+                </p>
+                <textarea
+                  rows={3}
+                  value={miniRequests}
+                  onChange={(e) => setMiniRequests(e.target.value)}
+                  className="w-full rounded-md border border-amber-300 px-3 py-2"
+                />
+              </div>
+              <div className="mt-3 flex justify-end">
+                <button
+                  onClick={() => saveReport('mini')}
+                  disabled={loading}
+                  className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  {loading ? 'Saving…' : 'Submit mini report'}
+                </button>
+              </div>
             </div>
 
             {/* Junior */}
-            <div>
+            <div className="rounded-md border border-zinc-200 p-4">
               <label className="block text-sm font-medium text-zinc-700">
                 Junior Rugby Report
               </label>
@@ -142,10 +198,33 @@ export default function RugbyReportPage() {
                 onChange={(e) => setJuniorReport(e.target.value)}
                 className="mt-1 w-full rounded-md border px-3 py-2"
               />
+              <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3">
+                <label className="block text-xs font-semibold text-amber-900">
+                  Junior requests to Management Team
+                </label>
+                <p className="mb-2 text-xs text-amber-700">
+                  Items entered here can later be linked to the Action Tracker.
+                </p>
+                <textarea
+                  rows={3}
+                  value={juniorRequests}
+                  onChange={(e) => setJuniorRequests(e.target.value)}
+                  className="w-full rounded-md border border-amber-300 px-3 py-2"
+                />
+              </div>
+              <div className="mt-3 flex justify-end">
+                <button
+                  onClick={() => saveReport('junior')}
+                  disabled={loading}
+                  className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  {loading ? 'Saving…' : 'Submit junior report'}
+                </button>
+              </div>
             </div>
 
             {/* Senior */}
-            <div>
+            <div className="rounded-md border border-zinc-200 p-4">
               <label className="block text-sm font-medium text-zinc-700">
                 Senior Rugby Report
               </label>
@@ -155,33 +234,31 @@ export default function RugbyReportPage() {
                 onChange={(e) => setSeniorReport(e.target.value)}
                 className="mt-1 w-full rounded-md border px-3 py-2"
               />
+              <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3">
+                <label className="block text-xs font-semibold text-amber-900">
+                  Senior requests to Management Team
+                </label>
+                <p className="mb-2 text-xs text-amber-700">
+                  Items entered here can later be linked to the Action Tracker.
+                </p>
+                <textarea
+                  rows={3}
+                  value={seniorRequests}
+                  onChange={(e) => setSeniorRequests(e.target.value)}
+                  className="w-full rounded-md border border-amber-300 px-3 py-2"
+                />
+              </div>
+              <div className="mt-3 flex justify-end">
+                <button
+                  onClick={() => saveReport('senior')}
+                  disabled={loading}
+                  className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  {loading ? 'Saving…' : 'Submit senior report'}
+                </button>
+              </div>
             </div>
 
-            {/* Management requests */}
-            <div className="rounded-md border border-amber-300 bg-amber-50 p-4">
-              <label className="block text-sm font-semibold text-amber-900">
-                Requests to Management Team
-              </label>
-              <p className="mb-2 text-xs text-amber-700">
-                Items entered here can later be linked to the Action Tracker.
-              </p>
-              <textarea
-                rows={4}
-                value={managementRequests}
-                onChange={(e) => setManagementRequests(e.target.value)}
-                className="w-full rounded-md border border-amber-300 px-3 py-2"
-              />
-            </div>
-
-            <div className="flex justify-end">
-              <button
-                onClick={saveReport}
-                disabled={loading}
-                className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
-              >
-                {loading ? 'Saving…' : 'Save rugby report'}
-              </button>
-            </div>
           </div>
         </section>
 
