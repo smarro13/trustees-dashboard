@@ -341,7 +341,15 @@ export default function MeetingPage() {
                 )}
                 {r.management_requests && (
                   <div>
-                    <p className="font-semibold">Management Requests:</p>
+                    <p className="font-semibold">
+                      {r.mini_report
+                        ? 'Mini Management Requests:'
+                        : r.junior_report
+                          ? 'Junior Management Requests:'
+                          : r.senior_report
+                            ? 'Senior Management Requests:'
+                            : 'Management Requests:'}
+                    </p>
                     <p className="text-zinc-700 whitespace-pre-wrap">{r.management_requests}</p>
                   </div>
                 )}
