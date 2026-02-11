@@ -10,6 +10,7 @@ type Item = {
 };
 
 type RegularPayment = {
+  id: number;
   description: string;
   frequency: string;
   amount: string;
@@ -39,25 +40,25 @@ export default function TreasuryPage() {
     { dateRange: '', moneyIn: '', moneyOut: '' },
   ]);
   const [regularPayments, setRegularPayments] = useState<RegularPayment[]>([
-    { description: 'Gas', frequency: 'Monthly', amount: '300', notes: 'Monthly Readings' },
-    { description: 'Water', frequency: 'Monthly', amount: '580', notes: 'Catch Up Payments' },
-    { description: 'BT Group (Phone)', frequency: 'Monthly TC', amount: '99', notes: '' },
-    { description: 'BT Group (Broadband)', frequency: 'Monthly TC', amount: '246', notes: '' },
-    { description: '3 Mobile', frequency: 'Monthly TC', amount: '30', notes: 'Steward Mobile' },
-    { description: 'Bottom Line', frequency: 'Monthly', amount: '85', notes: 'On Average' },
-    { description: 'Sky TV', frequency: 'Monthly TC', amount: '450', notes: '' },
-    { description: 'Coaching Staff', frequency: 'Monthly', amount: '1353', notes: '' },
-    { description: 'Laundry', frequency: 'Monthly', amount: '650', notes: 'Average over the year' },
-    { description: 'DK Services', frequency: 'Monthly TC', amount: '104', notes: 'Pot Washers' },
-    { description: 'FDMS', frequency: 'Monthly TC', amount: '520', notes: 'Varies on the amount taken' },
-    { description: 'Mark Bates', frequency: 'Monthly', amount: '140', notes: 'Average' },
-    { description: 'Physio', frequency: 'Monthly', amount: '320', notes: '' },
-    { description: 'Concept Hygiene', frequency: 'Monthly', amount: '270', notes: '' },
-    { description: 'Aldermore Bank PLC', frequency: 'Monthly TC', amount: '255.60', notes: 'Club Control' },
-    { description: 'Biffa Waste', frequency: 'Monthly TC', amount: '557', notes: '' },
-    { description: 'HMRC', frequency: 'Monthly', amount: '355', notes: 'PAYE for RM (Increased)' },
-    { description: 'Club Insure', frequency: 'Monthly', amount: '858.33', notes: '' },
-    { description: 'Coporate Asset Sols', frequency: 'Monthly TC', amount: '400.80', notes: '' },
+    { id: 1, description: 'Gas', frequency: 'Monthly', amount: '300', notes: 'Monthly Readings' },
+    { id: 2, description: 'Water', frequency: 'Monthly', amount: '580', notes: 'Catch Up Payments' },
+    { id: 3, description: 'BT Group (Phone)', frequency: 'Monthly TC', amount: '99', notes: '' },
+    { id: 4, description: 'BT Group (Broadband)', frequency: 'Monthly TC', amount: '246', notes: '' },
+    { id: 5, description: '3 Mobile', frequency: 'Monthly TC', amount: '30', notes: 'Steward Mobile' },
+    { id: 6, description: 'Bottom Line', frequency: 'Monthly', amount: '85', notes: 'On Average' },
+    { id: 7, description: 'Sky TV', frequency: 'Monthly TC', amount: '450', notes: '' },
+    { id: 8, description: 'Coaching Staff', frequency: 'Monthly', amount: '1353', notes: '' },
+    { id: 9, description: 'Laundry', frequency: 'Monthly', amount: '650', notes: 'Average over the year' },
+    { id: 10, description: 'DK Services', frequency: 'Monthly TC', amount: '104', notes: 'Pot Washers' },
+    { id: 11, description: 'FDMS', frequency: 'Monthly TC', amount: '520', notes: 'Varies on the amount taken' },
+    { id: 12, description: 'Mark Bates', frequency: 'Monthly', amount: '140', notes: 'Average' },
+    { id: 13, description: 'Physio', frequency: 'Monthly', amount: '320', notes: '' },
+    { id: 14, description: 'Concept Hygiene', frequency: 'Monthly', amount: '270', notes: '' },
+    { id: 15, description: 'Aldermore Bank PLC', frequency: 'Monthly TC', amount: '255.60', notes: 'Club Control' },
+    { id: 16, description: 'Biffa Waste', frequency: 'Monthly TC', amount: '557', notes: '' },
+    { id: 17, description: 'HMRC', frequency: 'Monthly', amount: '355', notes: 'PAYE for RM (Increased)' },
+    { id: 18, description: 'Club Insure', frequency: 'Monthly', amount: '858.33', notes: '' },
+    { id: 19, description: 'Coporate Asset Sols', frequency: 'Monthly TC', amount: '400.80', notes: '' },
   ]);
   const [regularIncomes, setRegularIncomes] = useState<RegularIncome[]>([
     { description: 'Road Riders', frequency: 'Monthly', amount: '450', notes: '' },
@@ -151,17 +152,19 @@ export default function TreasuryPage() {
   const addRegularPaymentRow = () =>
     setRegularPayments([
       ...regularPayments,
-      { description: '', frequency: '', amount: '', notes: '' },
+      { id: Date.now(), description: '', frequency: '', amount: '', notes: '' },
     ]);
 
   const updateRegularPaymentRow = (
-    i: number,
+    id: number,
     key: keyof RegularPayment,
     value: string,
   ) => {
-    const copy = [...regularPayments];
-    copy[i][key] = value;
-    setRegularPayments(copy);
+    setRegularPayments((prev) =>
+      prev.map((rp) =>
+        rp.id === id ? { ...rp, [key]: value } : rp
+      )
+    );
   };
 
   const addRegularIncomeRow = () =>
@@ -200,8 +203,8 @@ export default function TreasuryPage() {
     setRegularIncomes((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const removeRegularPaymentRow = (index: number) => {
-    setRegularPayments((prev) => prev.filter((_, i) => i !== index));
+  const removeRegularPaymentRow = (id: number) => {
+    setRegularPayments((prev) => prev.filter((rp) => rp.id !== id));
   };
 
   const saveReport = async () => {
@@ -797,15 +800,15 @@ export default function TreasuryPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {getSortedRegularPayments().map((rp, idx) => (
-                    <tr key={idx} className="align-top">
+                  {getSortedRegularPayments().map((rp) => (
+                    <tr key={rp.id} className="align-top">
                       <td className="border px-2 py-1 align-top">
                         <input
                           type="text"
                           value={rp.description}
                           onChange={(e) =>
                             updateRegularPaymentRow(
-                              idx,
+                              rp.id,
                               'description',
                               e.target.value,
                             )
@@ -820,7 +823,7 @@ export default function TreasuryPage() {
                           value={rp.frequency}
                           onChange={(e) =>
                             updateRegularPaymentRow(
-                              idx,
+                              rp.id,
                               'frequency',
                               e.target.value,
                             )
@@ -837,7 +840,7 @@ export default function TreasuryPage() {
                           value={rp.amount}
                           onChange={(e) =>
                             updateRegularPaymentRow(
-                              idx,
+                              rp.id,
                               'amount',
                               e.target.value,
                             )
@@ -851,7 +854,7 @@ export default function TreasuryPage() {
                           value={rp.notes}
                           onChange={(e) =>
                             updateRegularPaymentRow(
-                              idx,
+                              rp.id,
                               'notes',
                               e.target.value,
                             )
@@ -864,7 +867,7 @@ export default function TreasuryPage() {
                       <td className="border px-2 py-1 text-center align-middle">
                         <button
                           type="button"
-                          onClick={() => removeRegularPaymentRow(idx)}
+                          onClick={() => removeRegularPaymentRow(rp.id)}
                           className="rounded border px-2 py-0.5 text-xs text-red-600"
                         >
                           Remove
