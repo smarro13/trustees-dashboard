@@ -584,7 +584,6 @@ export default function TreasuryPage() {
                       Totals
                     </td>
                     <td className="border px-2 py-1 text-right">
-                    <td className="border px-2 py-1 text-right">
                       £
                       {items
                         .reduce(
