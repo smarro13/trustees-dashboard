@@ -97,45 +97,58 @@ export default function MembershipReportPage() {
       return;
     }
 
-    await supabase.from('membership_reports').insert({
-      meeting_id: meetingId,
-      bottom_line: null,
+    try {
+      const { data, error } = await supabase.from('membership_reports').insert({
+        meeting_id: meetingId,
+        bottom_line: null,
 
-      num_people: numPeople ? Number(numPeople) : null,
+        num_people: numPeople ? Number(numPeople) : null,
 
-      // Bottomline Total (£)
-      money_total: moneyTotal ? Number(moneyTotal) : null,
+        // Bottomline Total (£)
+        money_total: moneyTotal ? Number(moneyTotal) : null,
 
-      // LoveAdmin
-      user_id: user.id,
-      loveadmin_total: loveAdminTotal ? Number(loveAdminTotal) : null,
-      loveadmin_new_signups: loveAdminNewSignups
-        ? Number(loveAdminNewSignups)
-        : null,
-      loveadmin_outstanding_total: loveAdminOutstandingTotal
-        ? Number(loveAdminOutstandingTotal)
-        : null,
-      loveadmin_cancellations: loveAdminCancellations
-        ? Number(loveAdminCancellations)
-        : null,
+        // LoveAdmin
+        user_id: user.id,
+        loveadmin_total: loveAdminTotal ? Number(loveAdminTotal) : null,
+        loveadmin_new_signups: loveAdminNewSignups
+          ? Number(loveAdminNewSignups)
+          : null,
+        loveadmin_outstanding_total: loveAdminOutstandingTotal
+          ? Number(loveAdminOutstandingTotal)
+          : null,
+        loveadmin_cancellations: loveAdminCancellations
+          ? Number(loveAdminCancellations)
+          : null,
 
-      // Details (strip local id before saving)
-      outstanding_lines: outstandingLines.map(({ id, ...rest }) => rest),
-      cancellation_lines: cancellationLines.map(({ id, ...rest }) => rest),
-    });
+        // Details (strip local id before saving)
+        outstanding_lines: outstandingLines.map(({ id, ...rest }) => rest),
+        cancellation_lines: cancellationLines.map(({ id, ...rest }) => rest),
+      });
 
-    setMeetingId(null);
-    setNumPeople('');
-    setMoneyTotal('');
-    setLoveAdminNewSignups('');
-    setLoveAdminOutstandingTotal('');
-    setLoveAdminCancellations('');
-    setLoveAdminTotal('');
-    setOutstandingLines([]);
-    setSelectedOutstandingCategory('');
-    setCancellationLines([]);
-    setSelectedCancellationCategory('');
-    loadData();
+      if (error) {
+        console.error('Error saving membership report:', error);
+        alert(`Failed to save: ${error.message}`);
+        return;
+      }
+
+      alert('Membership report saved successfully!');
+      
+      setMeetingId(null);
+      setNumPeople('');
+      setMoneyTotal('');
+      setLoveAdminNewSignups('');
+      setLoveAdminOutstandingTotal('');
+      setLoveAdminCancellations('');
+      setLoveAdminTotal('');
+      setOutstandingLines([]);
+      setSelectedOutstandingCategory('');
+      setCancellationLines([]);
+      setSelectedCancellationCategory('');
+      loadData();
+    } catch (err) {
+      console.error('Unexpected error saving membership report:', err);
+      alert('An unexpected error occurred while saving');
+    }
   };
 
   const handleCsvUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
