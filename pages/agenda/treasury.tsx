@@ -503,6 +503,7 @@ export default function TreasuryPage() {
                     <th className="border px-2 py-1 text-right whitespace-nowrap">Money Out (£)</th>
                     <th className="border px-2 py-1 text-right whitespace-nowrap">Difference</th>
                     <th className="border px-2 py-1 text-right whitespace-nowrap">Balance</th>
+                    <th className="border px-2 py-1 text-right whitespace-nowrap">New Balance</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -565,15 +566,24 @@ export default function TreasuryPage() {
                         <td className="border px-2 py-1 text-right align-top">
                           £{balance.toFixed(2)}
                         </td>
+                        <td className="border px-2 py-1 text-right align-top">
+                          <input
+                            type="number"
+                            step="0.01"
+                            className="w-full rounded border px-2 py-1 text-right"
+                            placeholder="0.00"
+                          />
+                        </td>
                       </tr>
                     );
                   })}
                 </tbody>
                 <tfoot>
                   <tr className="font-semibold bg-zinc-50">
-                    <td className="border px-2 py-1" colSpan={2}>
+                    <td className="border px-2 py-1">
                       Totals
                     </td>
+                    <td className="border px-2 py-1 text-right">
                     <td className="border px-2 py-1 text-right">
                       £
                       {items
@@ -601,6 +611,19 @@ export default function TreasuryPage() {
                           return sum + (mi - mo);
                         }, 0)
                         .toFixed(2)}
+                    </td>
+                    <td className="border px-2 py-1 text-right">
+                      £
+                      {items
+                        .reduce((sum, r) => {
+                          const mi = Number(r.moneyIn || '0');
+                          const mo = Number(r.moneyOut || '0');
+                          return sum + (mi - mo);
+                        }, 0)
+                        .toFixed(2)}
+                    </td>
+                    <td className="border px-2 py-1 text-right">
+                      
                     </td>
                   </tr>
                 </tfoot>
