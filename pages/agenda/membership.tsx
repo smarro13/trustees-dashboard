@@ -108,7 +108,6 @@ export default function MembershipReportPage() {
         money_total: moneyTotal ? Number(moneyTotal) : null,
 
         // LoveAdmin
-        user_id: user.id,
         loveadmin_total: loveAdminTotal ? Number(loveAdminTotal) : null,
         loveadmin_new_signups: loveAdminNewSignups
           ? Number(loveAdminNewSignups)
