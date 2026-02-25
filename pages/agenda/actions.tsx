@@ -179,10 +179,12 @@ export default function ActionTrackerPage() {
       });
     }
 
+    // Reload data first, then close modal
+    await loadData();
+    
     setStatusChangeModal(null);
     setStatusUpdateNote('');
     setLoading(false);
-    loadData();
   };
 
   const cancelStatusChange = () => {
