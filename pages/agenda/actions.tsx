@@ -6,8 +6,19 @@ const STATUS_OPTIONS = ['Open', 'In Progress', 'Completed'];
 
 export default function ActionTrackerPage() {
   const [actions, setActions] = useState<any[]>([]);
+  const [actionStatusHistory, setActionStatusHistory] = useState<Record<string, any[]>>({});
   const [meetings, setMeetings] = useState<any[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [showCompletedActions, setShowCompletedActions] = useState(false);
+
+  // Status change modal
+  const [statusChangeModal, setStatusChangeModal] = useState<{
+    actionId: string;
+    currentStatus: string;
+    newStatus: string;
+    actionTitle: string;
+  } | null>(null);
+  const [statusUpdateNote, setStatusUpdateNote] = useState('');
 
   // manual entry
   const [title, setTitle] = useState('');
@@ -66,6 +77,23 @@ export default function ActionTrackerPage() {
 
     if (meetingsData) setMeetings(meetingsData);
 
+    // Load status update history for all actions
+    const { data: historyData } = await supabase
+      .from('action_status_updates')
+      .select('*')
+      .order('updated_at', { ascending: false });
+
+    if (historyData) {
+      const historyByAction: Record<string, any[]> = {};
+      historyData.forEach((update) => {
+        if (!historyByAction[update.action_id]) {
+          historyByAction[update.action_id] = [];
+        }
+        historyByAction[update.action_id].push(update);
+      });
+      setActionStatusHistory(historyByAction);
+    }
+
     setLoading(false);
   };
 
@@ -106,17 +134,65 @@ export default function ActionTrackerPage() {
     loadData();
   };
 
-  const updateStatus = async (id: string, status: string) => {
-    await supabase
+  const initiateStatusChange = (actionId: string, currentStatus: string, newStatus: string, actionTitle: string) => {
+    if (currentStatus === newStatus) return;
+    
+    setStatusChangeModal({
+      actionId,
+      currentStatus,
+      newStatus,
+      actionTitle,
+    });
+    setStatusUpdateNote('');
+  };
+
+  const confirmStatusChange = async () => {
+    if (!statusChangeModal) return;
+
+    const { actionId, newStatus } = statusChangeModal;
+    
+    setLoading(true);
+
+    // Update the action status
+    const { error } = await supabase
       .from('action_items')
       .update({
-        status,
-        completed_at: status === 'Completed' ? new Date().toISOString() : null,
+        status: newStatus,
+        completed_at: newStatus === 'Completed' ? new Date().toISOString() : null,
       })
-      .eq('id', id);
+      .eq('id', actionId);
 
+    if (error) {
+      alert('Failed to update status: ' + error.message);
+      setLoading(false);
+      return;
+    }
+
+    // Insert status update history
+    if (statusUpdateNote.trim()) {
+      await supabase.from('action_status_updates').insert({
+        action_id: actionId,
+        status: newStatus,
+        update_note: statusUpdateNote.trim(),
+        updated_by: createdBy || 'Unknown',
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    setStatusChangeModal(null);
+    setStatusUpdateNote('');
+    setLoading(false);
     loadData();
   };
+
+  const cancelStatusChange = () => {
+    setStatusChangeModal(null);
+    setStatusUpdateNote('');
+  };
+
+  // Filter actions into active and completed
+  const activeActions = actions.filter((a) => a.status !== 'Completed');
+  const completedActions = actions.filter((a) => a.status === 'Completed');
 
   return (
     <main className="min-h-screen">
@@ -225,17 +301,18 @@ export default function ActionTrackerPage() {
           </div>
         </section>
 
-        {/* Actions table */}
-        <section>
+        {/* Active Actions table */}
+        <section className="mb-6">
+          <h2 className="text-lg sm:text-xl font-semibold mb-4">Active Actions</h2>
           {loading ? (
             <p className="text-sm text-zinc-500">Loading actions…</p>
-          ) : actions.length === 0 ? (
-            <p className="text-sm text-zinc-500">No actions yet.</p>
+          ) : activeActions.length === 0 ? (
+            <p className="text-sm text-zinc-500">No active actions.</p>
           ) : (
             <>
               {/* Mobile: Card view */}
               <div className="space-y-4 lg:hidden">
-                {actions.map((a) => (
+                {activeActions.map((a) => (
                   <div
                     key={a.id}
                     className="rounded-lg border border-zinc-200 bg-white"
@@ -274,7 +351,7 @@ export default function ActionTrackerPage() {
                       <div className="px-4 pb-4 border-t pt-3">
                       <select
                         value={a.status}
-                        onChange={(e) => updateStatus(a.id, e.target.value)}
+                        onChange={(e) => initiateStatusChange(a.id, a.status, e.target.value, a.title)}
                         className="w-full mb-3 min-h-[44px] rounded-md border px-3 py-2 text-sm"
                       >
                         {STATUS_OPTIONS.map((s) => (
@@ -314,6 +391,36 @@ export default function ActionTrackerPage() {
                           {a.source || '—'}
                         </p>
                       </div>
+                      
+                      {actionStatusHistory[a.id] && actionStatusHistory[a.id].length > 0 && (
+                        <div className="mt-4 pt-3 border-t border-zinc-200">
+                          <p className="font-medium text-sm mb-2">Status History:</p>
+                          <div className="space-y-2">
+                            {actionStatusHistory[a.id].map((update) => (
+                              <div key={update.id} className="rounded-md bg-zinc-50 p-2 text-xs">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className={`px-2 py-0.5 rounded ${
+                                    update.status === 'Completed' ? 'bg-green-100 text-green-800' :
+                                    update.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                                    'bg-zinc-100 text-zinc-800'
+                                  }`}>
+                                    {update.status}
+                                  </span>
+                                  <span className="text-zinc-500">
+                                    {new Date(update.updated_at).toLocaleDateString('en-GB')} {new Date(update.updated_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                                {update.update_note && (
+                                  <p className="text-zinc-700 mt-1">{update.update_note}</p>
+                                )}
+                                {update.updated_by && (
+                                  <p className="text-zinc-500 mt-1">— {update.updated_by}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       </div>
                       </div>
                     )}
@@ -337,7 +444,7 @@ export default function ActionTrackerPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {actions.map((a) => (
+                    {activeActions.map((a) => (
                       <tr key={a.id}>
                         <td className="px-3 py-2 font-medium">{a.title}</td>
                         <td className="px-3 py-2">{a.owner || '—'}</td>
@@ -359,7 +466,7 @@ export default function ActionTrackerPage() {
                         <td className="px-3 py-2">
                           <select
                             value={a.status}
-                            onChange={(e) => updateStatus(a.id, e.target.value)}
+                            onChange={(e) => initiateStatusChange(a.id, a.status, e.target.value, a.title)}
                             className="rounded-md border px-2 py-1 text-xs"
                           >
                             {STATUS_OPTIONS.map((s) => (
@@ -377,6 +484,273 @@ export default function ActionTrackerPage() {
             </>
           )}
         </section>
+
+        {/* Completed Actions - Collapsible section */}
+        {completedActions.length > 0 && (
+          <section className="mt-6">
+            <button
+              onClick={() => setShowCompletedActions(!showCompletedActions)}
+              className="flex items-center justify-between w-full rounded-lg bg-white shadow-sm ring-1 ring-zinc-200 px-4 sm:px-6 py-3 sm:py-4 hover:bg-zinc-50 transition-colors"
+            >
+              <h2 className="text-lg sm:text-xl font-semibold text-zinc-900">
+                ✓ Completed Actions ({completedActions.length})
+              </h2>
+              <svg
+                className={`w-5 h-5 text-zinc-400 transition-transform ${
+                  showCompletedActions ? 'rotate-180' : ''
+                }`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {showCompletedActions && (
+              <div className="mt-4">
+                {/* Mobile: Card view */}
+                <div className="space-y-4 lg:hidden">
+                  {completedActions.map((a) => (
+                    <div
+                      key={a.id}
+                      className="rounded-lg border border-zinc-200 bg-white"
+                    >
+                      <button
+                        onClick={() => toggleExpanded(a.id)}
+                        className="w-full p-4 text-left"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="flex-1 font-semibold text-zinc-900">
+                            {a.title}
+                          </h3>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-800">
+                              {a.status}
+                            </span>
+                            <svg
+                              className={`w-5 h-5 text-zinc-400 transition-transform ${
+                                expandedIds.has(a.id) ? 'rotate-180' : ''
+                              }`}
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                        </div>
+                      </button>
+
+                      {expandedIds.has(a.id) && (
+                        <div className="px-4 pb-4 border-t pt-3">
+                        <select
+                          value={a.status}
+                          onChange={(e) => initiateStatusChange(a.id, a.status, e.target.value, a.title)}
+                          className="w-full mb-3 min-h-[44px] rounded-md border px-3 py-2 text-sm"
+                        >
+                          {STATUS_OPTIONS.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                      
+                        <div className="space-y-2 text-sm text-zinc-600">
+                        {a.description && (
+                          <p className="text-zinc-700">{a.description}</p>
+                        )}
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                          <p>
+                            <span className="font-medium">Owner:</span>{' '}
+                            {a.owner || '—'}
+                          </p>
+                          <p>
+                            <span className="font-medium">Due:</span>{' '}
+                            {a.due_date
+                              ? new Date(a.due_date).toLocaleDateString('en-GB')
+                              : '—'}
+                          </p>
+                          <p>
+                            <span className="font-medium">Meeting:</span>{' '}
+                            {a.meetings?.meeting_date
+                              ? new Date(a.meetings.meeting_date).toLocaleDateString('en-GB')
+                              : '—'}
+                          </p>
+                          <p>
+                            <span className="font-medium">Created by:</span>{' '}
+                            {a.created_by || '—'}
+                          </p>
+                          <p>
+                            <span className="font-medium">Source:</span>{' '}
+                            {a.source || '—'}
+                          </p>
+                        </div>
+                        
+                        {actionStatusHistory[a.id] && actionStatusHistory[a.id].length > 0 && (
+                          <div className="mt-4 pt-3 border-t border-zinc-200">
+                            <p className="font-medium text-sm mb-2">Status History:</p>
+                            <div className="space-y-2">
+                              {actionStatusHistory[a.id].map((update) => (
+                                <div key={update.id} className="rounded-md bg-zinc-50 p-2 text-xs">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className={`px-2 py-0.5 rounded ${
+                                      update.status === 'Completed' ? 'bg-green-100 text-green-800' :
+                                      update.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                                      'bg-zinc-100 text-zinc-800'
+                                    }`}>
+                                      {update.status}
+                                    </span>
+                                    <span className="text-zinc-500">
+                                      {new Date(update.updated_at).toLocaleDateString('en-GB')} {new Date(update.updated_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  </div>
+                                  {update.update_note && (
+                                    <p className="text-zinc-700 mt-1">{update.update_note}</p>
+                                  )}
+                                  {update.updated_by && (
+                                    <p className="text-zinc-500 mt-1">— {update.updated_by}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop: Table view */}
+                <div className="hidden lg:block overflow-x-auto rounded-md border bg-white">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-zinc-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Title</th>
+                        <th className="px-3 py-2 text-left">Owner</th>
+                        <th className="px-3 py-2 text-left">Due</th>
+                        <th className="px-3 py-2 text-left">Meeting</th>
+                        <th className="px-3 py-2 text-left">Created by</th>
+                        <th className="px-3 py-2 text-left">Source</th>
+                        <th className="px-3 py-2 text-left">Details</th>
+                        <th className="px-3 py-2 text-left">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {completedActions.map((a) => (
+                        <tr key={a.id} className="bg-green-50/30">
+                          <td className="px-3 py-2 font-medium">{a.title}</td>
+                          <td className="px-3 py-2">{a.owner || '—'}</td>
+                          <td className="px-3 py-2">
+                            {a.due_date
+                              ? new Date(a.due_date).toLocaleDateString('en-GB')
+                              : '—'}
+                          </td>
+                          <td className="px-3 py-2">
+                            {a.meetings?.meeting_date
+                              ? new Date(a.meetings.meeting_date).toLocaleDateString('en-GB')
+                              : '—'}
+                          </td>
+                          <td className="px-3 py-2">{a.created_by || '—'}</td>
+                          <td className="px-3 py-2 text-xs">{a.source || '—'}</td>
+                          <td className="px-3 py-2">
+                            {a.description || <span className="text-zinc-400">No details</span>}
+                          </td>
+                          <td className="px-3 py-2">
+                            <select
+                              value={a.status}
+                              onChange={(e) => initiateStatusChange(a.id, a.status, e.target.value, a.title)}
+                              className="rounded-md border px-2 py-1 text-xs"
+                            >
+                              {STATUS_OPTIONS.map((s) => (
+                                <option key={s} value={s}>
+                                  {s}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Status Change Modal */}
+        {statusChangeModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
+              <div className="border-b border-zinc-200 px-6 py-4">
+                <h3 className="text-lg font-semibold text-zinc-900">Update Action Status</h3>
+              </div>
+              
+              <div className="px-6 py-4 space-y-4">
+                <div>
+                  <p className="text-sm font-medium text-zinc-700 mb-1">Action:</p>
+                  <p className="text-sm text-zinc-600">{statusChangeModal.actionTitle}</p>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-zinc-700 mb-1">Status Change:</p>
+                  <p className="text-sm">
+                    <span className="inline-block px-2 py-1 rounded bg-zinc-100 text-zinc-800">
+                      {statusChangeModal.currentStatus}
+                    </span>
+                    <span className="mx-2">→</span>
+                    <span className={`inline-block px-2 py-1 rounded ${
+                      statusChangeModal.newStatus === 'Completed' ? 'bg-green-100 text-green-800' :
+                      statusChangeModal.newStatus === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                      'bg-zinc-100 text-zinc-800'
+                    }`}>
+                      {statusChangeModal.newStatus}
+                    </span>
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-2">
+                    Update / Closing Note
+                    {statusChangeModal.newStatus === 'Completed' && (
+                      <span className="text-red-600 ml-1">*</span>
+                    )}
+                  </label>
+                  <textarea
+                    value={statusUpdateNote}
+                    onChange={(e) => setStatusUpdateNote(e.target.value)}
+                    placeholder="Describe the progress made or why this action is being closed..."
+                    rows={4}
+                    className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  {statusChangeModal.newStatus === 'Completed' && !statusUpdateNote.trim() && (
+                    <p className="mt-1 text-xs text-amber-600">A closing note is strongly recommended for completed actions</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 border-t border-zinc-200 px-6 py-4">
+                <button
+                  onClick={cancelStatusChange}
+                  disabled={loading}
+                  className="min-h-[44px] rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmStatusChange}
+                  disabled={loading}
+                  className="min-h-[44px] rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  {loading ? 'Updating...' : 'Confirm Update'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );
