@@ -46,6 +46,7 @@ export default function MeetingPage() {
   const [trading, setTrading] = useState<any[]>([]);
   const [treasury, setTreasury] = useState<any[]>([]);
   const [actions, setActions] = useState<any[]>([]);
+  const [openActions, setOpenActions] = useState<any[]>([]);
   const [mattersArising, setMattersArising] = useState<any[]>([]);
   const [aob, setAob] = useState<any[]>([]);
   const [rugby, setRugby] = useState<any[]>([]);
@@ -77,6 +78,7 @@ export default function MeetingPage() {
         trad,
         tres,
         act,
+        openAct,
         ma,
         aobItems,
         rugbyItems,
@@ -96,6 +98,14 @@ export default function MeetingPage() {
         supabase.from('trading_reports').select('*').eq('meeting_id', meetingId),
         supabase.from('treasury_reports').select('*').eq('meeting_id', meetingId),
         supabase.from('action_items').select('*').eq('meeting_id', meetingId),
+        supabase
+          .from('action_items')
+          .select(`
+            *,
+            meetings ( meeting_date )
+          `)
+          .neq('status', 'Completed')
+          .order('due_date', { ascending: true }),
         supabase
           .from('matters_arising')
           .select('*')
@@ -119,6 +129,7 @@ export default function MeetingPage() {
       setTrading(trad.data ?? []);
       setTreasury(tres.data ?? []);
       setActions(act.data ?? []);
+      setOpenActions(openAct.data ?? []);
       setMattersArising(ma.data ?? []);
       setAob(aobItems.data ?? []);
       setRugby(rugbyItems.data ?? []);
@@ -236,15 +247,62 @@ export default function MeetingPage() {
         );
 
       case 'actions':
-        if (!actions.length) return empty(emptyText);
+        if (!actions.length && !openActions.length) return empty(emptyText);
         return (
-          <ul className="space-y-1 text-sm">
-            {actions.map((a) => (
-              <li key={a.id}>
-                <strong>{a.title}</strong> — {a.status}
-              </li>
-            ))}
-          </ul>
+          <div className="space-y-4">
+            {openActions.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                <h3 className="text-sm font-semibold text-amber-900 mb-3 flex items-center gap-2">
+                  <span>⚠️</span>
+                  <span>Open Actions ({openActions.length})</span>
+                </h3>
+                <div className="space-y-2">
+                  {openActions.map((a) => {
+                    const isOverdue = a.due_date && new Date(a.due_date) < new Date();
+                    return (
+                      <div key={a.id} className="rounded-md border border-amber-200 bg-white p-3">
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <p className="font-semibold text-sm">{a.title}</p>
+                          <span className={`text-xs px-2 py-1 rounded ${
+                            a.status === 'In Progress' ? 'bg-blue-100 text-blue-800' : 'bg-zinc-100 text-zinc-800'
+                          }`}>
+                            {a.status}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-zinc-600">
+                          <p>
+                            <span className="font-medium">Owner:</span> {a.owner || '—'}
+                          </p>
+                          <p className={isOverdue ? 'text-red-600 font-semibold' : ''}>
+                            <span className="font-medium">Due:</span>{' '}
+                            {a.due_date ? new Date(a.due_date).toLocaleDateString('en-GB') : '—'}
+                          </p>
+                          {a.meetings?.meeting_date && (
+                            <p>
+                              <span className="font-medium">From:</span>{' '}
+                              {new Date(a.meetings.meeting_date).toLocaleDateString('en-GB')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {actions.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-700 mb-2">Actions from this meeting</h3>
+                <ul className="space-y-1 text-sm">
+                  {actions.map((a) => (
+                    <li key={a.id}>
+                      <strong>{a.title}</strong> — {a.status}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
         );
 
       case 'matters_arising':
