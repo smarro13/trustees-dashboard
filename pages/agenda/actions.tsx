@@ -20,6 +20,18 @@ export default function ActionTrackerPage() {
   } | null>(null);
   const [statusUpdateNote, setStatusUpdateNote] = useState('');
 
+  // Edit action modal
+  const [editActionModal, setEditActionModal] = useState<{
+    actionId: string;
+  } | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editOwner, setEditOwner] = useState('');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editMeetingId, setEditMeetingId] = useState<string | null>(null);
+  const [editCreatedBy, setEditCreatedBy] = useState('');
+  const [editSource, setEditSource] = useState('');
+
   // manual entry
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -192,6 +204,71 @@ export default function ActionTrackerPage() {
     setStatusUpdateNote('');
   };
 
+  const initiateEditAction = (action: any) => {
+    setEditActionModal({
+      actionId: action.id,
+    });
+    setEditTitle(action.title);
+    setEditDescription(action.description || '');
+    setEditOwner(action.owner || '');
+    setEditDueDate(action.due_date || '');
+    setEditMeetingId(action.meeting_id || null);
+    setEditCreatedBy(action.created_by || '');
+    setEditSource(action.source || '');
+  };
+
+  const confirmEditAction = async () => {
+    if (!editActionModal || !editTitle.trim()) return;
+
+    const { actionId } = editActionModal;
+
+    setLoading(true);
+
+    // Update the action
+    const { error } = await supabase
+      .from('action_items')
+      .update({
+        title: editTitle.trim(),
+        description: editDescription.trim() || null,
+        owner: editOwner.trim() || null,
+        due_date: editDueDate || null,
+        meeting_id: editMeetingId || null,
+        created_by: editCreatedBy.trim() || null,
+        source: editSource.trim() || null,
+      })
+      .eq('id', actionId);
+
+    if (error) {
+      alert('Failed to update action: ' + error.message);
+      setLoading(false);
+      return;
+    }
+
+    // Reload data first, then close modal
+    await loadData();
+
+    setEditActionModal(null);
+    setEditTitle('');
+    setEditDescription('');
+    setEditOwner('');
+    setEditDueDate('');
+    setEditMeetingId(null);
+    setEditCreatedBy('');
+    setEditSource('');
+    setLoading(false);
+  };
+
+  const cancelEditAction = () => {
+    setEditActionModal(null);
+    setEditTitle('');
+    setEditDescription('');
+    setEditOwner('');
+    setEditDueDate('');
+    setEditMeetingId(null);
+    setEditCreatedBy('');
+    setEditSource('');
+  };
+
   // Filter actions into active and completed
   const activeActions = actions.filter((a) => a.status !== 'Completed');
   const completedActions = actions.filter((a) => a.status === 'Completed');
@@ -351,17 +428,26 @@ export default function ActionTrackerPage() {
 
                     {expandedIds.has(a.id) && (
                       <div className="px-4 pb-4 border-t pt-3">
-                      <select
-                        value={a.status}
-                        onChange={(e) => initiateStatusChange(a.id, a.status, e.target.value, a.title)}
-                        className="w-full mb-3 min-h-[44px] rounded-md border px-3 py-2 text-sm"
-                      >
-                        {STATUS_OPTIONS.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex gap-2 mb-3">
+                        <select
+                          value={a.status}
+                          onChange={(e) => initiateStatusChange(a.id, a.status, e.target.value, a.title)}
+                          className="flex-1 min-h-[44px] rounded-md border px-3 py-2 text-sm"
+                        >
+                          {STATUS_OPTIONS.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => initiateEditAction(a)}
+                          className="min-h-[44px] rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                          title="Edit action details"
+                        >
+                          ✏️
+                        </button>
+                      </div>
                     
                       <div className="space-y-2 text-sm text-zinc-600">
                       {a.description && (
@@ -443,6 +529,7 @@ export default function ActionTrackerPage() {
                       <th className="px-3 py-2 text-left">Source</th>
                       <th className="px-3 py-2 text-left">Details</th>
                       <th className="px-3 py-2 text-left">Status</th>
+                      <th className="px-3 py-2 text-left">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -477,6 +564,15 @@ export default function ActionTrackerPage() {
                               </option>
                             ))}
                           </select>
+                        </td>
+                        <td className="px-3 py-2">
+                          <button
+                            onClick={() => initiateEditAction(a)}
+                            className="inline-flex items-center justify-center rounded bg-blue-600 p-1.5 text-white hover:bg-blue-700"
+                            title="Edit action details"
+                          >
+                            ✏️
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -638,6 +734,7 @@ export default function ActionTrackerPage() {
                         <th className="px-3 py-2 text-left">Source</th>
                         <th className="px-3 py-2 text-left">Details</th>
                         <th className="px-3 py-2 text-left">Status</th>
+                        <th className="px-3 py-2 text-left">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -672,6 +769,15 @@ export default function ActionTrackerPage() {
                                 </option>
                               ))}
                             </select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <button
+                              onClick={() => initiateEditAction(a)}
+                              className="inline-flex items-center justify-center rounded bg-blue-600 p-1.5 text-white hover:bg-blue-700"
+                              title="Edit action details"
+                            >
+                              ✏️
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -748,6 +854,121 @@ export default function ActionTrackerPage() {
                   className="min-h-[44px] rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
                 >
                   {loading ? 'Updating...' : 'Confirm Update'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Action Modal */}
+        {editActionModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-2xl rounded-lg bg-white shadow-xl max-h-[90vh] overflow-y-auto">
+              <div className="border-b border-zinc-200 px-6 py-4 sticky top-0 bg-white">
+                <h3 className="text-lg font-semibold text-zinc-900">Edit Action Details</h3>
+              </div>
+              
+              <div className="px-6 py-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-2">Title *</label>
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    placeholder="Enter action title"
+                    className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-2">Description</label>
+                  <textarea
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    placeholder="Add description"
+                    rows={3}
+                    className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 mb-2">Owner</label>
+                    <input
+                      type="text"
+                      value={editOwner}
+                      onChange={(e) => setEditOwner(e.target.value)}
+                      placeholder="Assign owner"
+                      className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 mb-2">Due Date</label>
+                    <input
+                      type="date"
+                      value={editDueDate}
+                      onChange={(e) => setEditDueDate(e.target.value)}
+                      className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 mb-2">Linked Meeting</label>
+                    <select
+                      value={editMeetingId ?? ''}
+                      onChange={(e) => setEditMeetingId(e.target.value || null)}
+                      className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="">No meeting linked</option>
+                      {meetings.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {new Date(m.meeting_date).toLocaleDateString('en-GB')}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 mb-2">Created By</label>
+                    <input
+                      type="text"
+                      value={editCreatedBy}
+                      onChange={(e) => setEditCreatedBy(e.target.value)}
+                      placeholder="Creator name"
+                      className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-2">Source</label>
+                  <input
+                    type="text"
+                    value={editSource}
+                    onChange={(e) => setEditSource(e.target.value)}
+                    placeholder="e.g., Manual, AOB, Treasury"
+                    className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 border-t border-zinc-200 px-6 py-4 sticky bottom-0 bg-white">
+                <button
+                  onClick={cancelEditAction}
+                  disabled={loading}
+                  className="min-h-[44px] rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmEditAction}
+                  disabled={loading || !editTitle.trim()}
+                  className="min-h-[44px] rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {loading ? 'Updating...' : 'Update Action'}
                 </button>
               </div>
             </div>
