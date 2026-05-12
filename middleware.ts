@@ -66,6 +66,7 @@ export async function middleware(req: NextRequest) {
       '/auth/callback',
       '/auth/forgot-password',
       '/auth/reset-password',
+      '/public/actions',
       '/public/minutes',
       '/public/agm-minutes',
     ];
