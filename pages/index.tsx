@@ -5,6 +5,19 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import AgendaMenu from '../components/AgendaMenu';
 
+const SHAREABLE_PAGES = [
+  {
+    title: 'Previous Minutes',
+    description: 'Read-only public page for sharing approved club minutes outside the login.',
+    href: '/public/minutes',
+  },
+  {
+    title: 'AGM Minutes',
+    description: 'Read-only public AGM minutes page for members and wider sharing.',
+    href: '/public/agm-minutes',
+  },
+];
+
 export default function LandingPage() {
   const [meetings, setMeetings] = useState<any[]>([]);
   const [dueActions, setDueActions] = useState<any[]>([]);
@@ -157,6 +170,37 @@ export default function LandingPage() {
         <div className="mt-8 flex flex-col items-start gap-8 sm:flex-row">
           <AgendaMenu />
           <div className="flex-1 min-w-0 w-full">
+            <section className="mb-12 rounded-lg bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
+              <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">🔗</span>
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Shareable Pages</h2>
+                    <p className="text-xs text-slate-500">Public links that can be shared outside the dashboard</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 px-4 py-4 md:grid-cols-2">
+                {SHAREABLE_PAGES.map((page) => (
+                  <Link
+                    key={page.href}
+                    href={page.href}
+                    className="rounded-lg border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:bg-blue-50"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-semibold text-slate-900">{page.title}</h3>
+                        <p className="mt-1 text-sm text-slate-600">{page.description}</p>
+                      </div>
+                      <span className="text-slate-400">↗</span>
+                    </div>
+                    <p className="mt-3 text-xs font-medium text-blue-600">Open public page</p>
+                  </Link>
+                ))}
+              </div>
+            </section>
+
             {/* Upcoming Meetings */}
             <section className="mb-12 rounded-lg bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
               <button
