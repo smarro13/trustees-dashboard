@@ -8,7 +8,7 @@ import AgendaMenu from '../components/AgendaMenu';
 const SHAREABLE_PAGES = [
   {
     title: 'Previous Minutes',
-    description: 'Read-only public page for sharing approved club minutes outside the login.',
+    description: 'Read-only public page for sharing approved club minutes.',
     href: '/public/minutes',
   },
   {

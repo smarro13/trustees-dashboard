@@ -8,6 +8,14 @@ export default function PublicMinutesPage() {
   const [minutes, setMinutes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const getMeetingDate = (minute: any) => {
+    if (Array.isArray(minute.meetings)) {
+      return minute.meetings[0]?.meeting_date ?? null;
+    }
+
+    return minute.meetings?.meeting_date ?? null;
+  };
+
   useEffect(() => {
     const loadData = async () => {
       const { data } = await supabase
@@ -49,10 +57,10 @@ export default function PublicMinutesPage() {
               <div key={minute.id} className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-zinc-200">
                 <h2 className="text-lg font-semibold text-zinc-900">{minute.title}</h2>
 
-                {minute.meetings?.meeting_date && (
+                {getMeetingDate(minute) && (
                   <p className="mt-1 text-sm text-zinc-600">
                     Meeting:{' '}
-                    {new Date(minute.meetings.meeting_date).toLocaleDateString('en-GB', {
+                    {new Date(getMeetingDate(minute)).toLocaleDateString('en-GB', {
                       day: '2-digit',
                       month: '2-digit',
                       year: 'numeric',

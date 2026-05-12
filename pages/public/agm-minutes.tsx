@@ -8,6 +8,14 @@ export default function PublicAGMMinutesPage() {
   const [minutes, setMinutes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const getMeetingDate = (minute: any) => {
+    if (Array.isArray(minute.meetings)) {
+      return minute.meetings[0]?.meeting_date ?? null;
+    }
+
+    return minute.meetings?.meeting_date ?? null;
+  };
+
   useEffect(() => {
     const loadData = async () => {
       const { data } = await supabase
@@ -31,7 +39,7 @@ export default function PublicAGMMinutesPage() {
       <div className="mx-auto w-full max-w-5xl px-4 py-10">
         <header className="mb-8">
           <h1 className="text-3xl font-extrabold text-zinc-900">AGM Minutes</h1>
-          <p className="mt-1 text-zinc-600">Read-only AGM minutes page for sharing outside the login.</p>
+          <p className="mt-1 text-zinc-600">Read-only AGM minutes page for sharing.</p>
           <div className="mt-3">
             <Link href="/public/minutes" className="text-sm font-medium text-blue-600 hover:underline">
               View previous minutes →
@@ -49,10 +57,10 @@ export default function PublicAGMMinutesPage() {
               <div key={minute.id} className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-zinc-200">
                 <h2 className="text-lg font-semibold text-zinc-900">{minute.title}</h2>
 
-                {minute.meetings?.meeting_date && (
+                {getMeetingDate(minute) && (
                   <p className="mt-1 text-sm text-zinc-600">
                     Meeting:{' '}
-                    {new Date(minute.meetings.meeting_date).toLocaleDateString('en-GB', {
+                    {new Date(getMeetingDate(minute)).toLocaleDateString('en-GB', {
                       day: '2-digit',
                       month: '2-digit',
                       year: 'numeric',

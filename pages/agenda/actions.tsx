@@ -3,6 +3,23 @@ import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 
 const STATUS_OPTIONS = ['Open', 'In Progress', 'Completed'];
+const PUBLIC_ACTION_MARKER = '[Public]';
+
+const stripPublicMarker = (source: string | null | undefined) =>
+  (source || '').replace(PUBLIC_ACTION_MARKER, '').trim();
+
+const hasPublicMarker = (source: string | null | undefined) =>
+  (source || '').includes(PUBLIC_ACTION_MARKER);
+
+const buildSourceValue = (source: string | null | undefined, isPublic: boolean) => {
+  const cleanedSource = stripPublicMarker(source);
+
+  if (isPublic) {
+    return cleanedSource ? `${PUBLIC_ACTION_MARKER} ${cleanedSource}` : PUBLIC_ACTION_MARKER;
+  }
+
+  return cleanedSource || null;
+};
 
 export default function ActionTrackerPage() {
   const [actions, setActions] = useState<any[]>([]);
@@ -31,6 +48,7 @@ export default function ActionTrackerPage() {
   const [editMeetingId, setEditMeetingId] = useState<string | null>(null);
   const [editCreatedBy, setEditCreatedBy] = useState('');
   const [editSource, setEditSource] = useState('');
+  const [editIsPublic, setEditIsPublic] = useState(false);
 
   // manual entry
   const [title, setTitle] = useState('');
@@ -39,6 +57,7 @@ export default function ActionTrackerPage() {
   const [dueDate, setDueDate] = useState('');
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [createdBy, setCreatedBy] = useState('');
+  const [isPublicAction, setIsPublicAction] = useState(false);
 
   const [loading, setLoading] = useState(false);
 
@@ -124,7 +143,7 @@ export default function ActionTrackerPage() {
       owner: owner || null,
       due_date: dueDate || null,
       meeting_id: meetingId,
-      source: 'Manual',
+      source: buildSourceValue('Manual', isPublicAction),
       status: 'Open',
       created_by: createdBy || null,
     });
@@ -142,6 +161,7 @@ export default function ActionTrackerPage() {
     setDueDate('');
     setMeetingId(null);
     setCreatedBy('');
+    setIsPublicAction(false);
 
     loadData();
   };
@@ -214,7 +234,8 @@ export default function ActionTrackerPage() {
     setEditDueDate(action.due_date || '');
     setEditMeetingId(action.meeting_id || null);
     setEditCreatedBy(action.created_by || '');
-    setEditSource(action.source || '');
+    setEditSource(stripPublicMarker(action.source || ''));
+    setEditIsPublic(hasPublicMarker(action.source));
   };
 
   const confirmEditAction = async () => {
@@ -234,7 +255,7 @@ export default function ActionTrackerPage() {
         due_date: editDueDate || null,
         meeting_id: editMeetingId || null,
         created_by: editCreatedBy.trim() || null,
-        source: editSource.trim() || null,
+        source: buildSourceValue(editSource.trim(), editIsPublic),
       })
       .eq('id', actionId);
 
@@ -255,6 +276,7 @@ export default function ActionTrackerPage() {
     setEditMeetingId(null);
     setEditCreatedBy('');
     setEditSource('');
+    setEditIsPublic(false);
     setLoading(false);
   };
 
@@ -267,6 +289,7 @@ export default function ActionTrackerPage() {
     setEditMeetingId(null);
     setEditCreatedBy('');
     setEditSource('');
+    setEditIsPublic(false);
   };
 
   // Filter actions into active and completed
@@ -367,6 +390,15 @@ export default function ActionTrackerPage() {
                 placeholder="Your name"
               />
             </div>
+
+            <label className="flex items-center gap-2 text-sm font-medium text-zinc-700">
+              <input
+                type="checkbox"
+                checked={isPublicAction}
+                onChange={(e) => setIsPublicAction(e.target.checked)}
+              />
+              Make this action public
+            </label>
 
             <div className="flex justify-end pt-2">
               <button
@@ -476,7 +508,12 @@ export default function ActionTrackerPage() {
                         </p>
                         <p>
                           <span className="font-medium">Source:</span>{' '}
-                          {a.source || '—'}
+                          {stripPublicMarker(a.source) || '—'}
+                          {hasPublicMarker(a.source) && (
+                            <span className="ml-2 rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                              Public
+                            </span>
+                          )}
                         </p>
                       </div>
                       
@@ -548,7 +585,14 @@ export default function ActionTrackerPage() {
                             : '—'}
                         </td>
                         <td className="px-3 py-2">{a.created_by || '—'}</td>
-                        <td className="px-3 py-2 text-xs">{a.source || '—'}</td>
+                        <td className="px-3 py-2 text-xs">
+                          {stripPublicMarker(a.source) || '—'}
+                          {hasPublicMarker(a.source) && (
+                            <span className="ml-2 rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-800">
+                              Public
+                            </span>
+                          )}
+                        </td>
                         <td className="px-3 py-2">
                           {a.description || <span className="text-zinc-400">No details</span>}
                         </td>
@@ -681,7 +725,12 @@ export default function ActionTrackerPage() {
                           </p>
                           <p>
                             <span className="font-medium">Source:</span>{' '}
-                            {a.source || '—'}
+                            {stripPublicMarker(a.source) || '—'}
+                            {hasPublicMarker(a.source) && (
+                              <span className="ml-2 rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                                Public
+                              </span>
+                            )}
                           </p>
                         </div>
                         
@@ -753,7 +802,14 @@ export default function ActionTrackerPage() {
                               : '—'}
                           </td>
                           <td className="px-3 py-2">{a.created_by || '—'}</td>
-                          <td className="px-3 py-2 text-xs">{a.source || '—'}</td>
+                          <td className="px-3 py-2 text-xs">
+                            {stripPublicMarker(a.source) || '—'}
+                            {hasPublicMarker(a.source) && (
+                              <span className="ml-2 rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-800">
+                                Public
+                              </span>
+                            )}
+                          </td>
                           <td className="px-3 py-2">
                             {a.description || <span className="text-zinc-400">No details</span>}
                           </td>
@@ -953,6 +1009,15 @@ export default function ActionTrackerPage() {
                     className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
+
+                <label className="flex items-center gap-2 text-sm font-medium text-zinc-700">
+                  <input
+                    type="checkbox"
+                    checked={editIsPublic}
+                    onChange={(e) => setEditIsPublic(e.target.checked)}
+                  />
+                  Make this action public
+                </label>
               </div>
 
               <div className="flex justify-end gap-3 border-t border-zinc-200 px-6 py-4 sticky bottom-0 bg-white">
