@@ -40,32 +40,22 @@ const AGM_AGENDA = [
 const AGM_SUPPORTING_LINKS = [
   {
     title: 'AGM Minutes',
-    description: 'Upload AGM minutes and review previously uploaded AGM minutes.',
+    description: 'Review AGM minutes and keep the annual meeting record in one place.',
     href: '/agenda/agm-minutes',
   },
   {
     title: 'AGM Questions',
-    description: 'Static AGM questions page, ready to be updated in code later.',
+    description: 'Review AGM questions and track any follow-up actions raised from them.',
     href: '/agenda/agm-questions',
   },
   {
     title: 'Previous Minutes',
-    description: 'Open the approved minutes used for the AGM minutes item.',
+    description: 'Open previously approved minutes for reference during the AGM.',
     href: '/agenda/minutes',
   },
   {
-    title: 'Treasury Report',
-    description: 'Use the latest treasury figures for the financial update.',
-    href: '/agenda/treasury',
-  },
-  {
-    title: 'Rugby Report',
-    description: 'Review rugby updates before the AGM discussion.',
-    href: '/agenda/rugby',
-  },
-  {
     title: 'AOB',
-    description: 'Check any items already logged for any other business.',
+    description: 'Check whether any items are already logged for any other business.',
     href: '/agenda/aob',
   },
 ];
@@ -89,7 +79,7 @@ export default function AGMPage() {
             Annual General Meeting (AGM)
           </h1>
           <p className="mt-1 max-w-3xl text-zinc-600">
-            AGM agenda and supporting links for the annual meeting. This agenda is static and is only updated in code.
+            AGM agenda and supporting links for the annual meeting.
           </p>
         </header>
 
@@ -137,7 +127,7 @@ export default function AGMPage() {
           <div className="border-b border-zinc-200 px-6 py-4">
             <h2 className="text-xl font-semibold text-zinc-900">Supporting AGM pages</h2>
             <p className="mt-1 text-sm text-zinc-600">
-              Quick links to AGM-specific pages and the sections that support this agenda.
+              Quick links to AGM-specific pages and the supporting reports used during the meeting.
             </p>
           </div>
           <div className="grid gap-4 px-6 py-6 md:grid-cols-2 xl:grid-cols-3">
@@ -151,26 +141,6 @@ export default function AGMPage() {
                 <p className="mt-1 text-sm text-zinc-600">{resource.description}</p>
               </Link>
             ))}
-          </div>
-        </section>
-
-        <section className="rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
-          <div className="border-b border-zinc-200 px-6 py-4">
-            <h2 className="text-xl font-semibold text-zinc-900">Meeting notes</h2>
-          </div>
-          <div className="grid gap-4 px-6 py-6 md:grid-cols-2">
-            <div className="rounded-lg border border-zinc-200 p-4">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Timing</h3>
-              <p className="mt-2 text-sm text-zinc-700">
-                AGM start is set to 8:00pm.
-              </p>
-            </div>
-            <div className="rounded-lg border border-zinc-200 p-4">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Elections</h3>
-              <p className="mt-2 text-sm text-zinc-700">
-                Election of officers covers trustee elections, with a separate Club President item on the agenda.
-              </p>
-            </div>
           </div>
         </section>
       </div>
