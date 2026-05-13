@@ -7,9 +7,9 @@ import AgendaMenu from '../components/AgendaMenu';
 
 const SHAREABLE_PAGES = [
   {
-    title: 'Public Actions',
-    description: 'Share selected live actions approved for wider visibility.',
-    href: '/public/actions',
+    title: 'Public Homepage',
+    description: 'One public landing page with actions, previous minutes, and AGM minutes.',
+    href: '/public',
   },
   {
     title: 'Previous Minutes',
