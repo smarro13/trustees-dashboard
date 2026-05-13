@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import PublicSectionNav from '../../components/PublicSectionNav';
 import { supabase } from '../../lib/supabaseClient';
 
 type PublicAction = {
@@ -67,25 +68,25 @@ export default function PublicActionsPage() {
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-900">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+        <PublicSectionNav />
+
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-zinc-500">Aldwinians</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-900">Public Actions</h1>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-900">Members Actions</h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-600">
-            These are the live actions the admin team has approved for wider sharing.
+            These are the live actions the admin team has approved for wider member sharing.
           </p>
 
           <div className="mt-5 flex flex-wrap gap-3 text-sm">
-            <a
-              href="https://www.aldwinians.co.uk"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center rounded-full bg-zinc-900 px-4 py-2 font-medium text-white transition hover:bg-zinc-700"
+            <Link
+              href="/public#raise-action"
+              className="inline-flex items-center rounded-full bg-red-700 px-4 py-2 font-medium text-white transition hover:bg-red-800"
             >
-              Raise an action on the club website
-            </a>
+              Raise an action
+            </Link>
             <Link
               href="/public/minutes"
-              className="inline-flex items-center rounded-full border border-zinc-300 px-4 py-2 font-medium text-zinc-700 transition hover:border-zinc-400 hover:text-zinc-900"
+              className="inline-flex items-center rounded-full border border-zinc-300 px-4 py-2 font-medium text-zinc-700 transition hover:border-red-300 hover:text-red-800"
             >
               View shared minutes
             </Link>
@@ -94,15 +95,15 @@ export default function PublicActionsPage() {
 
         {loading ? (
           <section className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600 shadow-sm">
-            Loading public actions...
+            Loading member actions...
           </section>
         ) : error ? (
           <section className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700 shadow-sm">
-            Unable to load public actions: {error}
+            Unable to load member actions: {error}
           </section>
         ) : actions.length === 0 ? (
           <section className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600 shadow-sm">
-            No public actions are available right now.
+            No member actions are available right now.
           </section>
         ) : (
           <div className="grid gap-4">
