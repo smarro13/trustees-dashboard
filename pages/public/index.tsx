@@ -55,6 +55,12 @@ export default function PublicHomePage() {
   const [actions, setActions] = useState<PublicAction[]>([]);
   const [minutes, setMinutes] = useState<Minute[]>([]);
   const [agmMinutes, setAgmMinutes] = useState<Minute[]>([]);
+  const [formTitle, setFormTitle] = useState('');
+  const [formDescription, setFormDescription] = useState('');
+  const [formName, setFormName] = useState('');
+  const [formEmail, setFormEmail] = useState('');
+  const [formStatus, setFormStatus] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -113,40 +119,86 @@ export default function PublicHomePage() {
     loadData();
   }, []);
 
+  const submitAction = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!formTitle.trim()) {
+      setFormStatus('Please add a title for the action.');
+      return;
+    }
+
+    setSubmitting(true);
+    setFormStatus(null);
+
+    try {
+      const response = await fetch('/api/public/raise-action', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: formTitle,
+          description: formDescription,
+          name: formName,
+          email: formEmail,
+          website: '',
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok || !payload.ok) {
+        setFormStatus(payload.error || 'Unable to submit your action right now.');
+        setSubmitting(false);
+        return;
+      }
+
+      setFormTitle('');
+      setFormDescription('');
+      setFormName('');
+      setFormEmail('');
+      setFormStatus('Your action has been submitted for the club to review.');
+    } catch (submitError) {
+      setFormStatus('Unable to submit your action right now.');
+    }
+
+    setSubmitting(false);
+  };
+
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-900">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
         <section className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm">
-          <div className="bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-700 px-6 py-8 text-white sm:px-8">
-            <p className="text-sm font-medium uppercase tracking-[0.25em] text-zinc-300">Aldwinians</p>
+          <div className="bg-gradient-to-r from-red-900 via-red-800 to-red-700 px-6 py-8 text-white sm:px-8">
+            <p className="text-sm font-medium uppercase tracking-[0.25em] text-red-100">Aldwinians</p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Public Information Hub</h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-200 sm:text-base">
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-red-50 sm:text-base">
               Shared updates from the club in one place, including live public actions, previous minutes, and AGM minutes.
             </p>
 
             <div className="mt-6 flex flex-wrap gap-3 text-sm">
               <Link
                 href="/public/actions"
-                className="inline-flex items-center rounded-full bg-white px-4 py-2 font-medium text-zinc-900 transition hover:bg-zinc-200"
+                className="inline-flex items-center rounded-full bg-white px-4 py-2 font-medium text-red-800 transition hover:bg-red-50"
               >
                 View all public actions
               </Link>
               <Link
                 href="/public/minutes"
-                className="inline-flex items-center rounded-full border border-zinc-500 px-4 py-2 font-medium text-white transition hover:border-zinc-300 hover:bg-white/10"
+                className="inline-flex items-center rounded-full border border-red-300/50 px-4 py-2 font-medium text-white transition hover:border-red-100 hover:bg-white/10"
               >
                 Browse previous minutes
               </Link>
               <Link
                 href="/public/agm-minutes"
-                className="inline-flex items-center rounded-full border border-zinc-500 px-4 py-2 font-medium text-white transition hover:border-zinc-300 hover:bg-white/10"
+                className="inline-flex items-center rounded-full border border-red-300/50 px-4 py-2 font-medium text-white transition hover:border-red-100 hover:bg-white/10"
               >
                 Browse AGM minutes
               </Link>
             </div>
           </div>
 
-          <div className="grid gap-4 border-t border-zinc-200 bg-zinc-50 px-6 py-5 sm:grid-cols-3 sm:px-8">
+          <div className="grid gap-4 border-t border-red-100 bg-red-50/60 px-6 py-5 sm:grid-cols-3 sm:px-8">
             <div className="rounded-2xl bg-white px-4 py-4 ring-1 ring-zinc-200">
               <p className="text-sm text-zinc-500">Open public actions</p>
               <p className="mt-2 text-3xl font-semibold text-zinc-900">{actions.length}</p>
@@ -172,55 +224,146 @@ export default function PublicHomePage() {
           </section>
         ) : (
           <div className="grid gap-8 lg:grid-cols-[1.2fr_0.9fr]">
-            <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-2xl font-semibold text-zinc-900">Public Actions</h2>
-                  <p className="mt-1 text-sm text-zinc-600">Current actions approved for wider sharing.</p>
+            <div className="grid gap-8">
+              <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-2xl font-semibold text-zinc-900">Raise an Action</h2>
+                    <p className="mt-1 text-sm text-zinc-600">Submit an item for the club to review and add to the action tracker.</p>
+                  </div>
                 </div>
-                <Link href="/public/actions" className="text-sm font-medium text-blue-600 hover:underline">
-                  Full list
-                </Link>
-              </div>
 
-              <div className="mt-5 space-y-4">
-                {actions.length === 0 ? (
-                  <p className="text-sm text-zinc-500">No public actions are available right now.</p>
-                ) : (
-                  actions.slice(0, 6).map((action) => (
-                    <article key={action.id} className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-lg font-semibold text-zinc-900">{action.title}</h3>
-                            <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800">
-                              {action.status || 'Open'}
-                            </span>
+                <form className="mt-5 space-y-4" onSubmit={submitAction}>
+                  <div>
+                    <label htmlFor="action-title" className="mb-1 block text-sm font-medium text-zinc-700">
+                      Title
+                    </label>
+                    <input
+                      id="action-title"
+                      value={formTitle}
+                      onChange={(event) => setFormTitle(event.target.value)}
+                      className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                      placeholder="Brief summary of the action"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="action-description" className="mb-1 block text-sm font-medium text-zinc-700">
+                      Details
+                    </label>
+                    <textarea
+                      id="action-description"
+                      value={formDescription}
+                      onChange={(event) => setFormDescription(event.target.value)}
+                      rows={5}
+                      className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                      placeholder="Add any useful background or context"
+                    />
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label htmlFor="action-name" className="mb-1 block text-sm font-medium text-zinc-700">
+                        Your name
+                      </label>
+                      <input
+                        id="action-name"
+                        value={formName}
+                        onChange={(event) => setFormName(event.target.value)}
+                        className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                        placeholder="Optional"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="action-email" className="mb-1 block text-sm font-medium text-zinc-700">
+                        Email
+                      </label>
+                      <input
+                        id="action-email"
+                        type="email"
+                        value={formEmail}
+                        onChange={(event) => setFormEmail(event.target.value)}
+                        className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                        placeholder="Optional"
+                      />
+                    </div>
+                  </div>
+
+                  <input
+                    type="text"
+                    name="website"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    className="hidden"
+                  />
+
+                  {formStatus && (
+                    <p className={`text-sm ${formStatus.includes('submitted') ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {formStatus}
+                    </p>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="inline-flex items-center rounded-full bg-red-700 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-red-300"
+                  >
+                    {submitting ? 'Submitting...' : 'Submit action'}
+                  </button>
+                </form>
+              </section>
+
+              <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-2xl font-semibold text-zinc-900">Public Actions</h2>
+                    <p className="mt-1 text-sm text-zinc-600">Current actions approved for wider sharing.</p>
+                  </div>
+                  <Link href="/public/actions" className="text-sm font-medium text-red-700 hover:underline">
+                    Full list
+                  </Link>
+                </div>
+
+                <div className="mt-5 space-y-4">
+                  {actions.length === 0 ? (
+                    <p className="text-sm text-zinc-500">No public actions are available right now.</p>
+                  ) : (
+                    actions.slice(0, 6).map((action) => (
+                      <article key={action.id} className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="text-lg font-semibold text-zinc-900">{action.title}</h3>
+                              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800">
+                                {action.status || 'Open'}
+                              </span>
+                            </div>
+                            {action.description && (
+                              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-600">
+                                {action.description}
+                              </p>
+                            )}
                           </div>
-                          {action.description && (
-                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-600">
-                              {action.description}
-                            </p>
-                          )}
+                          <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-zinc-600 ring-1 ring-zinc-200">
+                            {stripPublicMarker(action.source) || 'Action tracker'}
+                          </span>
                         </div>
-                        <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-zinc-600 ring-1 ring-zinc-200">
-                          {stripPublicMarker(action.source) || 'Action tracker'}
-                        </span>
-                      </div>
 
-                      <div className="mt-4 grid gap-2 text-sm text-zinc-600 sm:grid-cols-2">
-                        <p>
-                          <span className="font-medium text-zinc-900">Owner:</span> {action.owner || 'Not assigned'}
-                        </p>
-                        <p>
-                          <span className="font-medium text-zinc-900">Due date:</span> {formatDate(action.due_date, 'No due date')}
-                        </p>
-                      </div>
-                    </article>
-                  ))
-                )}
-              </div>
-            </section>
+                        <div className="mt-4 grid gap-2 text-sm text-zinc-600 sm:grid-cols-2">
+                          <p>
+                            <span className="font-medium text-zinc-900">Owner:</span> {action.owner || 'Not assigned'}
+                          </p>
+                          <p>
+                            <span className="font-medium text-zinc-900">Due date:</span> {formatDate(action.due_date, 'No due date')}
+                          </p>
+                        </div>
+                      </article>
+                    ))
+                  )}
+                </div>
+              </section>
+            </div>
 
             <div className="grid gap-8">
               <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
@@ -229,7 +372,7 @@ export default function PublicHomePage() {
                     <h2 className="text-2xl font-semibold text-zinc-900">Previous Minutes</h2>
                     <p className="mt-1 text-sm text-zinc-600">Approved club minutes shared publicly.</p>
                   </div>
-                  <Link href="/public/minutes" className="text-sm font-medium text-blue-600 hover:underline">
+                  <Link href="/public/minutes" className="text-sm font-medium text-red-700 hover:underline">
                     Full archive
                   </Link>
                 </div>
@@ -249,7 +392,7 @@ export default function PublicHomePage() {
                             href={minute.file_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="font-medium text-blue-600 hover:underline"
+                            className="font-medium text-red-700 hover:underline"
                           >
                             Open minutes
                           </a>
@@ -269,7 +412,7 @@ export default function PublicHomePage() {
                     <h2 className="text-2xl font-semibold text-zinc-900">AGM Minutes</h2>
                     <p className="mt-1 text-sm text-zinc-600">Annual general meeting records available to share.</p>
                   </div>
-                  <Link href="/public/agm-minutes" className="text-sm font-medium text-blue-600 hover:underline">
+                  <Link href="/public/agm-minutes" className="text-sm font-medium text-red-700 hover:underline">
                     Full archive
                   </Link>
                 </div>
@@ -289,7 +432,7 @@ export default function PublicHomePage() {
                             href={minute.file_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="font-medium text-blue-600 hover:underline"
+                            className="font-medium text-red-700 hover:underline"
                           >
                             Open AGM minutes
                           </a>
