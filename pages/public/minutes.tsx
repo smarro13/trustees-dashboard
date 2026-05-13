@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import PublicSectionNav from '../../components/PublicSectionNav';
 import { supabase } from '../../lib/supabaseClient';
 
 const AGM_MINUTES_PREFIX = 'AGM - ';
@@ -37,11 +38,13 @@ export default function PublicMinutesPage() {
   return (
     <main className="min-h-screen bg-zinc-50">
       <div className="mx-auto w-full max-w-5xl px-4 py-10">
+        <PublicSectionNav />
+
         <header className="mb-8">
           <h1 className="text-3xl font-extrabold text-zinc-900">Previous Minutes</h1>
-          <p className="mt-1 text-zinc-600">Read-only page for sharing approved club minutes.</p>
+          <p className="mt-1 text-zinc-600">Read-only page for sharing approved club minutes with members.</p>
           <div className="mt-3">
-            <Link href="/public/agm-minutes" className="text-sm font-medium text-blue-600 hover:underline">
+            <Link href="/public/agm-minutes" className="text-sm font-medium text-red-700 hover:underline">
               View AGM minutes →
             </Link>
           </div>
@@ -72,7 +75,7 @@ export default function PublicMinutesPage() {
                   href={minute.file_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-3 inline-block text-blue-600 hover:underline"
+                  className="mt-3 inline-block text-red-700 hover:underline"
                 >
                   Open minutes
                 </a>

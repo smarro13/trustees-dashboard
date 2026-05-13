@@ -7,18 +7,18 @@ import AgendaMenu from '../components/AgendaMenu';
 
 const SHAREABLE_PAGES = [
   {
-    title: 'Public Homepage',
-    description: 'One public landing page with actions, previous minutes, and AGM minutes.',
+    title: 'Members Homepage',
+    description: 'One members landing page with actions, previous minutes, and AGM minutes.',
     href: '/public',
   },
   {
     title: 'Previous Minutes',
-    description: 'Read-only public page for sharing approved club minutes.',
+    description: 'Read-only members page for sharing approved club minutes.',
     href: '/public/minutes',
   },
   {
     title: 'AGM Minutes',
-    description: 'Read-only public AGM minutes page for members and wider sharing.',
+    description: 'Read-only AGM minutes page for members and wider sharing.',
     href: '/public/agm-minutes',
   },
 ];
@@ -181,7 +181,7 @@ export default function LandingPage() {
                   <span className="text-xl">🔗</span>
                   <div>
                     <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Shareable Pages</h2>
-                    <p className="text-xs text-slate-500">Public links that can be shared outside the dashboard</p>
+                    <p className="text-xs text-slate-500">Members links that can be shared outside the dashboard</p>
                   </div>
                 </div>
               </div>
@@ -200,7 +200,7 @@ export default function LandingPage() {
                       </div>
                       <span className="text-slate-400">↗</span>
                     </div>
-                    <p className="mt-3 text-xs font-medium text-blue-600">Open public page</p>
+                    <p className="mt-3 text-xs font-medium text-blue-600">Open members page</p>
                   </Link>
                 ))}
               </div>
