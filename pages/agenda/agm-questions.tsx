@@ -52,6 +52,12 @@ const AGM_QUESTION_SECTIONS: AGMQuestionSection[] = [
     ],
   },
   {
+    title: 'Events',
+    questions: [
+      { text: 'Did the Barry Allen Memorial Finals Day prove a success for the club, and do we aim to submit tenders for further events, either Colts, Lancashire, or league finals, in the future?' },
+    ],
+  },
+  {
     title: 'Facilities & Club Improvements',
     questions: [
       { text: 'When will the wall next to the doorway in the main clubhouse be fixed?' },
