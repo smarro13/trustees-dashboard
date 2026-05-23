@@ -22,6 +22,16 @@ type Minute = {
   meetings?: { meeting_date?: string | null } | { meeting_date?: string | null }[] | null;
 };
 
+type JobClubItem = {
+  id: string;
+  title: string;
+  description?: string | null;
+  link_url?: string | null;
+  contact?: string | null;
+  is_active?: boolean | null;
+  created_at?: string | null;
+};
+
 const AGM_MINUTES_PREFIX = 'AGM - ';
 const PUBLIC_ACTION_MARKER = '[Public]';
 
@@ -56,6 +66,13 @@ export default function PublicHomePage() {
   const [actions, setActions] = useState<PublicAction[]>([]);
   const [minutes, setMinutes] = useState<Minute[]>([]);
   const [agmMinutes, setAgmMinutes] = useState<Minute[]>([]);
+  const [jobClubItems, setJobClubItems] = useState<JobClubItem[]>([]);
+  const [jobClubOpen, setJobClubOpen] = useState(true);
+  const [jobClubName, setJobClubName] = useState('');
+  const [jobClubNotes, setJobClubNotes] = useState('');
+  const [selectedJobClubId, setSelectedJobClubId] = useState('');
+  const [jobClubStatus, setJobClubStatus] = useState<string | null>(null);
+  const [submittingJobClub, setSubmittingJobClub] = useState(false);
   const [formTitle, setFormTitle] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formName, setFormName] = useState('');
@@ -66,11 +83,19 @@ export default function PublicHomePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const saved = window.localStorage.getItem('public-job-club-open');
+    if (saved === 'false') {
+      setJobClubOpen(false);
+    }
+  }, []);
+
+  useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       setError(null);
 
-      const [actionsResult, minutesResult, agmMinutesResult] = await Promise.all([
+      const [actionsResult, minutesResult, agmMinutesResult, jobClubResult] = await Promise.all([
         supabase
           .from('action_items')
           .select('id, title, description, owner, due_date, status, source, created_at')
@@ -99,6 +124,11 @@ export default function PublicHomePage() {
           `)
           .ilike('title', `${AGM_MINUTES_PREFIX}%`)
           .order('created_at', { ascending: false }),
+        supabase
+          .from('job_club_posts')
+          .select('id, title, description, link_url, contact, is_active, created_at')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false }),
       ]);
 
       const loadError = actionsResult.error || minutesResult.error || agmMinutesResult.error;
@@ -114,6 +144,11 @@ export default function PublicHomePage() {
       setActions((actionsResult.data || []).filter((action) => isPublicAction(action.source)));
       setMinutes(minutesResult.data || []);
       setAgmMinutes(agmMinutesResult.data || []);
+      if (!jobClubResult.error) {
+        setJobClubItems(jobClubResult.data || []);
+      } else {
+        setJobClubItems([]);
+      }
       setLoading(false);
     };
 
@@ -166,6 +201,50 @@ export default function PublicHomePage() {
     setSubmitting(false);
   };
 
+  const submitJobClubNote = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!jobClubName.trim() || !jobClubNotes.trim()) {
+      setJobClubStatus('Please enter your name and notes.');
+      return;
+    }
+
+    setSubmittingJobClub(true);
+    setJobClubStatus(null);
+
+    try {
+      const response = await fetch('/api/public/job-club-note', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: jobClubName,
+          notes: jobClubNotes,
+          jobClubPostId: selectedJobClubId || null,
+          website: '',
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok || !payload.ok) {
+        setJobClubStatus(payload.error || 'Unable to submit your note right now.');
+        setSubmittingJobClub(false);
+        return;
+      }
+
+      setJobClubName('');
+      setJobClubNotes('');
+      setSelectedJobClubId('');
+      setJobClubStatus('Thanks, your Job Club note has been submitted.');
+    } catch {
+      setJobClubStatus('Unable to submit your note right now.');
+    }
+
+    setSubmittingJobClub(false);
+  };
+
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-900">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
@@ -198,6 +277,21 @@ export default function PublicHomePage() {
               >
                 Browse AGM minutes
               </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setJobClubOpen((current) => {
+                    const next = !current;
+                    if (typeof window !== 'undefined') {
+                      window.localStorage.setItem('public-job-club-open', next ? 'true' : 'false');
+                    }
+                    return next;
+                  });
+                }}
+                className="inline-flex items-center rounded-full border border-red-300/50 px-4 py-2 font-medium text-white transition hover:border-red-100 hover:bg-white/10"
+              >
+                {jobClubOpen ? 'Close Job Club' : 'Open Job Club'}
+              </button>
             </div>
           </div>
 
@@ -214,6 +308,10 @@ export default function PublicHomePage() {
               <p className="text-sm text-zinc-500">Shared AGM minutes</p>
               <p className="mt-2 text-3xl font-semibold text-zinc-900">{agmMinutes.length}</p>
             </div>
+            <div className="rounded-2xl bg-white px-4 py-4 ring-1 ring-zinc-200">
+              <p className="text-sm text-zinc-500">Job Club listings</p>
+              <p className="mt-2 text-3xl font-semibold text-zinc-900">{jobClubItems.length}</p>
+            </div>
           </div>
         </section>
 
@@ -228,6 +326,144 @@ export default function PublicHomePage() {
         ) : (
           <div className="grid gap-8 lg:grid-cols-[1.2fr_0.9fr]">
             <div className="grid gap-8">
+              <section id="job-club" className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-2xl font-semibold text-zinc-900">Job Club</h2>
+                    <p className="mt-1 text-sm text-zinc-600">Club opportunities shared by trustees and members.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setJobClubOpen((current) => {
+                        const next = !current;
+                        if (typeof window !== 'undefined') {
+                          window.localStorage.setItem('public-job-club-open', next ? 'true' : 'false');
+                        }
+                        return next;
+                      });
+                    }}
+                    className="text-sm font-medium text-red-700 hover:underline"
+                  >
+                    {jobClubOpen ? 'Close' : 'Open'}
+                  </button>
+                </div>
+
+                {jobClubOpen ? (
+                  <div className="mt-5 space-y-4">
+                    {jobClubItems.length === 0 ? (
+                      <p className="text-sm text-zinc-500">No job club posts are available right now.</p>
+                    ) : (
+                      jobClubItems.slice(0, 8).map((item) => (
+                        <article key={item.id} className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                          <h3 className="text-lg font-semibold text-zinc-900">{item.title}</h3>
+                          {item.description && (
+                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-600">{item.description}</p>
+                          )}
+                          <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                            {item.link_url && (
+                              <a
+                                href={item.link_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-medium text-red-700 hover:underline"
+                              >
+                                View details
+                              </a>
+                            )}
+                            {item.contact && (
+                              <span className="text-zinc-600">Contact: {item.contact}</span>
+                            )}
+                            <span className="text-zinc-500">
+                              {formatDate(item.created_at, item.created_at || 'Recently added')}
+                            </span>
+                          </div>
+                        </article>
+                      ))
+                    )}
+
+                    <form className="mt-6 rounded-2xl border border-zinc-200 bg-white p-4" onSubmit={submitJobClubNote}>
+                      <h3 className="text-base font-semibold text-zinc-900">Add your name and notes</h3>
+                      <p className="mt-1 text-sm text-zinc-600">
+                        Share interest, availability, or useful details for the trustees.
+                      </p>
+
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <label htmlFor="job-club-name" className="mb-1 block text-sm font-medium text-zinc-700">
+                            Your name
+                          </label>
+                          <input
+                            id="job-club-name"
+                            value={jobClubName}
+                            onChange={(event) => setJobClubName(event.target.value)}
+                            className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                            placeholder="Your full name"
+                          />
+                        </div>
+
+                        <div>
+                          <label htmlFor="job-club-item" className="mb-1 block text-sm font-medium text-zinc-700">
+                            Related listing (optional)
+                          </label>
+                          <select
+                            id="job-club-item"
+                            value={selectedJobClubId}
+                            onChange={(event) => setSelectedJobClubId(event.target.value)}
+                            className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                          >
+                            <option value="">General note</option>
+                            {jobClubItems.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.title}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="mt-4">
+                        <label htmlFor="job-club-notes" className="mb-1 block text-sm font-medium text-zinc-700">
+                          Notes
+                        </label>
+                        <textarea
+                          id="job-club-notes"
+                          value={jobClubNotes}
+                          onChange={(event) => setJobClubNotes(event.target.value)}
+                          rows={4}
+                          className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                          placeholder="Add your note"
+                        />
+                      </div>
+
+                      <input
+                        type="text"
+                        name="website"
+                        tabIndex={-1}
+                        autoComplete="off"
+                        className="hidden"
+                      />
+
+                      {jobClubStatus && (
+                        <p className={`mt-3 text-sm ${jobClubStatus.includes('Thanks') ? 'text-emerald-700' : 'text-rose-700'}`}>
+                          {jobClubStatus}
+                        </p>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={submittingJobClub}
+                        className="mt-4 inline-flex items-center rounded-full bg-red-700 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-red-300"
+                      >
+                        {submittingJobClub ? 'Submitting...' : 'Submit Job Club note'}
+                      </button>
+                    </form>
+                  </div>
+                ) : (
+                  <p className="mt-5 text-sm text-zinc-500">Job Club is currently closed on this device. Use Open to view listings.</p>
+                )}
+              </section>
+
               <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
                   <div>
