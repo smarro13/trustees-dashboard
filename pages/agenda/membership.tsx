@@ -150,13 +150,6 @@ export default function MembershipReportPage() {
     }
   };
 
-  const handleCsvUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    // TODO: parse CSV and update state / Supabase as needed
-    // You might use PapaParse or FileReader here.
-  };
-
   // helpers to manage outstandingLines for selected category
   const addOutstandingLine = () => {
     if (!selectedOutstandingCategory) return;
