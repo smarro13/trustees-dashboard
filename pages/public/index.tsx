@@ -30,6 +30,13 @@ type ClubRefreshJob = {
   materials: string;
 };
 
+type JobClubPostRow = {
+  id: string;
+  title?: string | null;
+  description?: string | null;
+  is_active?: boolean | null;
+};
+
 const CLUB_REFRESH_JOBS: ClubRefreshJob[] = [
   {
     area: 'Eric Evans Lodge',
@@ -393,6 +400,7 @@ const CLUB_REFRESH_JOBS: ClubRefreshJob[] = [
 const AGM_MINUTES_PREFIX = 'AGM - ';
 const PUBLIC_ACTION_MARKER = '[Public]';
 const MAX_TASK_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const JOB_META_PREFIX = 'JOB_META:';
 
 const stripPublicMarker = (source: string | null | undefined) =>
   (source || '').replace(PUBLIC_ACTION_MARKER, '').trim();
@@ -465,6 +473,33 @@ const fileToBase64 = (file: File) =>
     reader.readAsDataURL(file);
   });
 
+const parsePostedJob = (row: JobClubPostRow): ClubRefreshJob | null => {
+  if (!row?.description) return null;
+
+  const firstLine = row.description.split('\n')[0]?.trim() || '';
+  if (!firstLine.startsWith(JOB_META_PREFIX)) return null;
+
+  try {
+    const parsed = JSON.parse(firstLine.replace(JOB_META_PREFIX, '').trim()) as Partial<ClubRefreshJob>;
+    const validStatuses: ClubRefreshJob['status'][] = ['Not Started', 'Ongoing', 'Completed'];
+    const validPriorities: ClubRefreshJob['priority'][] = ['High', 'Medium', 'Low'];
+
+    if (!parsed.area || !parsed.job || !parsed.materials) return null;
+    if (!parsed.status || !validStatuses.includes(parsed.status)) return null;
+    if (!parsed.priority || !validPriorities.includes(parsed.priority)) return null;
+
+    return {
+      area: parsed.area,
+      job: parsed.job,
+      status: parsed.status,
+      priority: parsed.priority,
+      materials: parsed.materials,
+    };
+  } catch {
+    return null;
+  }
+};
+
 export default function PublicHomePage() {
   const [actions, setActions] = useState<PublicAction[]>([]);
   const [minutes, setMinutes] = useState<Minute[]>([]);
@@ -477,38 +512,51 @@ export default function PublicHomePage() {
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [submittedJobs, setSubmittedJobs] = useState<ClubRefreshJob[]>([]);
   const [jobAreaFilter, setJobAreaFilter] = useState('All areas');
   const [jobStatusFilter, setJobStatusFilter] = useState<'All statuses' | ClubRefreshJob['status']>('All statuses');
   const [jobPriorityFilter, setJobPriorityFilter] = useState<'All priorities' | ClubRefreshJob['priority']>('All priorities');
+  const [newJobArea, setNewJobArea] = useState('');
+  const [newJobTitle, setNewJobTitle] = useState('');
+  const [newJobStatus, setNewJobStatus] = useState<ClubRefreshJob['status']>('Not Started');
+  const [newJobPriority, setNewJobPriority] = useState<ClubRefreshJob['priority']>('Medium');
+  const [newJobMaterials, setNewJobMaterials] = useState('');
+  const [newJobSubmittedBy, setNewJobSubmittedBy] = useState('');
+  const [addingJob, setAddingJob] = useState(false);
+  const [addJobStatus, setAddJobStatus] = useState<string | null>(null);
   const [taskAssignmentNamesByJob, setTaskAssignmentNamesByJob] = useState<Record<string, string>>({});
   const [taskAssignmentNotesByJob, setTaskAssignmentNotesByJob] = useState<Record<string, string>>({});
   const [taskAssignmentAttachmentsByJob, setTaskAssignmentAttachmentsByJob] = useState<Record<string, File[]>>({});
   const [taskAssignmentStatusByJob, setTaskAssignmentStatusByJob] = useState<Record<string, string | null>>({});
   const [submittingTaskAssignmentByJob, setSubmittingTaskAssignmentByJob] = useState<Record<string, boolean>>({});
 
+  const allJobClubJobs = useMemo(
+    () => [...CLUB_REFRESH_JOBS, ...submittedJobs],
+    [submittedJobs],
+  );
+
   const clubRefreshAreas = useMemo(
-    () => ['All areas', ...Array.from(new Set(CLUB_REFRESH_JOBS.map((item) => item.area)))],
-    [],
+    () => ['All areas', ...Array.from(new Set(allJobClubJobs.map((item) => item.area)))],
+    [allJobClubJobs],
   );
 
   const filteredClubRefreshJobs = useMemo(
     () =>
-      CLUB_REFRESH_JOBS.filter((item) => {
+      allJobClubJobs.filter((item) => {
         const areaMatches = jobAreaFilter === 'All areas' || item.area === jobAreaFilter;
         const statusMatches = jobStatusFilter === 'All statuses' || item.status === jobStatusFilter;
         const priorityMatches = jobPriorityFilter === 'All priorities' || item.priority === jobPriorityFilter;
 
         return areaMatches && statusMatches && priorityMatches;
       }),
-    [jobAreaFilter, jobPriorityFilter, jobStatusFilter],
+    [allJobClubJobs, jobAreaFilter, jobPriorityFilter, jobStatusFilter],
   );
 
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      setError(null);
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
 
-      const [actionsResult, minutesResult, agmMinutesResult] = await Promise.all([
+    const [actionsResult, minutesResult, agmMinutesResult, jobsResult] = await Promise.all([
         supabase
           .from('action_items')
           .select('id, title, description, owner, due_date, status, source, created_at')
@@ -537,26 +585,94 @@ export default function PublicHomePage() {
           `)
           .ilike('title', `${AGM_MINUTES_PREFIX}%`)
           .order('created_at', { ascending: false }),
-      ]);
+        supabase
+          .from('job_club_posts')
+          .select('id, title, description, is_active')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false }),
+    ]);
 
-      const loadError = actionsResult.error || minutesResult.error || agmMinutesResult.error;
-      if (loadError) {
-        setError(loadError.message);
-        setActions([]);
-        setMinutes([]);
-        setAgmMinutes([]);
-        setLoading(false);
+    const loadError = actionsResult.error || minutesResult.error || agmMinutesResult.error;
+    if (loadError) {
+      setError(loadError.message);
+      setActions([]);
+      setMinutes([]);
+      setAgmMinutes([]);
+      setSubmittedJobs([]);
+      setLoading(false);
+      return;
+    }
+
+    setActions((actionsResult.data || []).filter((action) => isPublicAction(action.source)));
+    setMinutes(minutesResult.data || []);
+    setAgmMinutes(agmMinutesResult.data || []);
+
+    if (jobsResult.error) {
+      setSubmittedJobs([]);
+    } else {
+      const parsedJobs = ((jobsResult.data || []) as JobClubPostRow[])
+        .map((row) => parsePostedJob(row))
+        .filter((row): row is ClubRefreshJob => Boolean(row));
+      setSubmittedJobs(parsedJobs);
+    }
+
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const submitNewJob = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!newJobArea.trim() || !newJobTitle.trim() || !newJobMaterials.trim()) {
+      setAddJobStatus('Please add area, job, and materials.');
+      return;
+    }
+
+    setAddingJob(true);
+    setAddJobStatus(null);
+
+    try {
+      const response = await fetch('/api/public/job-club-job', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          area: newJobArea,
+          job: newJobTitle,
+          status: newJobStatus,
+          priority: newJobPriority,
+          materials: newJobMaterials,
+          submittedBy: newJobSubmittedBy,
+          website: '',
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok || !payload.ok) {
+        setAddJobStatus(payload.error || 'Unable to add this job right now.');
+        setAddingJob(false);
         return;
       }
 
-      setActions((actionsResult.data || []).filter((action) => isPublicAction(action.source)));
-      setMinutes(minutesResult.data || []);
-      setAgmMinutes(agmMinutesResult.data || []);
-      setLoading(false);
-    };
+      setNewJobArea('');
+      setNewJobTitle('');
+      setNewJobStatus('Not Started');
+      setNewJobPriority('Medium');
+      setNewJobMaterials('');
+      setNewJobSubmittedBy('');
+      setAddJobStatus('Job added successfully.');
+      await loadData();
+    } catch {
+      setAddJobStatus('Unable to add this job right now.');
+    }
 
-    loadData();
-  }, []);
+    setAddingJob(false);
+  };
 
   const submitAction = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -758,6 +874,108 @@ export default function PublicHomePage() {
     }));
   };
 
+  const renderTaskAssignmentDropdown = (item: ClubRefreshJob, compact = false) => {
+    const taskLabel = getClubRefreshTaskLabel(item);
+    const taskStatus = taskAssignmentStatusByJob[taskLabel];
+    const taskAttachments = taskAssignmentAttachmentsByJob[taskLabel] || [];
+    const isSubmittingTask = Boolean(submittingTaskAssignmentByJob[taskLabel]);
+
+    return (
+      <details className={`mt-2 rounded-lg border border-zinc-200 bg-white ${compact ? 'p-2.5' : 'p-2'}`}>
+        <summary className="cursor-pointer list-none text-xs font-semibold text-red-700">
+          Actions
+        </summary>
+
+        <p className="mt-2 text-xs font-medium text-zinc-600">Assign to me</p>
+
+        <form
+          className="mt-3 space-y-3"
+          onSubmit={(event) => {
+            void submitTaskAssignmentForJob(event, taskLabel);
+          }}
+        >
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor={`task-name-${taskLabel}`}>
+              Your name
+            </label>
+            <input
+              id={`task-name-${taskLabel}`}
+              value={taskAssignmentNamesByJob[taskLabel] || ''}
+              onChange={(event) => {
+                setTaskAssignmentNamesByJob((current) => ({
+                  ...current,
+                  [taskLabel]: event.target.value,
+                }));
+              }}
+              className="w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-xs outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+              placeholder="Your full name"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor={`task-notes-${taskLabel}`}>
+              Notes
+            </label>
+            <textarea
+              id={`task-notes-${taskLabel}`}
+              value={taskAssignmentNotesByJob[taskLabel] || ''}
+              onChange={(event) => {
+                setTaskAssignmentNotesByJob((current) => ({
+                  ...current,
+                  [taskLabel]: event.target.value,
+                }));
+              }}
+              rows={3}
+              className="w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-xs outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+              placeholder="Availability, materials you can bring, or support needed"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor={`task-files-${taskLabel}`}>
+              Upload receipts/files (optional)
+            </label>
+            <input
+              id={`task-files-${taskLabel}`}
+              type="file"
+              multiple
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+              onChange={(event) => {
+                const files = Array.from(event.target.files || []);
+                setTaskAssignmentAttachmentsByJob((current) => ({
+                  ...current,
+                  [taskLabel]: files,
+                }));
+              }}
+              className="w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs text-zinc-700 outline-none transition file:mr-2 file:rounded-full file:border-0 file:bg-red-100 file:px-2 file:py-1 file:text-xs file:font-semibold file:text-red-700 hover:file:bg-red-200 focus:border-red-500 focus:ring-2 focus:ring-red-100"
+            />
+            {taskAttachments.length > 0 && (
+              <ul className="mt-1 space-y-1 text-xs text-zinc-600">
+                {taskAttachments.map((file) => (
+                  <li key={`${taskLabel}-${file.name}-${file.lastModified}`}>{file.name}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {taskStatus && (
+            <p className={`text-xs ${taskStatus.includes('Thanks') ? 'text-emerald-700' : 'text-rose-700'}`}>
+              {taskStatus}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={isSubmittingTask}
+            className="inline-flex items-center rounded-full bg-red-700 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-red-300"
+          >
+            {isSubmittingTask ? 'Submitting...' : 'Assign to me'}
+          </button>
+        </form>
+      </details>
+    );
+  };
+
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-900">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
@@ -766,33 +984,33 @@ export default function PublicHomePage() {
         <section className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm">
           <div className="bg-gradient-to-r from-red-900 via-red-800 to-red-700 px-6 py-8 text-white sm:px-8">
             <p className="text-sm font-medium uppercase tracking-[0.25em] text-red-100">Aldwinians</p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Members Information Hub</h1>
+            <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-4xl">Members Information Hub</h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-red-50 sm:text-base">
               Shared updates from the club in one place, including live member actions, previous minutes, and AGM minutes.
             </p>
 
-            <div className="mt-6 flex flex-col items-start gap-3 text-sm sm:flex-row sm:flex-wrap">
+            <div className="mt-6 flex flex-col items-stretch gap-3 text-sm sm:flex-row sm:flex-wrap sm:items-start">
               <Link
                 href="/public/actions"
-                className="inline-flex items-center rounded-full bg-white px-4 py-2 font-medium text-red-800 transition hover:bg-red-50"
+                className="inline-flex w-full items-center justify-center rounded-full bg-white px-4 py-2 font-medium text-red-800 transition hover:bg-red-50 sm:w-auto"
               >
                 View all member actions
               </Link>
               <Link
                 href="/public/minutes"
-                className="inline-flex items-center rounded-full border border-red-300/50 px-4 py-2 font-medium text-white transition hover:border-red-100 hover:bg-white/10"
+                className="inline-flex w-full items-center justify-center rounded-full border border-red-300/50 px-4 py-2 font-medium text-white transition hover:border-red-100 hover:bg-white/10 sm:w-auto"
               >
                 Browse previous minutes
               </Link>
               <Link
                 href="/public/agm-minutes"
-                className="inline-flex items-center rounded-full border border-red-300/50 px-4 py-2 font-medium text-white transition hover:border-red-100 hover:bg-white/10"
+                className="inline-flex w-full items-center justify-center rounded-full border border-red-300/50 px-4 py-2 font-medium text-white transition hover:border-red-100 hover:bg-white/10 sm:w-auto"
               >
                 Browse AGM minutes
               </Link>
               <Link
                 href="/public#job-club"
-                className="inline-flex items-center rounded-full border border-red-300/50 px-4 py-2 font-medium text-white transition hover:border-red-100 hover:bg-white/10"
+                className="inline-flex w-full items-center justify-center rounded-full border border-red-300/50 px-4 py-2 font-medium text-white transition hover:border-red-100 hover:bg-white/10 sm:w-auto"
               >
                 Jump to Job Club
               </Link>
@@ -802,19 +1020,19 @@ export default function PublicHomePage() {
           <div className="grid gap-4 border-t border-red-100 bg-red-50/60 px-6 py-5 sm:grid-cols-2 sm:px-8 lg:grid-cols-4">
             <div className="rounded-2xl bg-white px-4 py-4 ring-1 ring-zinc-200">
               <p className="text-sm text-zinc-500">Open member actions</p>
-              <p className="mt-2 text-3xl font-semibold text-zinc-900">{actions.length}</p>
+              <p className="mt-2 text-2xl font-semibold text-zinc-900 sm:text-3xl">{actions.length}</p>
             </div>
             <div className="rounded-2xl bg-white px-4 py-4 ring-1 ring-zinc-200">
               <p className="text-sm text-zinc-500">Shared minutes</p>
-              <p className="mt-2 text-3xl font-semibold text-zinc-900">{minutes.length}</p>
+              <p className="mt-2 text-2xl font-semibold text-zinc-900 sm:text-3xl">{minutes.length}</p>
             </div>
             <div className="rounded-2xl bg-white px-4 py-4 ring-1 ring-zinc-200">
               <p className="text-sm text-zinc-500">Shared AGM minutes</p>
-              <p className="mt-2 text-3xl font-semibold text-zinc-900">{agmMinutes.length}</p>
+              <p className="mt-2 text-2xl font-semibold text-zinc-900 sm:text-3xl">{agmMinutes.length}</p>
             </div>
             <div className="rounded-2xl bg-white px-4 py-4 ring-1 ring-zinc-200">
               <p className="text-sm text-zinc-500">Job Club tasks</p>
-              <p className="mt-2 text-3xl font-semibold text-zinc-900">{CLUB_REFRESH_JOBS.length}</p>
+              <p className="mt-2 text-2xl font-semibold text-zinc-900 sm:text-3xl">{allJobClubJobs.length}</p>
             </div>
           </div>
         </section>
@@ -839,7 +1057,7 @@ export default function PublicHomePage() {
                     </p>
                   </div>
                   <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700">
-                    {filteredClubRefreshJobs.length} of {CLUB_REFRESH_JOBS.length}
+                    {filteredClubRefreshJobs.length} of {allJobClubJobs.length}
                   </span>
                 </div>
 
@@ -903,7 +1121,135 @@ export default function PublicHomePage() {
                   </p>
                 )}
 
-                <div className="mt-5 overflow-x-auto">
+                <form className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4" onSubmit={submitNewJob}>
+                  <h3 className="text-base font-semibold text-zinc-900">Add Job</h3>
+                  <p className="mt-1 text-sm text-zinc-600">Submit a new job so it appears in the Job Club list.</p>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <div>
+                      <label htmlFor="new-job-area" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">
+                        Area
+                      </label>
+                      <input
+                        id="new-job-area"
+                        value={newJobArea}
+                        onChange={(event) => setNewJobArea(event.target.value)}
+                        className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                        placeholder="e.g. External Areas"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="new-job-status" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">
+                        Status
+                      </label>
+                      <select
+                        id="new-job-status"
+                        value={newJobStatus}
+                        onChange={(event) => setNewJobStatus(event.target.value as ClubRefreshJob['status'])}
+                        className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                      >
+                        <option value="Not Started">Not Started</option>
+                        <option value="Ongoing">Ongoing</option>
+                        <option value="Completed">Completed</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="new-job-priority" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">
+                        Priority
+                      </label>
+                      <select
+                        id="new-job-priority"
+                        value={newJobPriority}
+                        onChange={(event) => setNewJobPriority(event.target.value as ClubRefreshJob['priority'])}
+                        className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                      >
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <label htmlFor="new-job-title" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">
+                      Job
+                    </label>
+                    <input
+                      id="new-job-title"
+                      value={newJobTitle}
+                      onChange={(event) => setNewJobTitle(event.target.value)}
+                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                      placeholder="Describe the job"
+                    />
+                  </div>
+
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label htmlFor="new-job-materials" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">
+                        Rough Materials Required
+                      </label>
+                      <textarea
+                        id="new-job-materials"
+                        value={newJobMaterials}
+                        onChange={(event) => setNewJobMaterials(event.target.value)}
+                        rows={3}
+                        className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                        placeholder="Materials, tools, consumables"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="new-job-submitted-by" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">
+                        Submitted by (optional)
+                      </label>
+                      <input
+                        id="new-job-submitted-by"
+                        value={newJobSubmittedBy}
+                        onChange={(event) => setNewJobSubmittedBy(event.target.value)}
+                        className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                        placeholder="Your name"
+                      />
+                    </div>
+                  </div>
+
+                  <input type="text" name="website" tabIndex={-1} autoComplete="off" className="hidden" />
+
+                  {addJobStatus && (
+                    <p className={`mt-3 text-sm ${addJobStatus.includes('successfully') ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {addJobStatus}
+                    </p>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={addingJob}
+                    className="mt-3 inline-flex items-center rounded-full bg-red-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-red-300"
+                  >
+                    {addingJob ? 'Adding...' : 'Add job'}
+                  </button>
+                </form>
+
+                <div className="mt-5 space-y-3 md:hidden">
+                  {filteredClubRefreshJobs.map((item) => (
+                    <article key={`${item.area}-${item.job}`} className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{item.area}</p>
+                      <h3 className="mt-1 text-sm font-semibold text-zinc-900">{item.job}</h3>
+
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClasses(item.status)}`}>
+                          {item.status}
+                        </span>
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getPriorityBadgeClasses(item.priority)}`}>
+                          {item.priority}
+                        </span>
+                      </div>
+
+                      <p className="mt-2 text-xs text-zinc-600">Materials: {item.materials}</p>
+                      {renderTaskAssignmentDropdown(item, true)}
+                    </article>
+                  ))}
+                </div>
+
+                <div className="mt-5 hidden overflow-x-auto md:block">
                   <table className="min-w-[980px] w-full border-separate border-spacing-0 text-left text-sm">
                     <thead>
                       <tr>
@@ -916,107 +1262,12 @@ export default function PublicHomePage() {
                     </thead>
                     <tbody>
                       {filteredClubRefreshJobs.map((item) => {
-                        const taskLabel = getClubRefreshTaskLabel(item);
-                        const taskStatus = taskAssignmentStatusByJob[taskLabel];
-                        const taskAttachments = taskAssignmentAttachmentsByJob[taskLabel] || [];
-                        const isSubmittingTask = Boolean(submittingTaskAssignmentByJob[taskLabel]);
-
                         return (
                           <tr key={`${item.area}-${item.job}`} className="odd:bg-white even:bg-zinc-50/60">
                             <td className="border-b border-zinc-100 px-3 py-3 align-top font-medium text-zinc-900">{item.area}</td>
                             <td className="border-b border-zinc-100 px-3 py-3 align-top text-zinc-700">
                               <p>{item.job}</p>
-
-                              <details className="mt-2 rounded-lg border border-zinc-200 bg-white p-2">
-                                <summary className="cursor-pointer list-none text-xs font-semibold text-red-700">
-                                  Assign to me
-                                </summary>
-
-                                <form
-                                  className="mt-3 space-y-3"
-                                  onSubmit={(event) => {
-                                    void submitTaskAssignmentForJob(event, taskLabel);
-                                  }}
-                                >
-                                  <div>
-                                    <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor={`task-name-${taskLabel}`}>
-                                      Your name
-                                    </label>
-                                    <input
-                                      id={`task-name-${taskLabel}`}
-                                      value={taskAssignmentNamesByJob[taskLabel] || ''}
-                                      onChange={(event) => {
-                                        setTaskAssignmentNamesByJob((current) => ({
-                                          ...current,
-                                          [taskLabel]: event.target.value,
-                                        }));
-                                      }}
-                                      className="w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-xs outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
-                                      placeholder="Your full name"
-                                    />
-                                  </div>
-
-                                  <div>
-                                    <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor={`task-notes-${taskLabel}`}>
-                                      Notes
-                                    </label>
-                                    <textarea
-                                      id={`task-notes-${taskLabel}`}
-                                      value={taskAssignmentNotesByJob[taskLabel] || ''}
-                                      onChange={(event) => {
-                                        setTaskAssignmentNotesByJob((current) => ({
-                                          ...current,
-                                          [taskLabel]: event.target.value,
-                                        }));
-                                      }}
-                                      rows={3}
-                                      className="w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-xs outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
-                                      placeholder="Availability, materials you can bring, or support needed"
-                                    />
-                                  </div>
-
-                                  <div>
-                                    <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor={`task-files-${taskLabel}`}>
-                                      Upload receipts/files (optional)
-                                    </label>
-                                    <input
-                                      id={`task-files-${taskLabel}`}
-                                      type="file"
-                                      multiple
-                                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-                                      onChange={(event) => {
-                                        const files = Array.from(event.target.files || []);
-                                        setTaskAssignmentAttachmentsByJob((current) => ({
-                                          ...current,
-                                          [taskLabel]: files,
-                                        }));
-                                      }}
-                                      className="w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs text-zinc-700 outline-none transition file:mr-2 file:rounded-full file:border-0 file:bg-red-100 file:px-2 file:py-1 file:text-xs file:font-semibold file:text-red-700 hover:file:bg-red-200 focus:border-red-500 focus:ring-2 focus:ring-red-100"
-                                    />
-                                    {taskAttachments.length > 0 && (
-                                      <ul className="mt-1 space-y-1 text-xs text-zinc-600">
-                                        {taskAttachments.map((file) => (
-                                          <li key={`${taskLabel}-${file.name}-${file.lastModified}`}>{file.name}</li>
-                                        ))}
-                                      </ul>
-                                    )}
-                                  </div>
-
-                                  {taskStatus && (
-                                    <p className={`text-xs ${taskStatus.includes('Thanks') ? 'text-emerald-700' : 'text-rose-700'}`}>
-                                      {taskStatus}
-                                    </p>
-                                  )}
-
-                                  <button
-                                    type="submit"
-                                    disabled={isSubmittingTask}
-                                    className="inline-flex items-center rounded-full bg-red-700 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-red-300"
-                                  >
-                                    {isSubmittingTask ? 'Submitting...' : 'Assign to me'}
-                                  </button>
-                                </form>
-                              </details>
+                              {renderTaskAssignmentDropdown(item)}
                             </td>
                             <td className="border-b border-zinc-100 px-3 py-3 align-top">
                               <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClasses(item.status)}`}>
