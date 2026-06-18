@@ -171,15 +171,21 @@ export default function PublicJobClubPage() {
     [allJobClubJobs],
   );
 
-  const filteredJobs = useMemo(
-    () =>
-      allJobClubJobs.filter((item) => {
-        const areaMatches = jobAreaFilter === 'All areas' || item.area === jobAreaFilter;
-        const statusMatches = jobStatusFilter === 'All statuses' || item.status === jobStatusFilter;
-        const priorityMatches = jobPriorityFilter === 'All priorities' || item.priority === jobPriorityFilter;
-        return areaMatches && statusMatches && priorityMatches;
-      }),
-    [allJobClubJobs, jobAreaFilter, jobPriorityFilter, jobStatusFilter],
+  const jobMatchesFilters = (item: ClubRefreshJob) => {
+    const areaMatches = jobAreaFilter === 'All areas' || item.area === jobAreaFilter;
+    const statusMatches = jobStatusFilter === 'All statuses' || item.status === jobStatusFilter;
+    const priorityMatches = jobPriorityFilter === 'All priorities' || item.priority === jobPriorityFilter;
+    return areaMatches && statusMatches && priorityMatches;
+  };
+
+  const filteredOpenJobs = useMemo(
+    () => openJobs.filter((item) => jobMatchesFilters(item)),
+    [openJobs, jobAreaFilter, jobStatusFilter, jobPriorityFilter],
+  );
+
+  const filteredAssignedJobs = useMemo(
+    () => assignedJobs.filter(({ job }) => jobMatchesFilters(job)),
+    [assignedJobs, jobAreaFilter, jobStatusFilter, jobPriorityFilter],
   );
 
   const loadData = async () => {
@@ -482,33 +488,157 @@ export default function PublicJobClubPage() {
           <section className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700 shadow-sm">Unable to load Job Club: {error}</section>
         ) : (
           <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-4 grid gap-3 sm:grid-cols-2">
-              <section className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-zinc-900">Open Jobs</h3>
-                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 ring-1 ring-zinc-200">{openJobs.length}</span>
-                </div>
-                <div className="mt-2 space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                  {openJobs.length === 0 ? <p className="text-xs text-zinc-500">No open jobs right now.</p> : openJobs.slice(0, 10).map((job) => (
-                    <p key={`${job.area}-${job.job}-open`} className="text-xs text-zinc-700"><span className="font-medium text-zinc-900">{job.area}:</span> {job.job}</p>
-                  ))}
-                </div>
-              </section>
-
-              <section className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-zinc-900">Assigned Jobs</h3>
-                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 ring-1 ring-zinc-200">{assignedJobs.length}</span>
-                </div>
-                <div className="mt-2 space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                  {assignedJobs.length === 0 ? <p className="text-xs text-zinc-500">No assignments yet.</p> : assignedJobs.slice(0, 10).map(({ job, assignment }) => (
-                    <p key={`${job.area}-${job.job}-assigned`} className="text-xs text-zinc-700"><span className="font-medium text-zinc-900">{job.area}:</span> {job.job}<span className="text-zinc-500"> - {assignment.assignee}</span></p>
-                  ))}
-                </div>
-              </section>
+            <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <label htmlFor="club-refresh-area-filter" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">Area</label>
+                <select id="club-refresh-area-filter" value={jobAreaFilter} onChange={(event) => setJobAreaFilter(event.target.value)} className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100">
+                  {clubRefreshAreas.map((area) => <option key={area} value={area}>{area}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="club-refresh-status-filter" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">Status</label>
+                <select id="club-refresh-status-filter" value={jobStatusFilter} onChange={(event) => setJobStatusFilter(event.target.value as 'All statuses' | ClubRefreshJob['status'])} className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100">
+                  <option value="All statuses">All statuses</option>
+                  <option value="Not Started">Not Started</option>
+                  <option value="Ongoing">Ongoing</option>
+                  <option value="Completed">Completed</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="club-refresh-priority-filter" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">Priority</label>
+                <select id="club-refresh-priority-filter" value={jobPriorityFilter} onChange={(event) => setJobPriorityFilter(event.target.value as 'All priorities' | ClubRefreshJob['priority'])} className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100">
+                  <option value="All priorities">All priorities</option>
+                  <option value="High">High</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Low">Low</option>
+                </select>
+              </div>
             </div>
 
-            <form id="add-job-form" className="mb-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4" onSubmit={submitNewJob}>
+            <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="text-base font-semibold text-zinc-900">Unassigned Jobs</h3>
+                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 ring-1 ring-zinc-200">{filteredOpenJobs.length}</span>
+              </div>
+
+              <div className="space-y-3 md:hidden">
+                {filteredOpenJobs.length === 0 ? (
+                  <p className="rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-500">No unassigned jobs match the current filters.</p>
+                ) : (
+                  filteredOpenJobs.map((item) => (
+                    <article key={`${item.area}-${item.job}-open-card`} className="rounded-xl border border-zinc-200 bg-white p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{item.area}</p>
+                      <h3 className="mt-1 text-sm font-semibold text-zinc-900">{item.job}</h3>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClasses(item.status)}`}>{item.status}</span>
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getPriorityBadgeClasses(item.priority)}`}>{item.priority}</span>
+                      </div>
+                      <p className="mt-2 text-xs text-zinc-600">Materials: {item.materials}</p>
+                      {renderTaskAssignmentDropdown(item, true)}
+                    </article>
+                  ))
+                )}
+              </div>
+
+              <div className="hidden overflow-x-auto md:block">
+                <table className="min-w-[980px] w-full border-separate border-spacing-0 text-left text-sm">
+                  <thead>
+                    <tr>
+                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Area</th>
+                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Job</th>
+                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Status</th>
+                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Priority</th>
+                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Rough Materials Required</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredOpenJobs.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-3 py-4 text-sm text-zinc-500">No unassigned jobs match the current filters.</td>
+                      </tr>
+                    ) : (
+                      filteredOpenJobs.map((item) => (
+                        <tr key={`${item.area}-${item.job}-open-row`} className="odd:bg-white even:bg-zinc-50/60">
+                          <td className="border-b border-zinc-100 px-3 py-3 align-top font-medium text-zinc-900">{item.area}</td>
+                          <td className="border-b border-zinc-100 px-3 py-3 align-top text-zinc-700">
+                            <p>{item.job}</p>
+                            {renderTaskAssignmentDropdown(item)}
+                          </td>
+                          <td className="border-b border-zinc-100 px-3 py-3 align-top"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClasses(item.status)}`}>{item.status}</span></td>
+                          <td className="border-b border-zinc-100 px-3 py-3 align-top"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getPriorityBadgeClasses(item.priority)}`}>{item.priority}</span></td>
+                          <td className="border-b border-zinc-100 px-3 py-3 align-top text-zinc-700">{item.materials}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="text-base font-semibold text-zinc-900">Assigned Jobs</h3>
+                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 ring-1 ring-zinc-200">{filteredAssignedJobs.length}</span>
+              </div>
+
+              <div className="space-y-3 md:hidden">
+                {filteredAssignedJobs.length === 0 ? (
+                  <p className="rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-500">No assigned jobs match the current filters.</p>
+                ) : (
+                  filteredAssignedJobs.map(({ job, assignment }) => (
+                    <article key={`${job.area}-${job.job}-assigned-card`} className="rounded-xl border border-zinc-200 bg-white p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{job.area}</p>
+                      <h3 className="mt-1 text-sm font-semibold text-zinc-900">{job.job}</h3>
+                      <p className="mt-2 text-xs font-semibold text-emerald-700">Assigned to: {assignment.assignee}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClasses(job.status)}`}>{job.status}</span>
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getPriorityBadgeClasses(job.priority)}`}>{job.priority}</span>
+                      </div>
+                      <p className="mt-2 text-xs text-zinc-600">Materials: {job.materials}</p>
+                      {renderTaskAssignmentDropdown(job, true)}
+                    </article>
+                  ))
+                )}
+              </div>
+
+              <div className="hidden overflow-x-auto md:block">
+                <table className="min-w-[1080px] w-full border-separate border-spacing-0 text-left text-sm">
+                  <thead>
+                    <tr>
+                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Area</th>
+                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Job</th>
+                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Assigned User</th>
+                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Status</th>
+                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Priority</th>
+                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Rough Materials Required</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredAssignedJobs.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-3 py-4 text-sm text-zinc-500">No assigned jobs match the current filters.</td>
+                      </tr>
+                    ) : (
+                      filteredAssignedJobs.map(({ job, assignment }) => (
+                        <tr key={`${job.area}-${job.job}-assigned-row`} className="odd:bg-white even:bg-zinc-50/60">
+                          <td className="border-b border-zinc-100 px-3 py-3 align-top font-medium text-zinc-900">{job.area}</td>
+                          <td className="border-b border-zinc-100 px-3 py-3 align-top text-zinc-700">
+                            <p>{job.job}</p>
+                            {renderTaskAssignmentDropdown(job)}
+                          </td>
+                          <td className="border-b border-zinc-100 px-3 py-3 align-top text-emerald-700 font-semibold">{assignment.assignee}</td>
+                          <td className="border-b border-zinc-100 px-3 py-3 align-top"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClasses(job.status)}`}>{job.status}</span></td>
+                          <td className="border-b border-zinc-100 px-3 py-3 align-top"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getPriorityBadgeClasses(job.priority)}`}>{job.priority}</span></td>
+                          <td className="border-b border-zinc-100 px-3 py-3 align-top text-zinc-700">{job.materials}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <form id="add-job-form" className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4" onSubmit={submitNewJob}>
               <h3 className="text-base font-semibold text-zinc-900">Add Job</h3>
               <p className="mt-1 text-sm text-zinc-600">Submit a new job so it appears in the Job Club list.</p>
 
@@ -559,82 +689,6 @@ export default function PublicJobClubPage() {
                 {addingJob ? 'Adding...' : 'Add job'}
               </button>
             </form>
-
-            <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <div>
-                <label htmlFor="club-refresh-area-filter" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">Area</label>
-                <select id="club-refresh-area-filter" value={jobAreaFilter} onChange={(event) => setJobAreaFilter(event.target.value)} className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100">
-                  {clubRefreshAreas.map((area) => <option key={area} value={area}>{area}</option>)}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="club-refresh-status-filter" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">Status</label>
-                <select id="club-refresh-status-filter" value={jobStatusFilter} onChange={(event) => setJobStatusFilter(event.target.value as 'All statuses' | ClubRefreshJob['status'])} className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100">
-                  <option value="All statuses">All statuses</option>
-                  <option value="Not Started">Not Started</option>
-                  <option value="Ongoing">Ongoing</option>
-                  <option value="Completed">Completed</option>
-                </select>
-              </div>
-              <div>
-                <label htmlFor="club-refresh-priority-filter" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">Priority</label>
-                <select id="club-refresh-priority-filter" value={jobPriorityFilter} onChange={(event) => setJobPriorityFilter(event.target.value as 'All priorities' | ClubRefreshJob['priority'])} className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100">
-                  <option value="All priorities">All priorities</option>
-                  <option value="High">High</option>
-                  <option value="Medium">Medium</option>
-                  <option value="Low">Low</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-3 md:hidden">
-              {filteredJobs.map((item) => (
-                <article key={`${item.area}-${item.job}`} className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{item.area}</p>
-                  <h3 className="mt-1 text-sm font-semibold text-zinc-900">{item.job}</h3>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClasses(item.status)}`}>{item.status}</span>
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getPriorityBadgeClasses(item.priority)}`}>{item.priority}</span>
-                  </div>
-                  {latestAssignmentsByTask.has(getClubRefreshTaskLabel(item)) && (
-                    <p className="mt-2 text-xs font-semibold text-emerald-700">Assigned to: {latestAssignmentsByTask.get(getClubRefreshTaskLabel(item))?.assignee}</p>
-                  )}
-                  <p className="mt-2 text-xs text-zinc-600">Materials: {item.materials}</p>
-                  {renderTaskAssignmentDropdown(item, true)}
-                </article>
-              ))}
-            </div>
-
-            <div className="hidden overflow-x-auto md:block">
-              <table className="min-w-[980px] w-full border-separate border-spacing-0 text-left text-sm">
-                <thead>
-                  <tr>
-                    <th className="border-b border-zinc-200 bg-zinc-50 px-3 py-3 font-semibold text-zinc-900">Area</th>
-                    <th className="border-b border-zinc-200 bg-zinc-50 px-3 py-3 font-semibold text-zinc-900">Job</th>
-                    <th className="border-b border-zinc-200 bg-zinc-50 px-3 py-3 font-semibold text-zinc-900">Status</th>
-                    <th className="border-b border-zinc-200 bg-zinc-50 px-3 py-3 font-semibold text-zinc-900">Priority</th>
-                    <th className="border-b border-zinc-200 bg-zinc-50 px-3 py-3 font-semibold text-zinc-900">Rough Materials Required</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredJobs.map((item) => (
-                    <tr key={`${item.area}-${item.job}`} className="odd:bg-white even:bg-zinc-50/60">
-                      <td className="border-b border-zinc-100 px-3 py-3 align-top font-medium text-zinc-900">{item.area}</td>
-                      <td className="border-b border-zinc-100 px-3 py-3 align-top text-zinc-700">
-                        <p>{item.job}</p>
-                        {latestAssignmentsByTask.has(getClubRefreshTaskLabel(item)) && (
-                          <p className="mt-1 text-xs font-semibold text-emerald-700">Assigned to: {latestAssignmentsByTask.get(getClubRefreshTaskLabel(item))?.assignee}</p>
-                        )}
-                        {renderTaskAssignmentDropdown(item)}
-                      </td>
-                      <td className="border-b border-zinc-100 px-3 py-3 align-top"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClasses(item.status)}`}>{item.status}</span></td>
-                      <td className="border-b border-zinc-100 px-3 py-3 align-top"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getPriorityBadgeClasses(item.priority)}`}>{item.priority}</span></td>
-                      <td className="border-b border-zinc-100 px-3 py-3 align-top text-zinc-700">{item.materials}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </section>
         )}
       </div>
