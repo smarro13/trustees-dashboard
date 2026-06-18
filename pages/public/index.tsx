@@ -31,6 +31,27 @@ export type ClubRefreshJob = {
   materials: string;
 };
 
+type JobClubPostRow = {
+  id: string;
+  title?: string | null;
+  description?: string | null;
+  is_active?: boolean | null;
+};
+
+type JobClubNoteRow = {
+  id: string;
+  name: string;
+  notes: string;
+  created_at?: string | null;
+};
+
+type TaskAssignmentSummary = {
+  taskLabel: string;
+  assignee: string;
+  notes: string;
+  createdAt?: string | null;
+};
+
 export const CLUB_REFRESH_JOBS: ClubRefreshJob[] = [
   { area: 'Eric Evans Lounge', job: 'Repair plaster around door', category: 'Repairs', status: 'Not Started', priority: 'Medium', materials: 'Plaster/filler, sandpaper, caulk, paint, brushes' },
   { area: 'Eric Evans Lounge', job: 'Improve NPI Cup display', category: 'Aesthetic', status: 'Not Started', priority: 'Low', materials: 'Shelving, display mounts, lighting, cleaning materials' },
