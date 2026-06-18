@@ -480,14 +480,11 @@ export default function PublicHomePage() {
   const [jobAreaFilter, setJobAreaFilter] = useState('All areas');
   const [jobStatusFilter, setJobStatusFilter] = useState<'All statuses' | ClubRefreshJob['status']>('All statuses');
   const [jobPriorityFilter, setJobPriorityFilter] = useState<'All priorities' | ClubRefreshJob['priority']>('All priorities');
-  const [selectedTaskAssignment, setSelectedTaskAssignment] = useState(
-    CLUB_REFRESH_JOBS[0] ? getClubRefreshTaskLabel(CLUB_REFRESH_JOBS[0]) : '',
-  );
-  const [taskAssignmentName, setTaskAssignmentName] = useState('');
-  const [taskAssignmentNotes, setTaskAssignmentNotes] = useState('');
-  const [taskAssignmentAttachments, setTaskAssignmentAttachments] = useState<File[]>([]);
-  const [taskAssignmentStatus, setTaskAssignmentStatus] = useState<string | null>(null);
-  const [submittingTaskAssignment, setSubmittingTaskAssignment] = useState(false);
+  const [taskAssignmentNamesByJob, setTaskAssignmentNamesByJob] = useState<Record<string, string>>({});
+  const [taskAssignmentNotesByJob, setTaskAssignmentNotesByJob] = useState<Record<string, string>>({});
+  const [taskAssignmentAttachmentsByJob, setTaskAssignmentAttachmentsByJob] = useState<Record<string, File[]>>({});
+  const [taskAssignmentStatusByJob, setTaskAssignmentStatusByJob] = useState<Record<string, string | null>>({});
+  const [submittingTaskAssignmentByJob, setSubmittingTaskAssignmentByJob] = useState<Record<string, boolean>>({});
 
   const clubRefreshAreas = useMemo(
     () => ['All areas', ...Array.from(new Set(CLUB_REFRESH_JOBS.map((item) => item.area)))],
@@ -504,11 +501,6 @@ export default function PublicHomePage() {
         return areaMatches && statusMatches && priorityMatches;
       }),
     [jobAreaFilter, jobPriorityFilter, jobStatusFilter],
-  );
-
-  const clubRefreshTaskOptions = useMemo(
-    () => CLUB_REFRESH_JOBS.map((item) => getClubRefreshTaskLabel(item)),
-    [],
   );
 
   useEffect(() => {
@@ -612,32 +604,54 @@ export default function PublicHomePage() {
     setSubmitting(false);
   };
 
-  const submitTaskAssignment = async (event: React.FormEvent<HTMLFormElement>) => {
+  const submitTaskAssignmentForJob = async (
+    event: React.FormEvent<HTMLFormElement>,
+    taskLabel: string,
+  ) => {
     event.preventDefault();
 
-    if (!selectedTaskAssignment.trim()) {
-      setTaskAssignmentStatus('Please choose a task to assign yourself to.');
+    if (!taskLabel.trim()) {
+      setTaskAssignmentStatusByJob((current) => ({
+        ...current,
+        [taskLabel]: 'Please choose a valid task.',
+      }));
       return;
     }
 
-    if (!taskAssignmentName.trim() || !taskAssignmentNotes.trim()) {
-      setTaskAssignmentStatus('Please enter your name and notes for this task.');
+    const assigneeName = (taskAssignmentNamesByJob[taskLabel] || '').trim();
+    const assignmentNotes = (taskAssignmentNotesByJob[taskLabel] || '').trim();
+    const attachments = taskAssignmentAttachmentsByJob[taskLabel] || [];
+
+    if (!assigneeName || !assignmentNotes) {
+      setTaskAssignmentStatusByJob((current) => ({
+        ...current,
+        [taskLabel]: 'Please enter your name and notes for this task.',
+      }));
       return;
     }
 
-    const oversizedFile = taskAssignmentAttachments.find((file) => file.size > MAX_TASK_ATTACHMENT_BYTES);
+    const oversizedFile = attachments.find((file) => file.size > MAX_TASK_ATTACHMENT_BYTES);
     if (oversizedFile) {
-      setTaskAssignmentStatus(`Attachment too large: ${oversizedFile.name}. Max size is 10 MB per file.`);
+      setTaskAssignmentStatusByJob((current) => ({
+        ...current,
+        [taskLabel]: `Attachment too large: ${oversizedFile.name}. Max size is 10 MB per file.`,
+      }));
       return;
     }
 
-    setSubmittingTaskAssignment(true);
-    setTaskAssignmentStatus(null);
+    setSubmittingTaskAssignmentByJob((current) => ({
+      ...current,
+      [taskLabel]: true,
+    }));
+    setTaskAssignmentStatusByJob((current) => ({
+      ...current,
+      [taskLabel]: null,
+    }));
 
     const uploadedAttachmentLines: string[] = [];
 
     try {
-      for (const file of taskAssignmentAttachments) {
+      for (const file of attachments) {
         const base64Data = await fileToBase64(file);
 
         const uploadResponse = await fetch('/api/public/upload-job-club-attachment', {
@@ -656,23 +670,35 @@ export default function PublicHomePage() {
         const uploadPayload = await uploadResponse.json();
 
         if (!uploadResponse.ok || !uploadPayload.ok || !uploadPayload.url) {
-          setTaskAssignmentStatus(uploadPayload.error || `Unable to upload ${file.name}.`);
-          setSubmittingTaskAssignment(false);
+          setTaskAssignmentStatusByJob((current) => ({
+            ...current,
+            [taskLabel]: uploadPayload.error || `Unable to upload ${file.name}.`,
+          }));
+          setSubmittingTaskAssignmentByJob((current) => ({
+            ...current,
+            [taskLabel]: false,
+          }));
           return;
         }
 
         uploadedAttachmentLines.push(`- ${file.name}: ${uploadPayload.url}`);
       }
     } catch {
-      setTaskAssignmentStatus('Unable to upload one or more attachments right now.');
-      setSubmittingTaskAssignment(false);
+      setTaskAssignmentStatusByJob((current) => ({
+        ...current,
+        [taskLabel]: 'Unable to upload one or more attachments right now.',
+      }));
+      setSubmittingTaskAssignmentByJob((current) => ({
+        ...current,
+        [taskLabel]: false,
+      }));
       return;
     }
 
     const assignmentNote = [
       '[Task Assignment]',
-      `Task: ${selectedTaskAssignment.trim()}`,
-      `Notes: ${taskAssignmentNotes.trim()}`,
+      `Task: ${taskLabel}`,
+      `Notes: ${assignmentNotes}`,
       uploadedAttachmentLines.length > 0 ? 'Attachments:' : null,
       ...uploadedAttachmentLines,
     ]
@@ -686,7 +712,7 @@ export default function PublicHomePage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          name: taskAssignmentName,
+          name: assigneeName,
           notes: assignmentNote,
           jobClubPostId: null,
           website: '',
@@ -696,19 +722,40 @@ export default function PublicHomePage() {
       const payload = await response.json();
 
       if (!response.ok || !payload.ok) {
-        setTaskAssignmentStatus(payload.error || 'Unable to submit your task assignment right now.');
-        setSubmittingTaskAssignment(false);
+        setTaskAssignmentStatusByJob((current) => ({
+          ...current,
+          [taskLabel]: payload.error || 'Unable to submit your task assignment right now.',
+        }));
+        setSubmittingTaskAssignmentByJob((current) => ({
+          ...current,
+          [taskLabel]: false,
+        }));
         return;
       }
 
-      setTaskAssignmentNotes('');
-      setTaskAssignmentAttachments([]);
-      setTaskAssignmentStatus('Thanks, you have been assigned to this task and your notes were sent to trustees.');
+      setTaskAssignmentNotesByJob((current) => ({
+        ...current,
+        [taskLabel]: '',
+      }));
+      setTaskAssignmentAttachmentsByJob((current) => ({
+        ...current,
+        [taskLabel]: [],
+      }));
+      setTaskAssignmentStatusByJob((current) => ({
+        ...current,
+        [taskLabel]: 'Thanks, you have been assigned to this task and your notes were sent to trustees.',
+      }));
     } catch {
-      setTaskAssignmentStatus('Unable to submit your task assignment right now.');
+      setTaskAssignmentStatusByJob((current) => ({
+        ...current,
+        [taskLabel]: 'Unable to submit your task assignment right now.',
+      }));
     }
 
-    setSubmittingTaskAssignment(false);
+    setSubmittingTaskAssignmentByJob((current) => ({
+      ...current,
+      [taskLabel]: false,
+    }));
   };
 
   return (
@@ -868,150 +915,126 @@ export default function PublicHomePage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredClubRefreshJobs.map((item) => (
-                        <tr key={`${item.area}-${item.job}`} className="odd:bg-white even:bg-zinc-50/60">
-                          <td className="border-b border-zinc-100 px-3 py-3 align-top font-medium text-zinc-900">{item.area}</td>
-                          <td className="border-b border-zinc-100 px-3 py-3 align-top text-zinc-700">
-                            <p>{item.job}</p>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedTaskAssignment(getClubRefreshTaskLabel(item));
-                                setTaskAssignmentStatus(null);
+                      {filteredClubRefreshJobs.map((item) => {
+                        const taskLabel = getClubRefreshTaskLabel(item);
+                        const taskStatus = taskAssignmentStatusByJob[taskLabel];
+                        const taskAttachments = taskAssignmentAttachmentsByJob[taskLabel] || [];
+                        const isSubmittingTask = Boolean(submittingTaskAssignmentByJob[taskLabel]);
 
-                                if (typeof document !== 'undefined') {
-                                  const form = document.getElementById('task-assignment-form');
-                                  form?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                }
-                              }}
-                              className="mt-2 inline-flex items-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700 transition hover:bg-red-100"
-                            >
-                              Assign myself
-                            </button>
-                          </td>
-                          <td className="border-b border-zinc-100 px-3 py-3 align-top">
-                            <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClasses(item.status)}`}>
-                              {item.status}
-                            </span>
-                          </td>
-                          <td className="border-b border-zinc-100 px-3 py-3 align-top">
-                            <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getPriorityBadgeClasses(item.priority)}`}>
-                              {item.priority}
-                            </span>
-                          </td>
-                          <td className="border-b border-zinc-100 px-3 py-3 align-top text-zinc-700">{item.materials}</td>
-                        </tr>
-                      ))}
+                        return (
+                          <tr key={`${item.area}-${item.job}`} className="odd:bg-white even:bg-zinc-50/60">
+                            <td className="border-b border-zinc-100 px-3 py-3 align-top font-medium text-zinc-900">{item.area}</td>
+                            <td className="border-b border-zinc-100 px-3 py-3 align-top text-zinc-700">
+                              <p>{item.job}</p>
+
+                              <details className="mt-2 rounded-lg border border-zinc-200 bg-white p-2">
+                                <summary className="cursor-pointer list-none text-xs font-semibold text-red-700">
+                                  Assign to me
+                                </summary>
+
+                                <form
+                                  className="mt-3 space-y-3"
+                                  onSubmit={(event) => {
+                                    void submitTaskAssignmentForJob(event, taskLabel);
+                                  }}
+                                >
+                                  <div>
+                                    <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor={`task-name-${taskLabel}`}>
+                                      Your name
+                                    </label>
+                                    <input
+                                      id={`task-name-${taskLabel}`}
+                                      value={taskAssignmentNamesByJob[taskLabel] || ''}
+                                      onChange={(event) => {
+                                        setTaskAssignmentNamesByJob((current) => ({
+                                          ...current,
+                                          [taskLabel]: event.target.value,
+                                        }));
+                                      }}
+                                      className="w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-xs outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                                      placeholder="Your full name"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor={`task-notes-${taskLabel}`}>
+                                      Notes
+                                    </label>
+                                    <textarea
+                                      id={`task-notes-${taskLabel}`}
+                                      value={taskAssignmentNotesByJob[taskLabel] || ''}
+                                      onChange={(event) => {
+                                        setTaskAssignmentNotesByJob((current) => ({
+                                          ...current,
+                                          [taskLabel]: event.target.value,
+                                        }));
+                                      }}
+                                      rows={3}
+                                      className="w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-xs outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                                      placeholder="Availability, materials you can bring, or support needed"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor={`task-files-${taskLabel}`}>
+                                      Upload receipts/files (optional)
+                                    </label>
+                                    <input
+                                      id={`task-files-${taskLabel}`}
+                                      type="file"
+                                      multiple
+                                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                                      onChange={(event) => {
+                                        const files = Array.from(event.target.files || []);
+                                        setTaskAssignmentAttachmentsByJob((current) => ({
+                                          ...current,
+                                          [taskLabel]: files,
+                                        }));
+                                      }}
+                                      className="w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs text-zinc-700 outline-none transition file:mr-2 file:rounded-full file:border-0 file:bg-red-100 file:px-2 file:py-1 file:text-xs file:font-semibold file:text-red-700 hover:file:bg-red-200 focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                                    />
+                                    {taskAttachments.length > 0 && (
+                                      <ul className="mt-1 space-y-1 text-xs text-zinc-600">
+                                        {taskAttachments.map((file) => (
+                                          <li key={`${taskLabel}-${file.name}-${file.lastModified}`}>{file.name}</li>
+                                        ))}
+                                      </ul>
+                                    )}
+                                  </div>
+
+                                  {taskStatus && (
+                                    <p className={`text-xs ${taskStatus.includes('Thanks') ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                      {taskStatus}
+                                    </p>
+                                  )}
+
+                                  <button
+                                    type="submit"
+                                    disabled={isSubmittingTask}
+                                    className="inline-flex items-center rounded-full bg-red-700 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-red-300"
+                                  >
+                                    {isSubmittingTask ? 'Submitting...' : 'Assign to me'}
+                                  </button>
+                                </form>
+                              </details>
+                            </td>
+                            <td className="border-b border-zinc-100 px-3 py-3 align-top">
+                              <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClasses(item.status)}`}>
+                                {item.status}
+                              </span>
+                            </td>
+                            <td className="border-b border-zinc-100 px-3 py-3 align-top">
+                              <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getPriorityBadgeClasses(item.priority)}`}>
+                                {item.priority}
+                              </span>
+                            </td>
+                            <td className="border-b border-zinc-100 px-3 py-3 align-top text-zinc-700">{item.materials}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
-
-                <form
-                  id="task-assignment-form"
-                  className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4"
-                  onSubmit={submitTaskAssignment}
-                >
-                  <h3 className="text-base font-semibold text-zinc-900">Assign Yourself To A Task</h3>
-                  <p className="mt-1 text-sm text-zinc-600">
-                    Add your name and notes so trustees know who is taking ownership and any support needed.
-                  </p>
-
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <label htmlFor="task-assignment-select" className="mb-1 block text-sm font-medium text-zinc-700">
-                        Task
-                      </label>
-                      <select
-                        id="task-assignment-select"
-                        value={selectedTaskAssignment}
-                        onChange={(event) => setSelectedTaskAssignment(event.target.value)}
-                        className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
-                      >
-                        {clubRefreshTaskOptions.map((taskOption) => (
-                          <option key={taskOption} value={taskOption}>
-                            {taskOption}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label htmlFor="task-assignment-name" className="mb-1 block text-sm font-medium text-zinc-700">
-                        Your name
-                      </label>
-                      <input
-                        id="task-assignment-name"
-                        value={taskAssignmentName}
-                        onChange={(event) => setTaskAssignmentName(event.target.value)}
-                        className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
-                        placeholder="Your full name"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    <label htmlFor="task-assignment-notes" className="mb-1 block text-sm font-medium text-zinc-700">
-                      Notes
-                    </label>
-                    <textarea
-                      id="task-assignment-notes"
-                      value={taskAssignmentNotes}
-                      onChange={(event) => setTaskAssignmentNotes(event.target.value)}
-                      rows={4}
-                      className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
-                      placeholder="Availability, expected timing, materials you can bring, or support needed"
-                    />
-                  </div>
-
-                  <div className="mt-4">
-                    <label htmlFor="task-assignment-attachments" className="mb-1 block text-sm font-medium text-zinc-700">
-                      Receipts or relevant files (optional)
-                    </label>
-                    <input
-                      id="task-assignment-attachments"
-                      type="file"
-                      multiple
-                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-                      onChange={(event) => {
-                        const files = Array.from(event.target.files || []);
-                        setTaskAssignmentAttachments(files);
-                      }}
-                      className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-700 outline-none transition file:mr-3 file:rounded-full file:border-0 file:bg-red-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-red-700 hover:file:bg-red-200 focus:border-red-500 focus:ring-2 focus:ring-red-100"
-                    />
-                    <p className="mt-1 text-xs text-zinc-500">
-                      Up to 10 MB per file. You can select multiple files.
-                    </p>
-                    {taskAssignmentAttachments.length > 0 && (
-                      <ul className="mt-2 space-y-1 text-xs text-zinc-600">
-                        {taskAssignmentAttachments.map((file) => (
-                          <li key={`${file.name}-${file.lastModified}`}>{file.name}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-
-                  <input
-                    type="text"
-                    name="website"
-                    tabIndex={-1}
-                    autoComplete="off"
-                    className="hidden"
-                  />
-
-                  {taskAssignmentStatus && (
-                    <p className={`mt-3 text-sm ${taskAssignmentStatus.includes('Thanks') ? 'text-emerald-700' : 'text-rose-700'}`}>
-                      {taskAssignmentStatus}
-                    </p>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={submittingTaskAssignment}
-                    className="mt-4 inline-flex items-center rounded-full bg-red-700 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-red-300"
-                  >
-                    {submittingTaskAssignment ? 'Submitting...' : 'Assign me and submit notes'}
-                  </button>
-                </form>
               </section>
 
               <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
