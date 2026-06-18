@@ -521,9 +521,9 @@ export default function PublicJobClubPage() {
                 <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 ring-1 ring-zinc-200">{filteredOpenJobs.length}</span>
               </div>
 
-              <div className="space-y-3 md:hidden">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {filteredOpenJobs.length === 0 ? (
-                  <p className="rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-500">No unassigned jobs match the current filters.</p>
+                  <p className="rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-500 md:col-span-2 xl:col-span-3">No unassigned jobs match the current filters.</p>
                 ) : (
                   filteredOpenJobs.map((item) => (
                     <article key={`${item.area}-${item.job}-open-card`} className="rounded-xl border border-zinc-200 bg-white p-3">
@@ -539,40 +539,6 @@ export default function PublicJobClubPage() {
                   ))
                 )}
               </div>
-
-              <div className="hidden overflow-x-auto md:block">
-                <table className="min-w-[980px] w-full border-separate border-spacing-0 text-left text-sm">
-                  <thead>
-                    <tr>
-                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Area</th>
-                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Job</th>
-                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Status</th>
-                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Priority</th>
-                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Rough Materials Required</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredOpenJobs.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="px-3 py-4 text-sm text-zinc-500">No unassigned jobs match the current filters.</td>
-                      </tr>
-                    ) : (
-                      filteredOpenJobs.map((item) => (
-                        <tr key={`${item.area}-${item.job}-open-row`} className="odd:bg-white even:bg-zinc-50/60">
-                          <td className="border-b border-zinc-100 px-3 py-3 align-top font-medium text-zinc-900">{item.area}</td>
-                          <td className="border-b border-zinc-100 px-3 py-3 align-top text-zinc-700">
-                            <p>{item.job}</p>
-                            {renderTaskAssignmentDropdown(item)}
-                          </td>
-                          <td className="border-b border-zinc-100 px-3 py-3 align-top"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClasses(item.status)}`}>{item.status}</span></td>
-                          <td className="border-b border-zinc-100 px-3 py-3 align-top"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getPriorityBadgeClasses(item.priority)}`}>{item.priority}</span></td>
-                          <td className="border-b border-zinc-100 px-3 py-3 align-top text-zinc-700">{item.materials}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
             </section>
 
             <section className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
@@ -581,9 +547,9 @@ export default function PublicJobClubPage() {
                 <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 ring-1 ring-zinc-200">{filteredAssignedJobs.length}</span>
               </div>
 
-              <div className="space-y-3 md:hidden">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {filteredAssignedJobs.length === 0 ? (
-                  <p className="rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-500">No assigned jobs match the current filters.</p>
+                  <p className="rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-500 md:col-span-2 xl:col-span-3">No assigned jobs match the current filters.</p>
                 ) : (
                   filteredAssignedJobs.map(({ job, assignment }) => (
                     <article key={`${job.area}-${job.job}-assigned-card`} className="rounded-xl border border-zinc-200 bg-white p-3">
@@ -600,42 +566,6 @@ export default function PublicJobClubPage() {
                   ))
                 )}
               </div>
-
-              <div className="hidden overflow-x-auto md:block">
-                <table className="min-w-[1080px] w-full border-separate border-spacing-0 text-left text-sm">
-                  <thead>
-                    <tr>
-                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Area</th>
-                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Job</th>
-                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Assigned User</th>
-                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Status</th>
-                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Priority</th>
-                      <th className="border-b border-zinc-200 bg-white px-3 py-3 font-semibold text-zinc-900">Rough Materials Required</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredAssignedJobs.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="px-3 py-4 text-sm text-zinc-500">No assigned jobs match the current filters.</td>
-                      </tr>
-                    ) : (
-                      filteredAssignedJobs.map(({ job, assignment }) => (
-                        <tr key={`${job.area}-${job.job}-assigned-row`} className="odd:bg-white even:bg-zinc-50/60">
-                          <td className="border-b border-zinc-100 px-3 py-3 align-top font-medium text-zinc-900">{job.area}</td>
-                          <td className="border-b border-zinc-100 px-3 py-3 align-top text-zinc-700">
-                            <p>{job.job}</p>
-                            {renderTaskAssignmentDropdown(job)}
-                          </td>
-                          <td className="border-b border-zinc-100 px-3 py-3 align-top text-emerald-700 font-semibold">{assignment.assignee}</td>
-                          <td className="border-b border-zinc-100 px-3 py-3 align-top"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClasses(job.status)}`}>{job.status}</span></td>
-                          <td className="border-b border-zinc-100 px-3 py-3 align-top"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getPriorityBadgeClasses(job.priority)}`}>{job.priority}</span></td>
-                          <td className="border-b border-zinc-100 px-3 py-3 align-top text-zinc-700">{job.materials}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
             </section>
 
             <form id="add-job-form" className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4" onSubmit={submitNewJob}>
@@ -645,7 +575,7 @@ export default function PublicJobClubPage() {
               <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <div>
                   <label htmlFor="new-job-area" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">Area</label>
-                  <input id="new-job-area" value={newJobArea} onChange={(event) => setNewJobArea(event.target.value)} className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100" placeholder="e.g. External Areas" />
+                  <input id="new-job-area" value={newJobArea} onChange={(event) => setNewJobArea(event.target.value)} className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100" placeholder="e.g. External" />
                 </div>
                 <div>
                   <label htmlFor="new-job-status" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">Status</label>
