@@ -596,6 +596,9 @@ export default function PublicJobClubPage() {
                     <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClasses(item.status)}`}>{item.status}</span>
                     <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getPriorityBadgeClasses(item.priority)}`}>{item.priority}</span>
                   </div>
+                  {latestAssignmentsByTask.has(getClubRefreshTaskLabel(item)) && (
+                    <p className="mt-2 text-xs font-semibold text-emerald-700">Assigned to: {latestAssignmentsByTask.get(getClubRefreshTaskLabel(item))?.assignee}</p>
+                  )}
                   <p className="mt-2 text-xs text-zinc-600">Materials: {item.materials}</p>
                   {renderTaskAssignmentDropdown(item, true)}
                 </article>
@@ -617,7 +620,13 @@ export default function PublicJobClubPage() {
                   {filteredJobs.map((item) => (
                     <tr key={`${item.area}-${item.job}`} className="odd:bg-white even:bg-zinc-50/60">
                       <td className="border-b border-zinc-100 px-3 py-3 align-top font-medium text-zinc-900">{item.area}</td>
-                      <td className="border-b border-zinc-100 px-3 py-3 align-top text-zinc-700"><p>{item.job}</p>{renderTaskAssignmentDropdown(item)}</td>
+                      <td className="border-b border-zinc-100 px-3 py-3 align-top text-zinc-700">
+                        <p>{item.job}</p>
+                        {latestAssignmentsByTask.has(getClubRefreshTaskLabel(item)) && (
+                          <p className="mt-1 text-xs font-semibold text-emerald-700">Assigned to: {latestAssignmentsByTask.get(getClubRefreshTaskLabel(item))?.assignee}</p>
+                        )}
+                        {renderTaskAssignmentDropdown(item)}
+                      </td>
                       <td className="border-b border-zinc-100 px-3 py-3 align-top"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClasses(item.status)}`}>{item.status}</span></td>
                       <td className="border-b border-zinc-100 px-3 py-3 align-top"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getPriorityBadgeClasses(item.priority)}`}>{item.priority}</span></td>
                       <td className="border-b border-zinc-100 px-3 py-3 align-top text-zinc-700">{item.materials}</td>
