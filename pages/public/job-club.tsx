@@ -186,32 +186,56 @@ export default function PublicJobClubPage() {
     setLoading(true);
     setError(null);
 
-    const [jobsResult, notesResult] = await Promise.all([
-      supabase
-        .from('job_club_posts')
-        .select('id, title, description, is_active')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('job_club_notes')
-        .select('id, name, notes, created_at')
-        .order('created_at', { ascending: false })
-        .limit(300),
-    ]);
+    let jobsData: JobClubPostRow[] = [];
+    let notesData: JobClubNoteRow[] = [];
 
-    if (jobsResult.error || notesResult.error) {
-      setError(jobsResult.error?.message || notesResult.error?.message || 'Unable to load job club');
-      setSubmittedJobs([]);
-      setTaskAssignments([]);
-      setLoading(false);
-      return;
+    const jobsResult = await supabase
+      .from('job_club_posts')
+      .select('id, title, description, is_active')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false });
+
+    if (jobsResult.error) {
+      // Fallback query for environments where schema or columns differ.
+      const jobsFallbackResult = await supabase
+        .from('job_club_posts')
+        .select('id, title, description');
+
+      if (jobsFallbackResult.error) {
+        console.error('Job Club posts unavailable:', jobsFallbackResult.error.message);
+      } else {
+        jobsData = (jobsFallbackResult.data || []) as JobClubPostRow[];
+      }
+    } else {
+      jobsData = (jobsResult.data || []) as JobClubPostRow[];
     }
 
-    const parsedJobs = ((jobsResult.data || []) as JobClubPostRow[])
+    const notesResult = await supabase
+      .from('job_club_notes')
+      .select('id, name, notes, created_at')
+      .order('created_at', { ascending: false })
+      .limit(300);
+
+    if (notesResult.error) {
+      const notesFallbackResult = await supabase
+        .from('job_club_notes')
+        .select('id, name, notes, created_at')
+        .limit(300);
+
+      if (notesFallbackResult.error) {
+        console.error('Job Club notes unavailable:', notesFallbackResult.error.message);
+      } else {
+        notesData = (notesFallbackResult.data || []) as JobClubNoteRow[];
+      }
+    } else {
+      notesData = (notesResult.data || []) as JobClubNoteRow[];
+    }
+
+    const parsedJobs = jobsData
       .map((row) => parsePostedJob(row))
       .filter((row): row is ClubRefreshJob => Boolean(row));
 
-    const parsedAssignments = ((notesResult.data || []) as JobClubNoteRow[])
+    const parsedAssignments = notesData
       .map((row) => parseTaskAssignmentNote(row))
       .filter((row): row is TaskAssignmentSummary => Boolean(row));
 
