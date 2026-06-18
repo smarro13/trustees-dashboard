@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import PublicSectionNav from '../../components/PublicSectionNav';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -32,8 +32,377 @@ type JobClubItem = {
   created_at?: string | null;
 };
 
+type ClubRefreshJob = {
+  area: string;
+  job: string;
+  status: 'Not Started' | 'Ongoing' | 'Completed';
+  priority: 'High' | 'Medium' | 'Low';
+  materials: string;
+};
+
+const CLUB_REFRESH_JOBS: ClubRefreshJob[] = [
+  {
+    area: 'Eric Evans Lodge',
+    job: 'Repair damaged plaster around doors/walls',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Plaster/filler, sandpaper, decorators caulk, paint, brushes',
+  },
+  {
+    area: 'Eric Evans Lodge',
+    job: 'Improve trophy & MPI Cup displays',
+    status: 'Not Started',
+    priority: 'Low',
+    materials: 'Display mounts, shelves, hooks, cleaning materials',
+  },
+  {
+    area: 'Eric Evans Lodge',
+    job: 'Install/improve display lighting',
+    status: 'Not Started',
+    priority: 'Low',
+    materials: 'LED lighting, cable clips, electrical fittings',
+  },
+  {
+    area: 'Eric Evans Lodge',
+    job: 'Improve TV positioning & cables',
+    status: 'Not Started',
+    priority: 'Low',
+    materials: 'TV brackets, cable trunking, fixings',
+  },
+  {
+    area: 'Foyer',
+    job: 'Remove old posters and make walls good',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Scrapers, filler, sandpaper, paint',
+  },
+  {
+    area: 'Foyer',
+    job: 'Repaint and refresh entrance areas',
+    status: 'Not Started',
+    priority: 'High',
+    materials: 'Paint, rollers, brushes, trays, masking tape',
+  },
+  {
+    area: 'Foyer',
+    job: 'Reorganise club history and accreditation displays',
+    status: 'Not Started',
+    priority: 'Low',
+    materials: 'Frames, labels, wall fixings',
+  },
+  {
+    area: 'Foyer',
+    job: 'Clean and restore display cabinets',
+    status: 'Not Started',
+    priority: 'Low',
+    materials: 'Glass cleaner, cloths, cleaning supplies',
+  },
+  {
+    area: 'Ladies Toilets',
+    job: 'Repaint and refresh',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Bathroom paint, rollers, brushes, sealant',
+  },
+  {
+    area: 'Ladies Toilets',
+    job: 'Replace or improve signage',
+    status: 'Not Started',
+    priority: 'Low',
+    materials: 'Signs, vinyl labels, fixings',
+  },
+  {
+    area: 'Gents Toilets',
+    job: 'Repair taps and plumbing issues',
+    status: 'Not Started',
+    priority: 'High',
+    materials: 'Tap fittings, washers, sealant, plumbing tools',
+  },
+  {
+    area: 'Gents Toilets',
+    job: 'Repair or replace hand dryers',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Replacement dryer or spare parts, fixings',
+  },
+  {
+    area: 'Gents Toilets',
+    job: 'Improve paper towel facilities',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Dispensers, screws, fixings',
+  },
+  {
+    area: 'Gents Toilets',
+    job: 'Replace/upgrade lighting',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'LED bulbs, fittings, electrical materials',
+  },
+  {
+    area: 'Gents Toilets',
+    job: 'Repair doors, locks and damaged walls',
+    status: 'Not Started',
+    priority: 'High',
+    materials: 'Hinges, locks, screws, filler, paint',
+  },
+  {
+    area: 'Function Room',
+    job: 'Full repaint and refresh',
+    status: 'Not Started',
+    priority: 'High',
+    materials: 'Paint, rollers, brushes, dust sheets, masking tape',
+  },
+  {
+    area: 'Function Room',
+    job: 'Repair flooring and damaged areas',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Flooring materials, adhesive, trims',
+  },
+  {
+    area: 'Function Room',
+    job: 'Improve displays and decoration',
+    status: 'Not Started',
+    priority: 'Low',
+    materials: 'Frames, shelves, wall fixings',
+  },
+  {
+    area: 'Function Room',
+    job: 'Replace curtains and fittings',
+    status: 'Not Started',
+    priority: 'Low',
+    materials: 'Curtains, rails, brackets',
+  },
+  {
+    area: 'Corridors',
+    job: 'Repaint and refresh',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Paint, rollers, brushes',
+  },
+  {
+    area: 'Corridors',
+    job: 'Improve lighting',
+    status: 'Not Started',
+    priority: 'Low',
+    materials: 'LED fittings, sensors, electrical accessories',
+  },
+  {
+    area: 'Changing Rooms',
+    job: 'Full repaint',
+    status: 'Not Started',
+    priority: 'High',
+    materials: 'Hardwearing paint, rollers, brushes, filler',
+  },
+  {
+    area: 'Changing Rooms',
+    job: 'Remove old notices and make walls good',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Scrapers, filler, paint',
+  },
+  {
+    area: 'Changing Rooms',
+    job: 'Replace old whiteboards',
+    status: 'Not Started',
+    priority: 'Low',
+    materials: 'Whiteboards, markers, wall fixings',
+  },
+  {
+    area: 'Changing Rooms',
+    job: 'Improve signage',
+    status: 'Not Started',
+    priority: 'Low',
+    materials: 'Signs, vinyl labels',
+  },
+  {
+    area: 'New Changing Area',
+    job: 'Remove unwanted boards and fittings',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Hand tools, filler, paint',
+  },
+  {
+    area: 'New Changing Area',
+    job: 'Repaint and deep clean',
+    status: 'Not Started',
+    priority: 'High',
+    materials: 'Paint, rollers, cleaning materials',
+  },
+  {
+    area: 'New Changing Area',
+    job: 'Repair/secure emergency exit area',
+    status: 'Not Started',
+    priority: 'High',
+    materials: 'Locks, handles, signage, hardware',
+  },
+  {
+    area: 'Gym',
+    job: 'Repair flooring/replace damaged tiles',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Rubber tiles, adhesive',
+  },
+  {
+    area: 'Gym',
+    job: 'Repaint and refresh',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Paint, rollers, brushes',
+  },
+  {
+    area: 'Gym',
+    job: 'Repair or service equipment',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Replacement parts, lubricants, tools',
+  },
+  {
+    area: 'Gym',
+    job: 'Install new equipment',
+    status: 'Not Started',
+    priority: 'Low',
+    materials: 'Fixings, flooring protection',
+  },
+  {
+    area: 'External Areas',
+    job: 'Weed removal and grounds tidy',
+    status: 'Not Started',
+    priority: 'High',
+    materials: 'Weed killer, gloves, garden tools',
+  },
+  {
+    area: 'External Areas',
+    job: 'Jet wash paths, patios and hard standing',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Pressure washer, cleaning products',
+  },
+  {
+    area: 'External Areas',
+    job: 'Remove rubbish and scrap materials',
+    status: 'Not Started',
+    priority: 'High',
+    materials: 'Skips, bags, gloves, lifting equipment',
+  },
+  {
+    area: 'External Areas',
+    job: 'Repair/replace decking',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Timber, screws, timber treatment',
+  },
+  {
+    area: 'External Areas',
+    job: 'Inspect and repair gutters',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Ladders, gutter brackets, replacement sections',
+  },
+  {
+    area: 'External Areas',
+    job: 'Repaint external surfaces and bollards',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Exterior paint, brushes, rollers',
+  },
+  {
+    area: 'External Areas',
+    job: 'Replace artificial grass entrance',
+    status: 'Not Started',
+    priority: 'Low',
+    materials: 'Artificial grass, adhesive, edging',
+  },
+  {
+    area: 'External Areas',
+    job: 'Clean memorial areas and plaques',
+    status: 'Not Started',
+    priority: 'Low',
+    materials: 'Specialist cleaner, cloths',
+  },
+  {
+    area: 'External Areas',
+    job: 'Remove or relocate containers',
+    status: 'Not Started',
+    priority: 'Low',
+    materials: 'Lifting equipment, cutting tools, skips',
+  },
+  {
+    area: 'External Areas',
+    job: 'Secure external cables and services',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Cable clips, conduit, electrical materials',
+  },
+  {
+    area: 'External Areas',
+    job: 'Grass cutting and edging',
+    status: 'Ongoing',
+    priority: 'High',
+    materials: 'Fuel, mower, strimmer, line',
+  },
+  {
+    area: 'External Areas',
+    job: 'Moss treatment and cleaning',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Moss treatment, brushes',
+  },
+  {
+    area: 'Safety',
+    job: 'Restock first aid facilities',
+    status: 'Ongoing',
+    priority: 'High',
+    materials: 'First aid supplies, storage boxes, labels',
+  },
+  {
+    area: 'Safety',
+    job: 'Update emergency signage',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Safety signs, fixings',
+  },
+  {
+    area: 'Safety',
+    job: 'Deep clean first aid room',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Cleaning chemicals and equipment',
+  },
+  {
+    area: 'Safety',
+    job: 'Check and improve emergency lighting',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'Emergency fittings, batteries',
+  },
+  {
+    area: 'Club Site',
+    job: 'Install a site map and visitor information',
+    status: 'Not Started',
+    priority: 'Low',
+    materials: 'Signboard, posts, fixings',
+  },
+  {
+    area: 'Club Site',
+    job: 'Replace outdated signage',
+    status: 'Not Started',
+    priority: 'Medium',
+    materials: 'New signs, vinyl, fixings',
+  },
+  {
+    area: 'Club Site',
+    job: 'Remove redundant signage',
+    status: 'Not Started',
+    priority: 'Low',
+    materials: 'Tools, filler, paint',
+  },
+];
+
 const AGM_MINUTES_PREFIX = 'AGM - ';
 const PUBLIC_ACTION_MARKER = '[Public]';
+const MAX_TASK_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
 const stripPublicMarker = (source: string | null | undefined) =>
   (source || '').replace(PUBLIC_ACTION_MARKER, '').trim();
@@ -54,6 +423,32 @@ const formatDate = (value: string | null | undefined, fallback: string) => {
   }).format(date);
 };
 
+const getStatusBadgeClasses = (status: ClubRefreshJob['status']) => {
+  if (status === 'Ongoing') {
+    return 'bg-amber-100 text-amber-800';
+  }
+
+  if (status === 'Completed') {
+    return 'bg-emerald-100 text-emerald-800';
+  }
+
+  return 'bg-zinc-200 text-zinc-700';
+};
+
+const getPriorityBadgeClasses = (priority: ClubRefreshJob['priority']) => {
+  if (priority === 'High') {
+    return 'bg-rose-100 text-rose-800';
+  }
+
+  if (priority === 'Medium') {
+    return 'bg-amber-100 text-amber-800';
+  }
+
+  return 'bg-sky-100 text-sky-800';
+};
+
+const getClubRefreshTaskLabel = (item: ClubRefreshJob) => `${item.area} - ${item.job}`;
+
 const getMeetingDate = (minute: Minute) => {
   if (Array.isArray(minute.meetings)) {
     return minute.meetings[0]?.meeting_date ?? null;
@@ -61,6 +456,24 @@ const getMeetingDate = (minute: Minute) => {
 
   return minute.meetings?.meeting_date ?? null;
 };
+
+const fileToBase64 = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') {
+        reject(new Error('Could not read attachment data.'));
+        return;
+      }
+
+      const commaIndex = reader.result.indexOf(',');
+      resolve(commaIndex >= 0 ? reader.result.slice(commaIndex + 1) : reader.result);
+    };
+
+    reader.onerror = () => reject(new Error('Could not read attachment data.'));
+    reader.readAsDataURL(file);
+  });
 
 export default function PublicHomePage() {
   const [actions, setActions] = useState<PublicAction[]>([]);
@@ -81,6 +494,39 @@ export default function PublicHomePage() {
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [jobAreaFilter, setJobAreaFilter] = useState('All areas');
+  const [jobStatusFilter, setJobStatusFilter] = useState<'All statuses' | ClubRefreshJob['status']>('All statuses');
+  const [jobPriorityFilter, setJobPriorityFilter] = useState<'All priorities' | ClubRefreshJob['priority']>('All priorities');
+  const [selectedTaskAssignment, setSelectedTaskAssignment] = useState(
+    CLUB_REFRESH_JOBS[0] ? getClubRefreshTaskLabel(CLUB_REFRESH_JOBS[0]) : '',
+  );
+  const [taskAssignmentName, setTaskAssignmentName] = useState('');
+  const [taskAssignmentNotes, setTaskAssignmentNotes] = useState('');
+  const [taskAssignmentAttachments, setTaskAssignmentAttachments] = useState<File[]>([]);
+  const [taskAssignmentStatus, setTaskAssignmentStatus] = useState<string | null>(null);
+  const [submittingTaskAssignment, setSubmittingTaskAssignment] = useState(false);
+
+  const clubRefreshAreas = useMemo(
+    () => ['All areas', ...Array.from(new Set(CLUB_REFRESH_JOBS.map((item) => item.area)))],
+    [],
+  );
+
+  const filteredClubRefreshJobs = useMemo(
+    () =>
+      CLUB_REFRESH_JOBS.filter((item) => {
+        const areaMatches = jobAreaFilter === 'All areas' || item.area === jobAreaFilter;
+        const statusMatches = jobStatusFilter === 'All statuses' || item.status === jobStatusFilter;
+        const priorityMatches = jobPriorityFilter === 'All priorities' || item.priority === jobPriorityFilter;
+
+        return areaMatches && statusMatches && priorityMatches;
+      }),
+    [jobAreaFilter, jobPriorityFilter, jobStatusFilter],
+  );
+
+  const clubRefreshTaskOptions = useMemo(
+    () => CLUB_REFRESH_JOBS.map((item) => getClubRefreshTaskLabel(item)),
+    [],
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -243,6 +689,105 @@ export default function PublicHomePage() {
     }
 
     setSubmittingJobClub(false);
+  };
+
+  const submitTaskAssignment = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!selectedTaskAssignment.trim()) {
+      setTaskAssignmentStatus('Please choose a task to assign yourself to.');
+      return;
+    }
+
+    if (!taskAssignmentName.trim() || !taskAssignmentNotes.trim()) {
+      setTaskAssignmentStatus('Please enter your name and notes for this task.');
+      return;
+    }
+
+    const oversizedFile = taskAssignmentAttachments.find((file) => file.size > MAX_TASK_ATTACHMENT_BYTES);
+    if (oversizedFile) {
+      setTaskAssignmentStatus(`Attachment too large: ${oversizedFile.name}. Max size is 10 MB per file.`);
+      return;
+    }
+
+    setSubmittingTaskAssignment(true);
+    setTaskAssignmentStatus(null);
+
+    const uploadedAttachmentLines: string[] = [];
+
+    try {
+      for (const file of taskAssignmentAttachments) {
+        const base64Data = await fileToBase64(file);
+
+        const uploadResponse = await fetch('/api/public/upload-job-club-attachment', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            fileName: file.name,
+            contentType: file.type,
+            base64Data,
+            website: '',
+          }),
+        });
+
+        const uploadPayload = await uploadResponse.json();
+
+        if (!uploadResponse.ok || !uploadPayload.ok || !uploadPayload.url) {
+          setTaskAssignmentStatus(uploadPayload.error || `Unable to upload ${file.name}.`);
+          setSubmittingTaskAssignment(false);
+          return;
+        }
+
+        uploadedAttachmentLines.push(`- ${file.name}: ${uploadPayload.url}`);
+      }
+    } catch {
+      setTaskAssignmentStatus('Unable to upload one or more attachments right now.');
+      setSubmittingTaskAssignment(false);
+      return;
+    }
+
+    const assignmentNote = [
+      '[Task Assignment]',
+      `Task: ${selectedTaskAssignment.trim()}`,
+      `Notes: ${taskAssignmentNotes.trim()}`,
+      uploadedAttachmentLines.length > 0 ? 'Attachments:' : null,
+      ...uploadedAttachmentLines,
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join('\n');
+
+    try {
+      const response = await fetch('/api/public/job-club-note', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: taskAssignmentName,
+          notes: assignmentNote,
+          jobClubPostId: null,
+          website: '',
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok || !payload.ok) {
+        setTaskAssignmentStatus(payload.error || 'Unable to submit your task assignment right now.');
+        setSubmittingTaskAssignment(false);
+        return;
+      }
+
+      setTaskAssignmentNotes('');
+      setTaskAssignmentAttachments([]);
+      setTaskAssignmentStatus('Thanks, you have been assigned to this task and your notes were sent to trustees.');
+    } catch {
+      setTaskAssignmentStatus('Unable to submit your task assignment right now.');
+    }
+
+    setSubmittingTaskAssignment(false);
   };
 
   return (
@@ -462,6 +1007,237 @@ export default function PublicHomePage() {
                 ) : (
                   <p className="mt-5 text-sm text-zinc-500">Job Club is currently closed on this device. Use Open to view listings.</p>
                 )}
+              </section>
+
+              <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-2xl font-semibold text-zinc-900">Club Refresh Jobs</h2>
+                    <p className="mt-1 text-sm text-zinc-600">
+                      Planned and active jobs across the site, including priority and rough materials needed.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700">
+                    {filteredClubRefreshJobs.length} of {CLUB_REFRESH_JOBS.length}
+                  </span>
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div>
+                    <label htmlFor="club-refresh-area-filter" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">
+                      Area
+                    </label>
+                    <select
+                      id="club-refresh-area-filter"
+                      value={jobAreaFilter}
+                      onChange={(event) => setJobAreaFilter(event.target.value)}
+                      className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                    >
+                      {clubRefreshAreas.map((area) => (
+                        <option key={area} value={area}>
+                          {area}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="club-refresh-status-filter" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">
+                      Status
+                    </label>
+                    <select
+                      id="club-refresh-status-filter"
+                      value={jobStatusFilter}
+                      onChange={(event) => setJobStatusFilter(event.target.value as 'All statuses' | ClubRefreshJob['status'])}
+                      className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                    >
+                      <option value="All statuses">All statuses</option>
+                      <option value="Not Started">Not Started</option>
+                      <option value="Ongoing">Ongoing</option>
+                      <option value="Completed">Completed</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="club-refresh-priority-filter" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">
+                      Priority
+                    </label>
+                    <select
+                      id="club-refresh-priority-filter"
+                      value={jobPriorityFilter}
+                      onChange={(event) => setJobPriorityFilter(event.target.value as 'All priorities' | ClubRefreshJob['priority'])}
+                      className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                    >
+                      <option value="All priorities">All priorities</option>
+                      <option value="High">High</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Low">Low</option>
+                    </select>
+                  </div>
+                </div>
+
+                {filteredClubRefreshJobs.length === 0 && (
+                  <p className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-600">
+                    No jobs match the current filters.
+                  </p>
+                )}
+
+                <div className="mt-5 overflow-x-auto">
+                  <table className="min-w-[980px] w-full border-separate border-spacing-0 text-left text-sm">
+                    <thead>
+                      <tr>
+                        <th className="border-b border-zinc-200 bg-zinc-50 px-3 py-3 font-semibold text-zinc-900">Area</th>
+                        <th className="border-b border-zinc-200 bg-zinc-50 px-3 py-3 font-semibold text-zinc-900">Job</th>
+                        <th className="border-b border-zinc-200 bg-zinc-50 px-3 py-3 font-semibold text-zinc-900">Status</th>
+                        <th className="border-b border-zinc-200 bg-zinc-50 px-3 py-3 font-semibold text-zinc-900">Priority</th>
+                        <th className="border-b border-zinc-200 bg-zinc-50 px-3 py-3 font-semibold text-zinc-900">Rough Materials Required</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredClubRefreshJobs.map((item) => (
+                        <tr key={`${item.area}-${item.job}`} className="odd:bg-white even:bg-zinc-50/60">
+                          <td className="border-b border-zinc-100 px-3 py-3 align-top font-medium text-zinc-900">{item.area}</td>
+                          <td className="border-b border-zinc-100 px-3 py-3 align-top text-zinc-700">
+                            <p>{item.job}</p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedTaskAssignment(getClubRefreshTaskLabel(item));
+                                setTaskAssignmentStatus(null);
+
+                                if (typeof document !== 'undefined') {
+                                  const form = document.getElementById('task-assignment-form');
+                                  form?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                }
+                              }}
+                              className="mt-2 inline-flex items-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700 transition hover:bg-red-100"
+                            >
+                              Assign myself
+                            </button>
+                          </td>
+                          <td className="border-b border-zinc-100 px-3 py-3 align-top">
+                            <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClasses(item.status)}`}>
+                              {item.status}
+                            </span>
+                          </td>
+                          <td className="border-b border-zinc-100 px-3 py-3 align-top">
+                            <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getPriorityBadgeClasses(item.priority)}`}>
+                              {item.priority}
+                            </span>
+                          </td>
+                          <td className="border-b border-zinc-100 px-3 py-3 align-top text-zinc-700">{item.materials}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <form
+                  id="task-assignment-form"
+                  className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4"
+                  onSubmit={submitTaskAssignment}
+                >
+                  <h3 className="text-base font-semibold text-zinc-900">Assign Yourself To A Task</h3>
+                  <p className="mt-1 text-sm text-zinc-600">
+                    Add your name and notes so trustees know who is taking ownership and any support needed.
+                  </p>
+
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label htmlFor="task-assignment-select" className="mb-1 block text-sm font-medium text-zinc-700">
+                        Task
+                      </label>
+                      <select
+                        id="task-assignment-select"
+                        value={selectedTaskAssignment}
+                        onChange={(event) => setSelectedTaskAssignment(event.target.value)}
+                        className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                      >
+                        {clubRefreshTaskOptions.map((taskOption) => (
+                          <option key={taskOption} value={taskOption}>
+                            {taskOption}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label htmlFor="task-assignment-name" className="mb-1 block text-sm font-medium text-zinc-700">
+                        Your name
+                      </label>
+                      <input
+                        id="task-assignment-name"
+                        value={taskAssignmentName}
+                        onChange={(event) => setTaskAssignmentName(event.target.value)}
+                        className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                        placeholder="Your full name"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <label htmlFor="task-assignment-notes" className="mb-1 block text-sm font-medium text-zinc-700">
+                      Notes
+                    </label>
+                    <textarea
+                      id="task-assignment-notes"
+                      value={taskAssignmentNotes}
+                      onChange={(event) => setTaskAssignmentNotes(event.target.value)}
+                      rows={4}
+                      className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                      placeholder="Availability, expected timing, materials you can bring, or support needed"
+                    />
+                  </div>
+
+                  <div className="mt-4">
+                    <label htmlFor="task-assignment-attachments" className="mb-1 block text-sm font-medium text-zinc-700">
+                      Receipts or relevant files (optional)
+                    </label>
+                    <input
+                      id="task-assignment-attachments"
+                      type="file"
+                      multiple
+                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                      onChange={(event) => {
+                        const files = Array.from(event.target.files || []);
+                        setTaskAssignmentAttachments(files);
+                      }}
+                      className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-700 outline-none transition file:mr-3 file:rounded-full file:border-0 file:bg-red-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-red-700 hover:file:bg-red-200 focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                    />
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Up to 10 MB per file. You can select multiple files.
+                    </p>
+                    {taskAssignmentAttachments.length > 0 && (
+                      <ul className="mt-2 space-y-1 text-xs text-zinc-600">
+                        {taskAssignmentAttachments.map((file) => (
+                          <li key={`${file.name}-${file.lastModified}`}>{file.name}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  <input
+                    type="text"
+                    name="website"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    className="hidden"
+                  />
+
+                  {taskAssignmentStatus && (
+                    <p className={`mt-3 text-sm ${taskAssignmentStatus.includes('Thanks') ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {taskAssignmentStatus}
+                    </p>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={submittingTaskAssignment}
+                    className="mt-4 inline-flex items-center rounded-full bg-red-700 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-red-300"
+                  >
+                    {submittingTaskAssignment ? 'Submitting...' : 'Assign me and submit notes'}
+                  </button>
+                </form>
               </section>
 
               <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
