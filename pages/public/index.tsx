@@ -23,6 +23,15 @@ type Minute = {
 };
 
 export type ClubRefreshJob = {
+  area: string;
+  job: string;
+  category?: string;
+  status: 'Not Started' | 'Ongoing' | 'Completed';
+  priority: 'High' | 'Medium' | 'Low';
+  materials: string;
+};
+
+export const CLUB_REFRESH_JOBS: ClubRefreshJob[] = [
   { area: 'Eric Evans Lounge', job: 'Repair plaster around door', category: 'Repairs', status: 'Not Started', priority: 'Medium', materials: 'Plaster/filler, sandpaper, caulk, paint, brushes' },
   { area: 'Eric Evans Lounge', job: 'Improve NPI Cup display', category: 'Aesthetic', status: 'Not Started', priority: 'Low', materials: 'Shelving, display mounts, lighting, cleaning materials' },
   { area: 'Eric Evans Lounge', job: 'Add display lighting', category: 'Improvement', status: 'Not Started', priority: 'Low', materials: 'LED lights, cable clips, electrical fixings' },
@@ -64,7 +73,7 @@ export type ClubRefreshJob = {
   { area: 'Changing Rooms', job: 'Replace whiteboards', category: 'Improvement', status: 'Not Started', priority: 'Low', materials: 'Whiteboards, markers, wall fixings' },
   { area: 'Changing Rooms', job: 'Improve lost property process', category: 'Process', status: 'Not Started', priority: 'Medium', materials: 'Storage bins, labels, process signage' },
   { area: 'Changing Rooms', job: 'Repurpose storage (Room 19). Kit return. Move brushes to kitchen store', category: 'Organisation', status: 'Not Started', priority: 'Medium', materials: 'Shelving, storage boxes, labels, hooks' },
-  { area: 'New Changing Area', job: 'Remove ALL notice boards', category: 'Cleaning', status: 'Not Started', priority: 'Medium', materials: 'Screwdrivers, scrapers, filler, paint' },
+  { area: 'New Changing Area', job: 'Remove all notice boards', category: 'Cleaning', status: 'Not Started', priority: 'Medium', materials: 'Screwdrivers, scrapers, filler, paint' },
   { area: 'New Changing Area', job: 'Paint walls/ceilings', category: 'Decoration', status: 'Not Started', priority: 'Medium', materials: 'Paint, rollers, brushes, dust sheets' },
   { area: 'New Changing Area', job: 'Secure emergency exit', category: 'Safety', status: 'Not Started', priority: 'High', materials: 'Locks, handles, signage, hardware' },
   { area: 'New Changing Area', job: 'Deep clean', category: 'Cleaning', status: 'Not Started', priority: 'Medium', materials: 'Cleaning chemicals, brushes, mops, PPE' },
@@ -83,10 +92,10 @@ export type ClubRefreshJob = {
   { area: 'External', job: 'Replace Astroturf entrance', category: 'Improvement', status: 'Not Started', priority: 'Medium', materials: 'Artificial turf, adhesive, edging strips' },
   { area: 'External', job: 'Clean memorial plaques and make additions', category: 'Cleaning', status: 'Not Started', priority: 'Low', materials: 'Specialist metal cleaner, cloths, protective polish' },
   { area: 'External', job: 'Find out about community payback container, can we keep it? Move it to corner where Paul Lyon\'s container is', category: 'Logistics', status: 'Not Started', priority: 'Medium', materials: 'Site plan, transport contacts, coordination notes' },
-  { area: 'External', job: 'Mike to organise Hi-Ab to move Small blue container, bike container, orange container', category: 'Logistics', status: 'Not Started', priority: 'Medium', materials: 'HIAB booking, lifting plan, chains/straps' },
+  { area: 'External', job: 'Mike to organise HIAB to move small blue container, bike container, orange container', category: 'Logistics', status: 'Not Started', priority: 'Medium', materials: 'HIAB booking, lifting plan, chains/straps' },
   { area: 'External', job: 'Paul Lyons to get his container removed', category: 'Logistics', status: 'Not Started', priority: 'Medium', materials: 'Removal booking, access plan, coordination notes' },
-  { area: 'External', job: 'Empty blue container. Anything we are keeping to be looked in Changing room 1 for now', category: 'Logistics', status: 'Not Started', priority: 'Medium', materials: 'Storage crates, labels, inventory sheet' },
-  { area: 'External', job: 'Remove branches and extract x 2 old containers and tractor shed', category: 'Waste', status: 'Not Started', priority: 'Medium', materials: 'Chainsaw/PPE, skip, lifting equipment' },
+  { area: 'External', job: 'Empty blue container. Anything we are keeping to be stored in Changing Room 1 for now', category: 'Logistics', status: 'Not Started', priority: 'Medium', materials: 'Storage crates, labels, inventory sheet' },
+  { area: 'External', job: 'Remove branches and extract 2 old containers and tractor shed', category: 'Waste', status: 'Not Started', priority: 'Medium', materials: 'Chainsaw/PPE, skip, lifting equipment' },
   { area: 'External', job: 'Secure/remove cables', category: 'Safety', status: 'Not Started', priority: 'High', materials: 'Cable clips, conduit, fixings, electrical materials' },
   { area: 'External', job: 'Repaint building (pitch side)', category: 'Decoration', status: 'Not Started', priority: 'Low', materials: 'Exterior masonry paint, rollers, brushes, masking tape' },
   { area: 'External', job: 'Grass cutting (incl. under tables)', category: 'Grounds', status: 'Not Started', priority: 'Medium', materials: 'Mower, strimmer line, fuel, PPE' },
@@ -94,41 +103,11 @@ export type ClubRefreshJob = {
   { area: 'External', job: 'Treat weeds (bin store)', category: 'Grounds', status: 'Not Started', priority: 'Medium', materials: 'Weed treatment, sprayer, gloves' },
   { area: 'Safety', job: 'Update first aid station', category: 'Compliance', status: 'Not Started', priority: 'High', materials: 'First aid supplies, storage boxes, labels' },
   { area: 'Safety', job: 'Ensure emergency signage present', category: 'Compliance', status: 'Not Started', priority: 'High', materials: 'Emergency signs, fixings, adhesive' },
-  { area: 'Safety', job: 'First Aid room cleared and deep cleaned', category: 'Cleaning', status: 'Not Started', priority: 'Medium', materials: 'Cleaning chemicals, cloths, disinfectant, PPE' },
+  { area: 'Safety', job: 'First aid room cleared and deep cleaned', category: 'Cleaning', status: 'Not Started', priority: 'Medium', materials: 'Cleaning chemicals, cloths, disinfectant, PPE' },
   { area: 'Safety', job: 'Repair emergency lighting', category: 'Electrical', status: 'Not Started', priority: 'High', materials: 'Emergency lighting units, batteries, electrical parts' },
   { area: 'Wayfinding', job: 'Install site map', category: 'Improvement', status: 'Not Started', priority: 'Medium', materials: 'Signboard, posts, concrete, fixings' },
   { area: 'Wayfinding', job: 'Improve changing room signage', category: 'Improvement', status: 'Not Started', priority: 'High', materials: 'Directional signs, vinyl labels, fixings' },
   { area: 'Wayfinding', job: 'Remove unnecessary signage', category: 'Organisation', status: 'Not Started', priority: 'Medium', materials: 'Hand tools, filler, paint, cleanup materials' },
-  { area: 'Gym', job: 'Repaint walls', category: 'Decoration', priority: 'Medium', status: 'Not Started', materials: 'Paint, rollers, brushes' },
-  { area: 'Gym', job: 'Fix machine belt', category: 'Repairs', priority: 'High', status: 'Not Started', materials: 'Replacement belt, tools, lubricant' },
-  { area: 'Gym', job: 'Install seated leg curl', category: 'Equipment', priority: 'Medium', status: 'Not Started', materials: 'Fixings, protective flooring, moving equipment' },
-  { area: 'Gym', job: 'Fix shoulder press handle', category: 'Repairs', priority: 'High', status: 'Not Started', materials: 'Replacement handle, fasteners, hand tools' },
-  { area: 'Gym', job: 'Remove/update noticeboards', category: 'Cleaning', priority: 'Low', status: 'Not Started', materials: 'Scrapers, filler, new board/fixings' },
-  { area: 'External', job: 'Remove weeds (site-wide)', category: 'Grounds', priority: 'High', status: 'Not Started', materials: 'Weed killer, gloves, garden tools' },
-  { area: 'External', job: 'Jet wash patios', category: 'Cleaning', priority: 'Medium', status: 'Not Started', materials: 'Pressure washer, detergents, hoses' },
-  { area: 'External', job: 'Remove waste & scrap', category: 'Waste', priority: 'High', status: 'Not Started', materials: 'Skips, rubble bags, gloves, lifting equipment' },
-  { area: 'External', job: 'Replace decking (cabin)', category: 'Repairs', priority: 'Medium', status: 'Not Started', materials: 'Timber boards, decking screws, timber treatment, saws' },
-  { area: 'External', job: 'Inspect gutters', category: 'Repairs', priority: 'Medium', status: 'Not Started', materials: 'Ladders, gutter brackets, replacement sections, sealant' },
-  { area: 'External', job: 'Repaint bollards/barriers', category: 'Aesthetic', priority: 'Low', status: 'Not Started', materials: 'Exterior paint, brushes, sandpaper, primer' },
-  { area: 'External', job: 'Replace Astroturf entrance', category: 'Improvement', priority: 'Medium', status: 'Not Started', materials: 'Artificial grass, adhesive, edging strips' },
-  { area: 'External', job: 'Clean memorial plaques and make additions', category: 'Cleaning', priority: 'Low', status: 'Not Started', materials: 'Specialist metal cleaner, cloths, protective polish' },
-  { area: 'External', job: 'Find out about community payback container, can we keep it? Move it to corner where Paul Lyon\'s container is', category: 'Operations', priority: 'Medium', status: 'Not Started', materials: 'Site plan, contact list, coordination notes' },
-  { area: 'External', job: 'Mike to organise Hi-Ab to move Small blue container, bike container, orange container', category: 'Operations', priority: 'Medium', status: 'Not Started', materials: 'HIAB booking, lifting plan, safety barriers' },
-  { area: 'External', job: 'Paul Lyons to get his container removed', category: 'Operations', priority: 'Medium', status: 'Not Started', materials: 'Removal booking, access plan, communication notes' },
-  { area: 'External', job: 'Empty blue container. Anything we are keeping to be looked in Changing room 1 for now', category: 'Operations', priority: 'Medium', status: 'Not Started', materials: 'Storage crates, labels, inventory sheet, PPE' },
-  { area: 'External', job: 'Remove branches and extract x 2 old containers and tractor shed', category: 'Operations', priority: 'Medium', status: 'Not Started', materials: 'Chainsaws/tools, skips, lifting equipment, PPE' },
-  { area: 'External', job: 'Secure/remove cables', category: 'Safety', priority: 'High', status: 'Not Started', materials: 'Cable clips, conduit, fixings, electrical materials' },
-  { area: 'External', job: 'Repaint building (pitch side)', category: 'Decoration', priority: 'Low', status: 'Not Started', materials: 'Exterior paint, rollers, brushes, access equipment' },
-  { area: 'External', job: 'Grass cutting (incl. under tables)', category: 'Grounds', priority: 'Medium', status: 'Not Started', materials: 'Mower, strimmer line, fuel, PPE' },
-  { area: 'External', job: 'Remove moss (smoking shelter)', category: 'Cleaning', priority: 'Medium', status: 'Not Started', materials: 'Moss treatment, stiff brushes, pressure washer' },
-  { area: 'External', job: 'Treat weeds (bin store)', category: 'Grounds', priority: 'Medium', status: 'Not Started', materials: 'Weed treatment, sprayer, PPE' },
-  { area: 'Safety', job: 'Update first aid station', category: 'Compliance', priority: 'High', status: 'Not Started', materials: 'First aid supplies, storage boxes, labels' },
-  { area: 'Safety', job: 'Ensure emergency signage present', category: 'Compliance', priority: 'High', status: 'Not Started', materials: 'Emergency signs, fixings, adhesive' },
-  { area: 'Safety', job: 'First Aid room cleared and deep cleaned', category: 'Cleaning', priority: 'Medium', status: 'Not Started', materials: 'Cleaning chemicals, cloths, disinfectant, PPE' },
-  { area: 'Safety', job: 'Repair emergency lighting', category: 'Electrical', priority: 'High', status: 'Not Started', materials: 'Emergency lighting units, batteries, electrical parts' },
-  { area: 'Wayfinding', job: 'Install site map', category: 'Improvement', priority: 'Medium', status: 'Not Started', materials: 'Signboard, posts, concrete, fixings' },
-  { area: 'Wayfinding', job: 'Improve changing room signage', category: 'Improvement', priority: 'High', status: 'Not Started', materials: 'Directional signs, vinyl labels, fixings' },
-  { area: 'Wayfinding', job: 'Remove unnecessary signage', category: 'Organisation', priority: 'Medium', status: 'Not Started', materials: 'Hand tools, filler, paint, disposal bags' },
 ];
 
 const AGM_MINUTES_PREFIX = 'AGM - ';
