@@ -804,7 +804,7 @@ export default function PublicHomePage() {
             <p className="text-sm font-medium uppercase tracking-[0.25em] text-red-100">Aldwinians</p>
             <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-4xl">Members Information Hub</h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-red-50 sm:text-base">
-              Shared updates from the club in one place, including live member actions, previous minutes, and AGM minutes.
+              Shared updates from the club in one place, including live member actions, AGM questions, previous minutes, and AGM minutes.
             </p>
 
             <div className="mt-6 flex flex-col items-stretch gap-3 text-sm sm:flex-row sm:flex-wrap sm:items-start">
@@ -825,6 +825,12 @@ export default function PublicHomePage() {
                 className="inline-flex w-full items-center justify-center rounded-full border border-red-300/50 px-4 py-2 font-medium text-white transition hover:border-red-100 hover:bg-white/10 sm:w-auto"
               >
                 Browse AGM minutes
+              </Link>
+              <Link
+                href="/public/agm-questions"
+                className="inline-flex w-full items-center justify-center rounded-full border border-red-300/50 px-4 py-2 font-medium text-white transition hover:border-red-100 hover:bg-white/10 sm:w-auto"
+              >
+                Browse AGM questions
               </Link>
               <Link
                 href="/public/job-club"

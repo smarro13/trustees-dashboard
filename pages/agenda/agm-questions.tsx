@@ -16,9 +16,12 @@ type AGMQuestionSection = {
 type ActionItem = {
   id: string;
   title: string;
+  description?: string | null;
+  status?: string | null;
 };
 
 const AGM_ACTION_SOURCE = '🏛️ AGM Questions';
+const AGM_PUBLIC_SOURCE = '🏛️ AGM Questions [Public]';
 const AGM_DEALT_WITH_STORAGE_KEY = 'agm-question-dealt-with';
 const AGM_ARCHIVE_STORAGE_KEY = 'agm-question-archive';
 
@@ -140,6 +143,7 @@ const AGM_QUESTION_SECTIONS: AGMQuestionSection[] = [
 
 export default function AGMQuestionsPage() {
   const [actions, setActions] = useState<ActionItem[]>([]);
+  const [savedQuestions, setSavedQuestions] = useState<ActionItem[]>([]);
   const [updates, setUpdates] = useState<Record<string, string>>({});
   const [openUpdateEditors, setOpenUpdateEditors] = useState<Record<string, boolean>>({});
   const [dealtWithQuestions, setDealtWithQuestions] = useState<Record<string, boolean>>({});
@@ -163,14 +167,25 @@ export default function AGMQuestionsPage() {
   const loadData = async () => {
     setLoading(true);
 
-    const { data: actionData } = await supabase
-      .from('action_items')
-      .select('id, title')
-      .eq('source', AGM_ACTION_SOURCE)
-      .order('created_at', { ascending: false });
+    const [actionsResult, savedQuestionsResult] = await Promise.all([
+      supabase
+        .from('action_items')
+        .select('id, title, description, status')
+        .eq('source', AGM_ACTION_SOURCE)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('action_items')
+        .select('id, title, description, status')
+        .eq('source', AGM_PUBLIC_SOURCE)
+        .order('created_at', { ascending: false }),
+    ]);
 
-    if (actionData) {
-      setActions(actionData);
+    if (actionsResult.data) {
+      setActions(actionsResult.data);
+    }
+
+    if (savedQuestionsResult.data) {
+      setSavedQuestions(savedQuestionsResult.data);
     }
 
     setLoading(false);
@@ -181,7 +196,7 @@ export default function AGMQuestionsPage() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || savedQuestions.length > 0) {
       return;
     }
 
@@ -202,12 +217,36 @@ export default function AGMQuestionsPage() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
+    if (!savedQuestions.length) {
+      return;
+    }
+
+    const nextUpdates: Record<string, string> = {};
+    const nextDealtWith: Record<string, boolean> = {};
+
+    savedQuestions.forEach((item) => {
+      const lines = (item.description || '').split('\n').map((line) => line.trim());
+      const updateLine = lines.find((line) => line.startsWith('Update:'));
+      const statusLine = lines.find((line) => line.startsWith('Status:'));
+      const update = updateLine ? updateLine.replace('Update:', '').trim() : '';
+      const parsedStatus = statusLine ? statusLine.replace('Status:', '').trim().toLowerCase() : '';
+
+      nextUpdates[item.title] = update === 'No update added yet.' ? '' : update;
+      nextDealtWith[item.title] =
+        parsedStatus === 'dealt with' || parsedStatus === 'complete' || item.status === 'Completed';
+    });
+
+    setUpdates((prev) => ({ ...prev, ...nextUpdates }));
+    setDealtWithQuestions((prev) => ({ ...prev, ...nextDealtWith }));
+  }, [savedQuestions]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || savedQuestions.length > 0) {
       return;
     }
 
     window.localStorage.setItem(AGM_DEALT_WITH_STORAGE_KEY, JSON.stringify(dealtWithQuestions));
-  }, [dealtWithQuestions]);
+  }, [dealtWithQuestions, savedQuestions.length]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -225,6 +264,7 @@ export default function AGMQuestionsPage() {
   };
 
   const hasAction = (questionText: string) => actions.some((action) => action.title === questionText);
+  const hasSavedQuestion = (questionText: string) => savedQuestions.some((question) => question.title === questionText);
 
   const isQuestionComplete = (questionText: string) => hasAction(questionText) || Boolean(dealtWithQuestions[questionText]);
 
@@ -257,6 +297,47 @@ export default function AGMQuestionsPage() {
     }
 
     setUpdates((prev) => ({ ...prev, [questionText]: '' }));
+    setOpenUpdateEditors((prev) => ({ ...prev, [questionText]: false }));
+    await loadData();
+  };
+
+  const saveQuestion = async (sectionTitle: string, questionText: string) => {
+    setSavingQuestion(questionText);
+
+    const updateText = updates[questionText]?.trim();
+    const statusText = dealtWithQuestions[questionText] ? 'Dealt with' : 'Pending';
+    const description = [
+      `Category: ${sectionTitle}`,
+      updateText ? `Update: ${updateText}` : 'Update: No update added yet.',
+      `Status: ${statusText}`,
+    ].join('\n\n');
+
+    const existingSavedQuestion = savedQuestions.find((question) => question.title === questionText);
+
+    const result = existingSavedQuestion
+      ? await supabase
+          .from('action_items')
+          .update({
+            description,
+            status: dealtWithQuestions[questionText] ? 'Completed' : 'Open',
+          })
+          .eq('id', existingSavedQuestion.id)
+      : await supabase.from('action_items').insert({
+          title: questionText,
+          description,
+          meeting_id: null,
+          source: AGM_PUBLIC_SOURCE,
+          status: dealtWithQuestions[questionText] ? 'Completed' : 'Open',
+          created_by: null,
+        });
+
+    setSavingQuestion(null);
+
+    if (result.error) {
+      alert('Failed to save AGM question: ' + result.error.message);
+      return;
+    }
+
     setOpenUpdateEditors((prev) => ({ ...prev, [questionText]: false }));
     await loadData();
   };
@@ -393,6 +474,17 @@ export default function AGMQuestionsPage() {
                                     {openUpdateEditors[question.text] ? 'Hide update' : 'Add update'}
                                   </button>
                                   <button
+                                    onClick={() => saveQuestion(section.title, question.text)}
+                                    disabled={savingQuestion === question.text}
+                                    className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                                  >
+                                    {savingQuestion === question.text
+                                      ? 'Saving…'
+                                      : hasSavedQuestion(question.text)
+                                        ? 'Update saved question'
+                                        : 'Save question'}
+                                  </button>
+                                  <button
                                     onClick={() => addToActionTracker(section.title, question.text)}
                                     disabled={savingQuestion === question.text}
                                     className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
@@ -419,6 +511,12 @@ export default function AGMQuestionsPage() {
                             {actionAdded && (
                               <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                                 This question already has an AGM action linked to it.
+                              </div>
+                            )}
+
+                            {hasSavedQuestion(question.text) && (
+                              <div className="mt-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                                This question has been saved and will appear on the public AGM questions page.
                               </div>
                             )}
                           </div>
