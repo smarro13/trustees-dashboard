@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { href: '/public/job-club', label: 'Job Club' },
   { href: '/public#raise-action', label: 'Raise an Action' },
   { href: '/public/actions', label: 'Actions' },
+  { href: '/public/agm-questions', label: 'AGM Questions' },
   { href: '/public/minutes', label: 'Minutes' },
   { href: '/public/agm-minutes', label: 'AGM Minutes' },
 ];
