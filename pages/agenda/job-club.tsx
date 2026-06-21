@@ -125,8 +125,23 @@ export default function JobClubManagementPage() {
         .order('created_at', { ascending: false })
         .limit(1000),
     ]);
-    if (postsResult.data) setPosts(postsResult.data);
-    if (notesResult.data) setNotes(notesResult.data);
+    
+    if (postsResult.error) {
+      console.error('Error loading job_club_posts:', postsResult.error);
+    }
+    if (postsResult.data) {
+      console.log('Loaded job_club_posts:', postsResult.data.length, 'records');
+      setPosts(postsResult.data);
+    }
+    
+    if (notesResult.error) {
+      console.error('Error loading job_club_notes:', notesResult.error);
+    }
+    if (notesResult.data) {
+      console.log('Loaded job_club_notes:', notesResult.data.length, 'records');
+      setNotes(notesResult.data);
+    }
+    
     setLastSyncedAt(new Date().toISOString());
 
     if (withSpinner) {
