@@ -185,78 +185,6 @@ export default function LandingPage() {
         <div className="mt-8 flex flex-col items-start gap-8 sm:flex-row">
           <AgendaMenu />
           <div className="flex-1 min-w-0 w-full">
-            <section className="mb-12 rounded-lg bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-              <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-xl">🔗</span>
-                  <div>
-                    <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Shareable Pages</h2>
-                    <p className="text-xs text-slate-500">Members links that can be shared outside the dashboard</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-4 px-4 py-4 md:grid-cols-2">
-                {SHAREABLE_PAGES.map((page) => (
-                  <Link
-                    key={page.href}
-                    href={page.href}
-                    className="rounded-lg border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:bg-blue-50"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-base font-semibold text-slate-900">{page.title}</h3>
-                        <p className="mt-1 text-sm text-slate-600">{page.description}</p>
-                      </div>
-                      <span className="text-slate-400">↗</span>
-                    </div>
-                    <p className="mt-3 text-xs font-medium text-blue-600">Open members page</p>
-                  </Link>
-                ))}
-              </div>
-            </section>
-
-            <section className="mb-12 rounded-lg bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-              <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-xl">💼</span>
-                  <div>
-                    <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Job Club Management</h2>
-                    <p className="text-xs text-slate-500">Manage Job Club jobs, metadata, and member notes from the dedicated agenda page</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="px-4 py-4">
-                <div className="rounded-lg border border-slate-200 bg-white p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h3 className="text-base font-semibold text-slate-900">Use the dedicated Job Club page</h3>
-                      <p className="mt-1 text-sm text-slate-600">
-                        All internal management now lives in one place: job metadata, status updates, visibility, and member notes.
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link
-                        href="/agenda/job-club"
-                        className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                      >
-                        Open Job Club Management
-                      </Link>
-                      <Link
-                        href="/public/job-club"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                      >
-                        View Public Page ↗
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-
             {/* Upcoming Meetings */}
             <section className="mb-12 rounded-lg bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
               <button
@@ -541,6 +469,38 @@ export default function LandingPage() {
                   </div>
                 </>
               )}
+            </section>
+
+            {/* Shareable Pages - Bottom of Page */}
+            <section className="mt-12 rounded-lg bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
+              <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">🔗</span>
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Shareable Pages</h2>
+                    <p className="text-xs text-slate-500">Members links that can be shared outside the dashboard</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 px-4 py-4 md:grid-cols-2">
+                {SHAREABLE_PAGES.map((page) => (
+                  <Link
+                    key={page.href}
+                    href={page.href}
+                    className="rounded-lg border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:bg-blue-50"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-semibold text-slate-900">{page.title}</h3>
+                        <p className="mt-1 text-sm text-slate-600">{page.description}</p>
+                      </div>
+                      <span className="text-slate-400">↗</span>
+                    </div>
+                    <p className="mt-3 text-xs font-medium text-blue-600">Open members page</p>
+                  </Link>
+                ))}
+              </div>
             </section>
           </div>
         </div>

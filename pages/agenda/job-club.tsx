@@ -192,7 +192,7 @@ export default function JobClubManagementPage() {
   const stats = useMemo(() => {
     const all = posts.map((p) => parseJobMeta(p.description)).filter(Boolean) as ParsedJobMeta[];
     return {
-      total: all.length,
+      total: posts.length,
       notStarted: all.filter((m) => m.status === 'Not Started').length,
       ongoing: all.filter((m) => m.status === 'Ongoing').length,
       completed: all.filter((m) => m.status === 'Completed').length,
