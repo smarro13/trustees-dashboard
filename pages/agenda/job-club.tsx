@@ -216,6 +216,13 @@ export default function JobClubManagementPage() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
+  useEffect(() => {
+    const assignments = notes
+      .map((note) => parseTaskAssignmentNote(note))
+      .filter((assignment): assignment is TaskAssignmentSummary => assignment !== null);
+    setTaskAssignments(assignments);
+  }, [notes]);
+
   const notesByPost = useMemo(() => {
     const map = new Map<string, JobClubNote[]>();
     for (const note of notes) {
