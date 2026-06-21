@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import PublicSectionNav from '../../components/PublicSectionNav';
 import type { ClubRefreshJob } from './index';
-import { CLUB_REFRESH_JOBS } from './index';
 import { supabase } from '../../lib/supabaseClient';
 
 type JobClubPostRow = {
@@ -134,7 +133,7 @@ export default function PublicJobClubPage() {
   const [submittingTaskAssignmentByJob, setSubmittingTaskAssignmentByJob] = useState<Record<string, boolean>>({});
 
   const allJobClubJobs = useMemo(
-    () => [...CLUB_REFRESH_JOBS, ...submittedJobs],
+    () => submittedJobs,
     [submittedJobs],
   );
 
@@ -199,7 +198,8 @@ export default function PublicJobClubPage() {
       .from('job_club_posts')
       .select('id, title, description, is_active')
       .eq('is_active', true)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(1000);
 
     if (jobsResult.error) {
       // Fallback query for environments where schema or columns differ.
