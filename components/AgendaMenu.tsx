@@ -70,8 +70,8 @@ export default function AgendaMenu() {
           { label: '🎉 Events Planning', href: '/agenda/events' },
           { label: '👥 Membership Report', href: '/agenda/membership' },
           { label: '🏉 Rugby Report', href: '/agenda/rugby' },
-          { label: '� Job Club', href: '/agenda/job-club' },
-          { label: '�📌 Matters Arising', href: '/agenda/matters-arising' },
+          { label: '🔧 Job Club', href: '/agenda/job-club' },
+          { label: '📌 Matters Arising', href: '/agenda/matters-arising' },
           { label: '💬 AOB', href: '/agenda/aob' }
         ].map((item) => (
           <Link
