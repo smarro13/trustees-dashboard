@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
+import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 
 const STATUS_OPTIONS = ['Open', 'In Progress', 'Completed'];
 const PUBLIC_ACTION_MARKER = '[Public]';
@@ -60,6 +61,11 @@ export default function ActionTrackerPage() {
   const [isPublicAction, setIsPublicAction] = useState(false);
 
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<InlineNotice | null>(null);
+
+  const showNotice = (type: InlineNotice['type'], message: string) => {
+    setNotice({ type, message });
+  };
 
   const toggleExpanded = (id: string) => {
     setExpandedIds((prev) => {
@@ -132,6 +138,12 @@ export default function ActionTrackerPage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   const addAction = async () => {
     if (!title.trim()) return;
 
@@ -151,7 +163,7 @@ export default function ActionTrackerPage() {
     setLoading(false);
 
     if (error) {
-      alert(error.message);
+      showNotice('error', error.message);
       return;
     }
 
@@ -164,6 +176,7 @@ export default function ActionTrackerPage() {
     setIsPublicAction(false);
 
     loadData();
+    showNotice('success', 'Action added successfully.');
   };
 
   const initiateStatusChange = (actionId: string, currentStatus: string, newStatus: string, actionTitle: string) => {
@@ -195,7 +208,7 @@ export default function ActionTrackerPage() {
       .eq('id', actionId);
 
     if (error) {
-      alert('Failed to update status: ' + error.message);
+      showNotice('error', 'Failed to update status: ' + error.message);
       setLoading(false);
       return;
     }
@@ -217,6 +230,7 @@ export default function ActionTrackerPage() {
     setStatusChangeModal(null);
     setStatusUpdateNote('');
     setLoading(false);
+    showNotice('success', 'Action status updated.');
   };
 
   const cancelStatusChange = () => {
@@ -260,7 +274,7 @@ export default function ActionTrackerPage() {
       .eq('id', actionId);
 
     if (error) {
-      alert('Failed to update action: ' + error.message);
+      showNotice('error', 'Failed to update action: ' + error.message);
       setLoading(false);
       return;
     }
@@ -278,6 +292,7 @@ export default function ActionTrackerPage() {
     setEditSource('');
     setEditIsPublic(false);
     setLoading(false);
+    showNotice('success', 'Action updated successfully.');
   };
 
   const cancelEditAction = () => {
@@ -314,6 +329,8 @@ export default function ActionTrackerPage() {
             Track actions raised across meetings and reports
           </p>
         </header>
+
+        <InlineNoticeBanner notice={notice} className="mb-6" />
 
         {/* Add action */}
         <section className="mb-10 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">

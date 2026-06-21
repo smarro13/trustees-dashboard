@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
+import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 
 const AGM_MINUTES_PREFIX = 'AGM - ';
 
@@ -11,6 +12,11 @@ export default function AGMMinutesPage() {
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<InlineNotice | null>(null);
+
+  const showNotice = (type: InlineNotice['type'], message: string) => {
+    setNotice({ type, message });
+  };
 
   const loadData = async () => {
     const { data: minutesData } = await supabase
@@ -36,6 +42,12 @@ export default function AGMMinutesPage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   const buildTitle = () => {
     const trimmed = title.trim();
     if (!trimmed) {
@@ -49,12 +61,12 @@ export default function AGMMinutesPage() {
 
   const uploadMinutes = async () => {
     if (!title.trim()) {
-      alert('Please enter a title for the AGM minutes');
+      showNotice('error', 'Please enter a title for the AGM minutes.');
       return;
     }
 
     if (!file) {
-      alert('Please select a file to upload');
+      showNotice('error', 'Please select a file to upload.');
       return;
     }
 
@@ -68,7 +80,7 @@ export default function AGMMinutesPage() {
         .upload(filePath, file);
 
       if (uploadError) {
-        alert('Failed to upload file: ' + uploadError.message);
+        showNotice('error', 'Failed to upload file: ' + uploadError.message);
         setLoading(false);
         return;
       }
@@ -84,7 +96,7 @@ export default function AGMMinutesPage() {
       });
 
       if (insertError) {
-        alert('Failed to save AGM minutes: ' + insertError.message);
+        showNotice('error', 'Failed to save AGM minutes: ' + insertError.message);
         setLoading(false);
         return;
       }
@@ -94,10 +106,10 @@ export default function AGMMinutesPage() {
       setFile(null);
       setLoading(false);
       loadData();
-      alert('AGM minutes uploaded successfully.');
+      showNotice('success', 'AGM minutes uploaded successfully.');
     } catch (error) {
       console.error('AGM minutes upload error:', error);
-      alert('An error occurred while uploading AGM minutes');
+      showNotice('error', 'An error occurred while uploading AGM minutes.');
       setLoading(false);
     }
   };
@@ -118,6 +130,8 @@ export default function AGMMinutesPage() {
             Upload and review AGM minutes. These are stored separately from regular minutes by using the AGM title prefix.
           </p>
         </header>
+
+        <InlineNoticeBanner notice={notice} className="mb-6" />
 
         <section className="mb-10 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="border-b border-zinc-200 px-6 py-4">

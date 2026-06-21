@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 import Link from 'next/link';
@@ -21,45 +21,25 @@ const SHAREABLE_PAGES = [
     description: 'Read-only AGM minutes page for members and wider sharing.',
     href: '/public/agm-minutes',
   },
+  {
+    title: 'AGM Questions',
+    description: 'Public AGM questions and trustee updates.',
+    href: '/public/agm-questions',
+  },
+  {
+    title: 'Job Club',
+    description: 'Public Job Club opportunities and task assignments.',
+    href: '/public/job-club',
+  },
 ];
-
-type JobClubPost = {
-  id: string;
-  title: string;
-  description?: string | null;
-  link_url?: string | null;
-  contact?: string | null;
-  is_active?: boolean | null;
-  created_at?: string | null;
-};
-
-type JobClubNote = {
-  id: string;
-  name: string;
-  notes: string;
-  job_club_post_id?: string | null;
-  created_at?: string | null;
-};
 
 export default function LandingPage() {
   const [meetings, setMeetings] = useState<any[]>([]);
   const [dueActions, setDueActions] = useState<any[]>([]);
   const [userEmail, setUserEmail] = useState<string>('');
   const [meetingsOpen, setMeetingsOpen] = useState(true);
-  const [jobClubPosts, setJobClubPosts] = useState<JobClubPost[]>([]);
-  const [jobClubNotes, setJobClubNotes] = useState<JobClubNote[]>([]);
-  const [newJobTitle, setNewJobTitle] = useState('');
-  const [newJobDescription, setNewJobDescription] = useState('');
-  const [newJobLink, setNewJobLink] = useState('');
-  const [newJobContact, setNewJobContact] = useState('');
-  const [submittingJobClub, setSubmittingJobClub] = useState(false);
-  const [jobClubStatus, setJobClubStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-
-  const jobClubTitleMap = useMemo(() => {
-    return new Map(jobClubPosts.map((post) => [post.id, post.title]));
-  }, [jobClubPosts]);
 
   // Get user session and redirect if not authenticated
   useEffect(() => {
@@ -126,102 +106,13 @@ export default function LandingPage() {
     setDueActions(data || []);
   };
 
-  const fetchJobClubData = async () => {
-    const [{ data: postsData, error: postsError }, { data: notesData, error: notesError }] = await Promise.all([
-      supabase
-        .from('job_club_posts')
-        .select('id, title, description, link_url, contact, is_active, created_at')
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('job_club_notes')
-        .select('id, name, notes, job_club_post_id, created_at')
-        .order('created_at', { ascending: false })
-        .limit(25),
-    ]);
-
-    if (postsError) {
-      console.error('Failed to load job club posts', postsError);
-      setJobClubPosts([]);
-    } else {
-      setJobClubPosts(postsData || []);
-    }
-
-    if (notesError) {
-      console.error('Failed to load job club notes', notesError);
-      setJobClubNotes([]);
-    } else {
-      setJobClubNotes(notesData || []);
-    }
-  };
-
-  const createJobClubPost = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (!newJobTitle.trim()) {
-      setJobClubStatus('Please add a title for the Job Club post.');
-      return;
-    }
-
-    setSubmittingJobClub(true);
-    setJobClubStatus(null);
-
-    const { error } = await supabase.from('job_club_posts').insert({
-      title: newJobTitle.trim(),
-      description: newJobDescription.trim() || null,
-      link_url: newJobLink.trim() || null,
-      contact: newJobContact.trim() || null,
-      is_active: true,
-    });
-
-    if (error) {
-      setJobClubStatus(error.message);
-      setSubmittingJobClub(false);
-      return;
-    }
-
-    setNewJobTitle('');
-    setNewJobDescription('');
-    setNewJobLink('');
-    setNewJobContact('');
-    setJobClubStatus('Job Club post created.');
-    setSubmittingJobClub(false);
-    await fetchJobClubData();
-  };
-
-  const toggleJobClubPost = async (post: JobClubPost) => {
-    const { error } = await supabase
-      .from('job_club_posts')
-      .update({ is_active: !post.is_active })
-      .eq('id', post.id);
-
-    if (error) {
-      setJobClubStatus(error.message);
-      return;
-    }
-
-    await fetchJobClubData();
-  };
-
-  const deleteJobClubPost = async (postId: string) => {
-    const { error } = await supabase.from('job_club_posts').delete().eq('id', postId);
-    if (error) {
-      setJobClubStatus(error.message);
-      return;
-    }
-
-    await fetchJobClubData();
-  };
-
   useEffect(() => {
     let meetingsChannel: RealtimeChannel;
     let actionsChannel: RealtimeChannel;
-    let jobClubPostsChannel: RealtimeChannel;
-    let jobClubNotesChannel: RealtimeChannel;
 
     // initial load
     fetchMeetings();
     fetchDueActions();
-    fetchJobClubData();
 
     // Realtime: Meetings
     meetingsChannel = supabase
@@ -243,29 +134,9 @@ export default function LandingPage() {
       )
       .subscribe();
 
-    jobClubPostsChannel = supabase
-      .channel('job-club-posts-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'job_club_posts' },
-        () => fetchJobClubData(),
-      )
-      .subscribe();
-
-    jobClubNotesChannel = supabase
-      .channel('job-club-notes-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'job_club_notes' },
-        () => fetchJobClubData(),
-      )
-      .subscribe();
-
     return () => {
       if (meetingsChannel) supabase.removeChannel(meetingsChannel);
       if (actionsChannel) supabase.removeChannel(actionsChannel);
-      if (jobClubPostsChannel) supabase.removeChannel(jobClubPostsChannel);
-      if (jobClubNotesChannel) supabase.removeChannel(jobClubNotesChannel);
     };
   }, []);
 
@@ -351,129 +222,36 @@ export default function LandingPage() {
                   <span className="text-xl">💼</span>
                   <div>
                     <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Job Club Management</h2>
-                    <p className="text-xs text-slate-500">Create public job listings and review notes from members</p>
+                    <p className="text-xs text-slate-500">Manage Job Club jobs, metadata, and member notes from the dedicated agenda page</p>
                   </div>
                 </div>
               </div>
 
-              <div className="grid gap-6 px-4 py-4 lg:grid-cols-[1.1fr_0.9fr]">
-                <div className="space-y-4">
-                  <form className="rounded-lg border border-slate-200 bg-white p-4" onSubmit={createJobClubPost}>
-                    <h3 className="text-base font-semibold text-slate-900">Add Job Club Post</h3>
-                    <div className="mt-3 space-y-3">
-                      <input
-                        value={newJobTitle}
-                        onChange={(event) => setNewJobTitle(event.target.value)}
-                        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                        placeholder="Title"
-                      />
-                      <textarea
-                        value={newJobDescription}
-                        onChange={(event) => setNewJobDescription(event.target.value)}
-                        rows={3}
-                        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                        placeholder="Description"
-                      />
-                      <input
-                        value={newJobLink}
-                        onChange={(event) => setNewJobLink(event.target.value)}
-                        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                        placeholder="Link URL (optional)"
-                      />
-                      <input
-                        value={newJobContact}
-                        onChange={(event) => setNewJobContact(event.target.value)}
-                        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                        placeholder="Contact (optional)"
-                      />
-                    </div>
-
-                    {jobClubStatus && (
-                      <p className="mt-3 text-sm text-slate-700">{jobClubStatus}</p>
-                    )}
-
-                    <button
-                      type="submit"
-                      disabled={submittingJobClub}
-                      className="mt-4 inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {submittingJobClub ? 'Saving...' : 'Create post'}
-                    </button>
-                  </form>
-
-                  <div className="rounded-lg border border-slate-200 bg-white p-4">
-                    <h3 className="text-base font-semibold text-slate-900">Current Job Club Posts</h3>
-                    <div className="mt-3 space-y-3">
-                      {jobClubPosts.length === 0 ? (
-                        <p className="text-sm text-slate-500">No Job Club posts yet.</p>
-                      ) : (
-                        jobClubPosts.map((post) => (
-                          <div key={post.id} className="rounded-md border border-slate-200 p-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="font-medium text-slate-900">{post.title}</p>
-                                {post.description && (
-                                  <p className="mt-1 text-sm text-slate-600 whitespace-pre-wrap">{post.description}</p>
-                                )}
-                                <p className="mt-2 text-xs text-slate-500">
-                                  {post.is_active ? 'Public: Open' : 'Public: Closed'}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => toggleJobClubPost(post)}
-                                  className="rounded-md border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50"
-                                >
-                                  {post.is_active ? 'Close' : 'Open'}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const confirmed = window.confirm('Delete this Job Club post?');
-                                    if (confirmed) {
-                                      void deleteJobClubPost(post.id);
-                                    }
-                                  }}
-                                  className="rounded-md border border-rose-300 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50"
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-
+              <div className="px-4 py-4">
                 <div className="rounded-lg border border-slate-200 bg-white p-4">
-                  <h3 className="text-base font-semibold text-slate-900">Recent Job Club Notes</h3>
-                  <div className="mt-3 space-y-3 max-h-[560px] overflow-y-auto pr-1">
-                    {jobClubNotes.length === 0 ? (
-                      <p className="text-sm text-slate-500">No notes submitted yet.</p>
-                    ) : (
-                      jobClubNotes.map((note) => (
-                        <article key={note.id} className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                          <p className="text-sm font-semibold text-slate-900">{note.name}</p>
-                          <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{note.notes}</p>
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                            <span>
-                              {note.job_club_post_id
-                                ? `Listing: ${jobClubTitleMap.get(note.job_club_post_id) || 'Unknown listing'}`
-                                : 'Listing: General note'}
-                            </span>
-                            <span>•</span>
-                            <span>
-                              {note.created_at
-                                ? new Date(note.created_at).toLocaleString('en-GB')
-                                : 'Recently'}
-                            </span>
-                          </div>
-                        </article>
-                      ))
-                    )}
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="text-base font-semibold text-slate-900">Use the dedicated Job Club page</h3>
+                      <p className="mt-1 text-sm text-slate-600">
+                        All internal management now lives in one place: job metadata, status updates, visibility, and member notes.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href="/agenda/job-club"
+                        className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                      >
+                        Open Job Club Management
+                      </Link>
+                      <Link
+                        href="/public/job-club"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        View Public Page ↗
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabaseClient';
+import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 
 type AGMQuestion = {
   text: string;
@@ -16,13 +18,18 @@ type AGMQuestionSection = {
 type ActionItem = {
   id: string;
   title: string;
-  description?: string | null;
-  status?: string | null;
+};
+
+type AGMQuestionRecord = {
+  id: string;
+  title: string;
+  section: string;
+  update_text: string | null;
+  status: string;
+  is_public: boolean;
 };
 
 const AGM_ACTION_SOURCE = '🏛️ AGM Questions';
-const AGM_PUBLIC_SOURCE = '🏛️ AGM Questions [Public]';
-const AGM_DEALT_WITH_STORAGE_KEY = 'agm-question-dealt-with';
 const AGM_ARCHIVE_STORAGE_KEY = 'agm-question-archive';
 
 const AGM_QUESTION_SECTIONS: AGMQuestionSection[] = [
@@ -143,14 +150,21 @@ const AGM_QUESTION_SECTIONS: AGMQuestionSection[] = [
 
 export default function AGMQuestionsPage() {
   const [actions, setActions] = useState<ActionItem[]>([]);
-  const [savedQuestions, setSavedQuestions] = useState<ActionItem[]>([]);
+  const [agmQuestionRecords, setAgmQuestionRecords] = useState<AGMQuestionRecord[]>([]);
   const [updates, setUpdates] = useState<Record<string, string>>({});
   const [openUpdateEditors, setOpenUpdateEditors] = useState<Record<string, boolean>>({});
   const [dealtWithQuestions, setDealtWithQuestions] = useState<Record<string, boolean>>({});
   const [isArchived, setIsArchived] = useState(false);
   const [showArchivedContent, setShowArchivedContent] = useState(false);
+  const [showCompletedQuestions, setShowCompletedQuestions] = useState(false);
   const [savingQuestion, setSavingQuestion] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [notice, setNotice] = useState<InlineNotice | null>(null);
+
+  const showNotice = (type: InlineNotice['type'], message: string) => {
+    setNotice({ type, message });
+  };
 
   const allQuestions = useMemo(
     () => AGM_QUESTION_SECTIONS.flatMap((section) =>
@@ -167,16 +181,15 @@ export default function AGMQuestionsPage() {
   const loadData = async () => {
     setLoading(true);
 
-    const [actionsResult, savedQuestionsResult] = await Promise.all([
+    const [actionsResult, agmRecordsResult] = await Promise.all([
       supabase
         .from('action_items')
-        .select('id, title, description, status')
+        .select('id, title')
         .eq('source', AGM_ACTION_SOURCE)
         .order('created_at', { ascending: false }),
       supabase
-        .from('action_items')
-        .select('id, title, description, status')
-        .eq('source', AGM_PUBLIC_SOURCE)
+        .from('agm_questions')
+        .select('id, title, section, update_text, status, is_public')
         .order('created_at', { ascending: false }),
     ]);
 
@@ -184,32 +197,42 @@ export default function AGMQuestionsPage() {
       setActions(actionsResult.data);
     }
 
-    if (savedQuestionsResult.data) {
-      setSavedQuestions(savedQuestionsResult.data);
+    if (agmRecordsResult.data) {
+      setAgmQuestionRecords(agmRecordsResult.data);
     }
 
+    setLastSyncedAt(new Date().toISOString());
     setLoading(false);
   };
 
   useEffect(() => {
+    let actionsChannel: RealtimeChannel;
+    let agmQuestionsChannel: RealtimeChannel;
+
     loadData();
+
+    actionsChannel = supabase
+      .channel('agenda-agm-actions-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'action_items' }, () => loadData())
+      .subscribe();
+
+    agmQuestionsChannel = supabase
+      .channel('agenda-agm-questions-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agm_questions' }, () => loadData())
+      .subscribe();
+
+    return () => {
+      if (actionsChannel) supabase.removeChannel(actionsChannel);
+      if (agmQuestionsChannel) supabase.removeChannel(agmQuestionsChannel);
+    };
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || savedQuestions.length > 0) {
+    if (typeof window === 'undefined') {
       return;
     }
 
-    const storedDealtWith = window.localStorage.getItem(AGM_DEALT_WITH_STORAGE_KEY);
     const storedArchive = window.localStorage.getItem(AGM_ARCHIVE_STORAGE_KEY);
-
-    if (storedDealtWith) {
-      try {
-        setDealtWithQuestions(JSON.parse(storedDealtWith));
-      } catch {
-        setDealtWithQuestions({});
-      }
-    }
 
     if (storedArchive === 'true') {
       setIsArchived(true);
@@ -217,36 +240,21 @@ export default function AGMQuestionsPage() {
   }, []);
 
   useEffect(() => {
-    if (!savedQuestions.length) {
+    if (!agmQuestionRecords.length) {
       return;
     }
 
     const nextUpdates: Record<string, string> = {};
     const nextDealtWith: Record<string, boolean> = {};
 
-    savedQuestions.forEach((item) => {
-      const lines = (item.description || '').split('\n').map((line) => line.trim());
-      const updateLine = lines.find((line) => line.startsWith('Update:'));
-      const statusLine = lines.find((line) => line.startsWith('Status:'));
-      const update = updateLine ? updateLine.replace('Update:', '').trim() : '';
-      const parsedStatus = statusLine ? statusLine.replace('Status:', '').trim().toLowerCase() : '';
-
-      nextUpdates[item.title] = update === 'No update added yet.' ? '' : update;
-      nextDealtWith[item.title] =
-        parsedStatus === 'dealt with' || parsedStatus === 'complete' || item.status === 'Completed';
+    agmQuestionRecords.forEach((record) => {
+      nextUpdates[record.title] = record.update_text || '';
+      nextDealtWith[record.title] = record.status === 'Closed/Actioned';
     });
 
     setUpdates((prev) => ({ ...prev, ...nextUpdates }));
     setDealtWithQuestions((prev) => ({ ...prev, ...nextDealtWith }));
-  }, [savedQuestions]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || savedQuestions.length > 0) {
-      return;
-    }
-
-    window.localStorage.setItem(AGM_DEALT_WITH_STORAGE_KEY, JSON.stringify(dealtWithQuestions));
-  }, [dealtWithQuestions, savedQuestions.length]);
+  }, [agmQuestionRecords]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -256,6 +264,15 @@ export default function AGMQuestionsPage() {
     window.localStorage.setItem(AGM_ARCHIVE_STORAGE_KEY, String(isArchived));
   }, [isArchived]);
 
+  useEffect(() => {
+    if (!notice) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   const toggleUpdateEditor = (questionText: string) => {
     setOpenUpdateEditors((prev) => ({
       ...prev,
@@ -264,11 +281,14 @@ export default function AGMQuestionsPage() {
   };
 
   const hasAction = (questionText: string) => actions.some((action) => action.title === questionText);
-  const hasSavedQuestion = (questionText: string) => savedQuestions.some((question) => question.title === questionText);
+  const hasSavedQuestion = (questionText: string) => agmQuestionRecords.some((record) => record.title === questionText);
 
   const isQuestionComplete = (questionText: string) => hasAction(questionText) || Boolean(dealtWithQuestions[questionText]);
+  const isSavedAndDealtWith = (questionText: string) =>
+    agmQuestionRecords.some((record) => record.title === questionText && record.status === 'Closed/Actioned');
 
   const completedQuestionCount = allQuestions.filter((question) => isQuestionComplete(question.text)).length;
+  const savedAndDealtWithCount = allQuestions.filter((question) => isSavedAndDealtWith(question.text)).length;
   const canArchive = questionCount > 0 && completedQuestionCount === questionCount;
 
   const addToActionTracker = async (sectionTitle: string, questionText: string) => {
@@ -292,54 +312,43 @@ export default function AGMQuestionsPage() {
     setSavingQuestion(null);
 
     if (error) {
-      alert('Failed to add AGM question to the action tracker: ' + error.message);
+      showNotice('error', 'Failed to add AGM question to the action tracker: ' + error.message);
       return;
     }
 
     setUpdates((prev) => ({ ...prev, [questionText]: '' }));
     setOpenUpdateEditors((prev) => ({ ...prev, [questionText]: false }));
     await loadData();
+    showNotice('success', 'Question added to Action Tracker.');
   };
 
   const saveQuestion = async (sectionTitle: string, questionText: string) => {
     setSavingQuestion(questionText);
 
-    const updateText = updates[questionText]?.trim();
-    const statusText = dealtWithQuestions[questionText] ? 'Dealt with' : 'Pending';
-    const description = [
-      `Category: ${sectionTitle}`,
-      updateText ? `Update: ${updateText}` : 'Update: No update added yet.',
-      `Status: ${statusText}`,
-    ].join('\n\n');
+    const updateText = updates[questionText]?.trim() || null;
+    const status = dealtWithQuestions[questionText] ? 'Closed/Actioned' : 'Pending';
 
-    const existingSavedQuestion = savedQuestions.find((question) => question.title === questionText);
+    const existingRecord = agmQuestionRecords.find((record) => record.title === questionText);
 
-    const result = existingSavedQuestion
+    const result = existingRecord
       ? await supabase
-          .from('action_items')
-          .update({
-            description,
-            status: dealtWithQuestions[questionText] ? 'Completed' : 'Open',
-          })
-          .eq('id', existingSavedQuestion.id)
-      : await supabase.from('action_items').insert({
-          title: questionText,
-          description,
-          meeting_id: null,
-          source: AGM_PUBLIC_SOURCE,
-          status: dealtWithQuestions[questionText] ? 'Completed' : 'Open',
-          created_by: null,
-        });
+          .from('agm_questions')
+          .update({ update_text: updateText, status, updated_at: new Date().toISOString() })
+          .eq('id', existingRecord.id)
+      : await supabase
+          .from('agm_questions')
+          .insert({ title: questionText, section: sectionTitle, update_text: updateText, status, is_public: true });
 
     setSavingQuestion(null);
 
     if (result.error) {
-      alert('Failed to save AGM question: ' + result.error.message);
+      showNotice('error', 'Failed to save AGM question: ' + result.error.message);
       return;
     }
 
     setOpenUpdateEditors((prev) => ({ ...prev, [questionText]: false }));
     await loadData();
+    showNotice('success', 'AGM question saved.');
   };
 
   const toggleDealtWith = (questionText: string) => {
@@ -373,7 +382,12 @@ export default function AGMQuestionsPage() {
           </Link>
 
           <h1 className="text-3xl font-extrabold text-zinc-900">AGM Questions</h1>
+          {lastSyncedAt && (
+            <p className="mt-2 text-xs text-zinc-500">Last synced: {new Date(lastSyncedAt).toLocaleString('en-GB')}</p>
+          )}
         </header>
+
+        <InlineNoticeBanner notice={notice} className="mb-6" />
 
         <section className="mb-8 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
@@ -397,6 +411,18 @@ export default function AGMQuestionsPage() {
           {!canArchive && (
             <div className="border-t border-zinc-200 px-6 py-3 text-sm text-zinc-500">
               Archiving becomes available once every question is complete.
+            </div>
+          )}
+          {savedAndDealtWithCount > 0 && !isArchived && (
+            <div className="border-t border-zinc-200 px-6 py-3 flex items-center justify-between">
+              <p className="text-sm text-zinc-500">{savedAndDealtWithCount} question{savedAndDealtWithCount !== 1 ? 's' : ''} saved as dealt with and hidden.</p>
+              <button
+                type="button"
+                onClick={() => setShowCompletedQuestions((prev) => !prev)}
+                className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+              >
+                {showCompletedQuestions ? 'Hide completed' : 'Show completed'}
+              </button>
             </div>
           )}
           {isArchived && (
@@ -430,9 +456,15 @@ export default function AGMQuestionsPage() {
                 ))}
 
                 <div className="space-y-5">
+                  {!isArchived && !showCompletedQuestions && section.questions.every((q) => isSavedAndDealtWith(q.text)) && (
+                    <p className="py-2 text-sm text-zinc-500">All questions in this section have been dealt with and are hidden.</p>
+                  )}
                   {section.questions.map((question, index) => {
                     const actionAdded = hasAction(question.text);
                     const isComplete = isQuestionComplete(question.text);
+                    const isHidden = !isArchived && isSavedAndDealtWith(question.text) && !showCompletedQuestions;
+
+                    if (isHidden) return null;
 
                     return (
                       <article key={question.text} className="rounded-lg border border-zinc-200 p-5">

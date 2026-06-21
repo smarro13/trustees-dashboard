@@ -1,44 +1,34 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import PublicSectionNav from '../../components/PublicSectionNav';
 import { supabase } from '../../lib/supabaseClient';
 
-type SavedAGMQuestion = {
+type AGMQuestionRecord = {
   id: string;
   title: string;
-  description?: string | null;
-  status?: string | null;
-};
-
-const AGM_PUBLIC_SOURCE = '🏛️ AGM Questions [Public]';
-
-const parseDescriptionValue = (description: string | null | undefined, key: 'Category' | 'Update' | 'Status') => {
-  const line = (description || '')
-    .split('\n')
-    .map((item) => item.trim())
-    .find((item) => item.startsWith(`${key}:`));
-
-  if (!line) {
-    return '';
-  }
-
-  return line.replace(`${key}:`, '').trim();
+  section: string;
+  update_text: string | null;
+  status: string;
 };
 
 export default function PublicAGMQuestionsPage() {
-  const [questions, setQuestions] = useState<SavedAGMQuestion[]>([]);
+  const [questions, setQuestions] = useState<AGMQuestionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
   useEffect(() => {
+    let agmQuestionsChannel: RealtimeChannel;
+
     const loadQuestions = async () => {
       setLoading(true);
       setError(null);
 
       const { data, error: loadError } = await supabase
-        .from('action_items')
-        .select('id, title, description, status, created_at')
-        .eq('source', AGM_PUBLIC_SOURCE)
+        .from('agm_questions')
+        .select('id, title, section, update_text, status')
+        .eq('is_public', true)
         .order('created_at', { ascending: false });
 
       if (loadError) {
@@ -49,10 +39,20 @@ export default function PublicAGMQuestionsPage() {
       }
 
       setQuestions(data || []);
+      setLastSyncedAt(new Date().toISOString());
       setLoading(false);
     };
 
     loadQuestions();
+
+    agmQuestionsChannel = supabase
+      .channel('public-agm-questions-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agm_questions' }, () => loadQuestions())
+      .subscribe();
+
+    return () => {
+      if (agmQuestionsChannel) supabase.removeChannel(agmQuestionsChannel);
+    };
   }, []);
 
   return (
@@ -66,6 +66,9 @@ export default function PublicAGMQuestionsPage() {
           <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-600">
             These are saved AGM questions and updates shared publicly by the trustees team.
           </p>
+          {lastSyncedAt && (
+            <p className="mt-2 text-xs text-zinc-500">Last synced: {new Date(lastSyncedAt).toLocaleString('en-GB')}</p>
+          )}
 
           <div className="mt-5 flex flex-wrap gap-3 text-sm">
             <Link
@@ -98,11 +101,7 @@ export default function PublicAGMQuestionsPage() {
         ) : (
           <div className="grid gap-4">
             {questions.map((question) => {
-              const category = parseDescriptionValue(question.description, 'Category');
-              const update = parseDescriptionValue(question.description, 'Update');
-              const status =
-                parseDescriptionValue(question.description, 'Status') ||
-                (question.status === 'Completed' ? 'Dealt with' : question.status || 'Pending');
+              const isClosed = question.status === 'Closed/Actioned';
 
               return (
                 <article
@@ -112,21 +111,25 @@ export default function PublicAGMQuestionsPage() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <h2 className="text-xl font-semibold text-zinc-900">{question.title}</h2>
-                      {category && (
+                      {question.section && (
                         <p className="mt-2 text-sm text-zinc-600">
-                          <span className="font-medium text-zinc-900">Category:</span> {category}
+                          <span className="font-medium text-zinc-900">Category:</span> {question.section}
                         </p>
                       )}
                     </div>
-                    <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800">
-                      {status}
+                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${
+                      isClosed
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {question.status}
                     </span>
                   </div>
 
                   <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
                     <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Update</p>
                     <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-700">
-                      {update || 'No update has been added yet.'}
+                      {question.update_text || 'No update has been added yet.'}
                     </p>
                   </div>
                 </article>

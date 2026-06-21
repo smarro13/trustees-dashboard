@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { User } from '@supabase/supabase-js';
+import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 
 type Item = {
   dateRange?: string; // now a single month (e.g. "March 2025")
@@ -41,6 +42,11 @@ export default function TradingPage() {
   const [tillError, setTillError] = useState<string | null>(null);
   const [includeTillAnalysis, setIncludeTillAnalysis] = useState(false);
   const [tillSummaryText, setTillSummaryText] = useState<string>('');
+  const [notice, setNotice] = useState<InlineNotice | null>(null);
+
+  const showNotice = (type: InlineNotice['type'], message: string) => {
+    setNotice({ type, message });
+  };
 
   const loadData = async () => {
     // Get current user
@@ -92,6 +98,12 @@ export default function TradingPage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   const addRow = () =>
     setItems([
       ...items,
@@ -116,7 +128,7 @@ export default function TradingPage() {
     if (!period.trim()) return;
 
     if (!user) {
-      alert('You must be logged in to save');
+      showNotice('error', 'You must be logged in to save.');
       return;
     }
 
@@ -185,6 +197,7 @@ export default function TradingPage() {
     setLoading(false);
 
     loadData();
+    showNotice('success', 'Trading report saved successfully.');
   };
 
   const handleTillPdfChange = async (file: File | null) => {
@@ -277,6 +290,7 @@ export default function TradingPage() {
             Financial overview for Aldwinians RUFC Trading Company - Monthly Update
           </p>
         </header>
+        <InlineNoticeBanner notice={notice} className="mb-6" />
 
         {/* New report – flat, full-width section */}
         <section className="mb-10 w-full rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
