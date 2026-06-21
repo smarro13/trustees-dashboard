@@ -145,6 +145,7 @@ export default function JobClubManagementPage() {
       supabase
         .from('job_club_posts')
         .select('id, title, description, is_active, contact, created_at')
+        .eq('is_active', true)
         .order('created_at', { ascending: false })
         .limit(1000),
       supabase
