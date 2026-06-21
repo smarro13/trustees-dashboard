@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
+import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 
 export default function MattersArisingPage() {
   const [matters, setMatters] = useState<any[]>([]);
@@ -11,6 +12,11 @@ export default function MattersArisingPage() {
   const [addToActions, setAddToActions] = useState(false);
   const [nextMeetingId, setNextMeetingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<InlineNotice | null>(null);
+
+  const showNotice = (type: InlineNotice['type'], message: string) => {
+    setNotice({ type, message });
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -53,6 +59,12 @@ export default function MattersArisingPage() {
     loadAll();
   }, []);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   const saveMatter = async () => {
     if (!title.trim()) return;
 
@@ -72,7 +84,7 @@ export default function MattersArisingPage() {
       .single();
 
     if (error) {
-      alert('Error saving matter: ' + error.message);
+      showNotice('error', 'Error saving matter: ' + error.message);
       setLoading(false);
       return;
     }
@@ -95,7 +107,7 @@ export default function MattersArisingPage() {
     setAddToActions(false);
     setLoading(false);
     loadData();
-    alert('Matter arising saved successfully!');
+    showNotice('success', 'Matter arising saved successfully.');
   };
 
   return (
@@ -111,6 +123,8 @@ export default function MattersArisingPage() {
         <p className="mt-1 text-zinc-600">
           Topics to be discussed at the next meeting
         </p>
+
+        <InlineNoticeBanner notice={notice} className="mt-4" />
 
         <section className="mt-8 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200 p-6 space-y-4">
           <input

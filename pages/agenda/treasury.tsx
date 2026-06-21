@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { User } from '@supabase/supabase-js';
+import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 
 type Item = {
   dateRange?: string; // now a single month (e.g. "March 2025")
@@ -72,6 +73,11 @@ export default function TreasuryPage() {
     { name: '6 Nations Tickets', amount: '2280' },
   ]);
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<InlineNotice | null>(null);
+
+  const showNotice = (type: InlineNotice['type'], message: string) => {
+    setNotice({ type, message });
+  };
 
   const loadData = async () => {
     // Get current user
@@ -128,6 +134,12 @@ export default function TreasuryPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
 
   const addRow = () =>
     setItems([
@@ -209,12 +221,12 @@ export default function TreasuryPage() {
 
   const saveReport = async () => {
     if (!period.trim()) {
-      alert('Please enter a reporting period');
+      showNotice('error', 'Please enter a reporting period.');
       return;
     }
 
     if (!user) {
-      alert('You must be logged in to save a report');
+      showNotice('error', 'You must be logged in to save a report.');
       return;
     }
 
@@ -233,7 +245,7 @@ export default function TreasuryPage() {
         .single();
 
       if (reportError) {
-        alert(`Error creating report: ${reportError.message}`);
+        showNotice('error', `Error creating report: ${reportError.message}`);
         setLoading(false);
         return;
       }
@@ -311,7 +323,7 @@ export default function TreasuryPage() {
             .insert(allRows);
 
           if (itemsError) {
-            alert(`Error saving report items: ${itemsError.message}`);
+            showNotice('error', `Error saving report items: ${itemsError.message}`);
             setLoading(false);
             return;
           }
@@ -403,11 +415,11 @@ export default function TreasuryPage() {
         { name: '6 Nations Tickets', amount: '2280' },
       ]);
 
-      alert('Report saved successfully!');
+      showNotice('success', 'Report saved successfully.');
       await loadData();
     } catch (error) {
       console.error('Error saving report:', error);
-      alert(`An unexpected error occurred: ${error}`);
+      showNotice('error', `An unexpected error occurred: ${error}`);
     } finally {
       setLoading(false);
     }
@@ -454,6 +466,8 @@ export default function TreasuryPage() {
             Financial overview for Aldwinians RUFC - Monthly Update
           </p>
         </header>
+
+        <InlineNoticeBanner notice={notice} className="mb-6" />
 
         {/* New report – flat, full-width section */}
         <section className="mb-10 w-full rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">

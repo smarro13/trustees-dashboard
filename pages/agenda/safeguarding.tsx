@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { User } from '@supabase/supabase-js';
+import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 export default function SafeguardingPage() {
   const [updates, setUpdates] = useState<any[]>([]);
   const [meetings, setMeetings] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [notice, setNotice] = useState<InlineNotice | null>(null);
 
   const [summary, setSummary] = useState('');
   const [status, setStatus] = useState('Information');
@@ -16,6 +19,12 @@ export default function SafeguardingPage() {
   const [meetingId, setMeetingId] = useState<string | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const showNotice = (type: InlineNotice['type'], message: string) => {
+    setNotice({ type, message });
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -49,11 +58,17 @@ export default function SafeguardingPage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   const saveUpdate = async () => {
     if (!summary) return;
 
     if (!user) {
-      alert('You must be logged in to save');
+      showNotice('error', 'You must be logged in to save.');
       return;
     }
 
@@ -75,7 +90,7 @@ export default function SafeguardingPage() {
 
       if (error) {
         console.error('Error updating safeguarding update:', error);
-        alert('Failed to update safeguarding update: ' + error.message);
+        showNotice('error', 'Failed to update safeguarding update: ' + error.message);
         setLoading(false);
         return;
       }
@@ -93,7 +108,7 @@ export default function SafeguardingPage() {
 
       if (error) {
         console.error('Error saving safeguarding update:', error);
-        alert('Failed to save safeguarding update: ' + error.message);
+        showNotice('error', 'Failed to save safeguarding update: ' + error.message);
         setLoading(false);
         return;
       }
@@ -108,7 +123,7 @@ export default function SafeguardingPage() {
 
     setLoading(false);
     loadData();
-    alert(editingId ? 'Safeguarding update updated successfully!' : 'Safeguarding update saved successfully!');
+    showNotice('success', editingId ? 'Safeguarding update updated successfully.' : 'Safeguarding update saved successfully.');
   };
 
   const startEdit = (u: any) => {
@@ -129,26 +144,29 @@ export default function SafeguardingPage() {
     setMeetingId(null);
   };
 
-  const deleteUpdate = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this safeguarding update?')) return;
-
+  const deleteUpdate = async () => {
+    if (!deleteTargetId) return;
+    setDeleting(true);
     setLoading(true);
 
     const { error } = await supabase
       .from('safeguarding_updates')
       .delete()
-      .eq('id', id);
+      .eq('id', deleteTargetId);
+
+    setDeleting(false);
 
     if (error) {
       console.error('Error deleting safeguarding update:', error);
-      alert('Failed to delete safeguarding update: ' + error.message);
+      showNotice('error', 'Failed to delete safeguarding update: ' + error.message);
       setLoading(false);
       return;
     }
 
     setLoading(false);
+    setDeleteTargetId(null);
     loadData();
-    alert('Safeguarding update deleted successfully!');
+    showNotice('success', 'Safeguarding update deleted successfully.');
   };
 
   const teamBuckets = [
@@ -189,6 +207,8 @@ export default function SafeguardingPage() {
             Board-level safeguarding oversight (no personal data)
           </p>
         </header>
+
+        <InlineNoticeBanner notice={notice} className="mb-6" />
 
         {/* New update – full-width, lightly styled section instead of player-card */}
         <section className="mb-10 w-full rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
@@ -312,7 +332,7 @@ export default function SafeguardingPage() {
                             Edit
                           </button>
                           <button
-                            onClick={() => deleteUpdate(u.id)}
+                            onClick={() => setDeleteTargetId(u.id)}
                             className="rounded-md bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"
                           >
                             Delete
@@ -334,6 +354,18 @@ export default function SafeguardingPage() {
             </div>
           ))}
         </section>
+
+        <ConfirmDialog
+          open={Boolean(deleteTargetId)}
+          title="Delete safeguarding update?"
+          description="This action cannot be undone."
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          tone="danger"
+          loading={deleting}
+          onConfirm={deleteUpdate}
+          onCancel={() => setDeleteTargetId(null)}
+        />
       </div>
     </main>
   );

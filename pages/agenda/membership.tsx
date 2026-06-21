@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { User } from '@supabase/supabase-js';
+import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 
 export default function MembershipReportPage() {
   const [reports, setReports] = useState<any[]>([]);
@@ -9,7 +10,10 @@ export default function MembershipReportPage() {
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [numPeople, setNumPeople] = useState<string>('');
   const [moneyTotal, setMoneyTotal] = useState<string>(''); // Bottomline only
-  const [loading, setLoading] = useState(false);  const [user, setUser] = useState<User | null>(null);  const [loveAdminNewSignups, setLoveAdminNewSignups] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [notice, setNotice] = useState<InlineNotice | null>(null);
+  const [loveAdminNewSignups, setLoveAdminNewSignups] = useState<string>('');
   const [loveAdminOutstandingTotal, setLoveAdminOutstandingTotal] = useState<string>('');
   const [loveAdminCancellations, setLoveAdminCancellations] = useState<string>('');
   const [loveAdminTotal, setLoveAdminTotal] = useState<string>(''); // LoveAdmin only
@@ -57,6 +61,10 @@ export default function MembershipReportPage() {
     [],
   );
 
+  const showNotice = (type: InlineNotice['type'], message: string) => {
+    setNotice({ type, message });
+  };
+
   // combined = Bottomline + LoveAdmin totals (only these two)
   const combinedMoneyTotal = (() => {
     const bottom = Number.isFinite(parseFloat(moneyTotal)) ? parseFloat(moneyTotal) : 0;
@@ -91,9 +99,15 @@ export default function MembershipReportPage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   const saveReport = async () => {
     if (!user) {
-      alert('You must be logged in to save');
+      showNotice('error', 'You must be logged in to save.');
       return;
     }
 
@@ -126,11 +140,11 @@ export default function MembershipReportPage() {
 
       if (error) {
         console.error('Error saving membership report:', error);
-        alert(`Failed to save: ${error.message}`);
+        showNotice('error', `Failed to save: ${error.message}`);
         return;
       }
 
-      alert('Membership report saved successfully!');
+      showNotice('success', 'Membership report saved successfully.');
       
       setMeetingId(null);
       setNumPeople('');
@@ -146,7 +160,7 @@ export default function MembershipReportPage() {
       loadData();
     } catch (err) {
       console.error('Unexpected error saving membership report:', err);
-      alert('An unexpected error occurred while saving');
+      showNotice('error', 'An unexpected error occurred while saving.');
     }
   };
 
@@ -218,6 +232,8 @@ export default function MembershipReportPage() {
             Membership updates from Bottomline and LoveAdmin
           </p>
         </header>
+
+        <InlineNoticeBanner notice={notice} className="mb-6" />
 
         {/* Bottom line section */}
         <section className="mb-10 w-full rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">

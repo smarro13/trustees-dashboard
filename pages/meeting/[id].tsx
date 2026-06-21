@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { supabase } from '../../lib/supabaseClient';
 import { AGENDA_SECTIONS } from '../../components/agenda/agendaConfig';
+import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 
 // Truncate text component for mobile
 function TruncatedText({ text, maxLength = 100 }: { text: string; maxLength?: number }) {
@@ -53,6 +54,7 @@ export default function MeetingPage() {
   const [minutes, setMinutes] = useState<any[]>([]);
   const [isMobile, setIsMobile] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const [notice, setNotice] = useState<InlineNotice | null>(null);
 
   useEffect(() => {
     if (!meetingId) return;
@@ -165,6 +167,12 @@ export default function MeetingPage() {
     return () => window.removeEventListener('resize', syncState);
   }, []);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   const toggleLock = async () => {
     if (!meetingId || !meeting) return;
     setLockSaving(true);
@@ -179,9 +187,10 @@ export default function MeetingPage() {
 
     if (error) {
       console.error('Failed to toggle lock', error);
-      alert('Could not update lock status.');
+      setNotice({ type: 'error', message: 'Could not update lock status.' });
     } else if (data) {
       setMeeting(data);
+      setNotice({ type: 'success', message: `Meeting ${data.is_locked ? 'locked' : 'unlocked'} successfully.` });
     }
 
     setLockSaving(false);
@@ -588,6 +597,7 @@ export default function MeetingPage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100">
       <div className="mx-auto max-w-[1200px] px-4 py-6 sm:py-10">
+        <InlineNoticeBanner notice={notice} className="mb-4" />
         <header className="mb-6 sm:mb-8">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <Link href="/" className="text-sm text-blue-600 hover:underline">

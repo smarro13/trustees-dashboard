@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
+import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 
 export default function MinutesPage() {
   const [minutes, setMinutes] = useState<any[]>([]);
@@ -9,6 +10,11 @@ export default function MinutesPage() {
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<InlineNotice | null>(null);
+
+  const showNotice = (type: InlineNotice['type'], message: string) => {
+    setNotice({ type, message });
+  };
 
   const loadData = async () => {
     const { data: minutesData } = await supabase
@@ -33,14 +39,20 @@ export default function MinutesPage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   const uploadMinutes = async () => {
     if (!title.trim()) {
-      alert('Please enter a title for the minutes');
+      showNotice('error', 'Please enter a title for the minutes.');
       return;
     }
 
     if (!file) {
-      alert('Please select a file to upload');
+      showNotice('error', 'Please select a file to upload.');
       return;
     }
 
@@ -55,7 +67,7 @@ export default function MinutesPage() {
 
       if (uploadError) {
         console.error('Upload error:', uploadError);
-        alert('Failed to upload file: ' + uploadError.message);
+        showNotice('error', 'Failed to upload file: ' + uploadError.message);
         setLoading(false);
         return;
       }
@@ -72,7 +84,7 @@ export default function MinutesPage() {
 
       if (insertError) {
         console.error('Insert error:', insertError);
-        alert('Failed to save minutes: ' + insertError.message);
+        showNotice('error', 'Failed to save minutes: ' + insertError.message);
         setLoading(false);
         return;
       }
@@ -82,10 +94,10 @@ export default function MinutesPage() {
       setFile(null);
       setLoading(false);
       loadData();
-      alert('Minutes uploaded successfully!');
+      showNotice('success', 'Minutes uploaded successfully.');
     } catch (error) {
       console.error('Upload error:', error);
-      alert('An error occurred while uploading');
+      showNotice('error', 'An error occurred while uploading.');
       setLoading(false);
     }
   };
@@ -109,6 +121,8 @@ export default function MinutesPage() {
             Upload and review approved board minutes
           </p>
         </header>
+
+        <InlineNoticeBanner notice={notice} className="mb-6" />
 
         {/* Upload – full-width, lightly styled section instead of player-card */}
         <section className="mb-10 w-full rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">

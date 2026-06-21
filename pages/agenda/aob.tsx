@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
+import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 
 export default function AOBPage() {
   const [items, setItems] = useState<any[]>([]);
@@ -13,6 +14,11 @@ export default function AOBPage() {
   const [actionNotes, setActionNotes] = useState('');
 
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<InlineNotice | null>(null);
+
+  const showNotice = (type: InlineNotice['type'], message: string) => {
+    setNotice({ type, message });
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -38,6 +44,12 @@ export default function AOBPage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   const saveItem = async () => {
     if (!title.trim() || !meetingId) return;
 
@@ -53,7 +65,7 @@ export default function AOBPage() {
 
     if (error) {
       console.error('Error saving AOB item:', error);
-      alert('Failed to save AOB item: ' + error.message);
+      showNotice('error', 'Failed to save AOB item: ' + error.message);
       setLoading(false);
       return;
     }
@@ -65,7 +77,7 @@ export default function AOBPage() {
 
     setLoading(false);
     loadData();
-    alert('AOB item saved successfully!');
+    showNotice('success', 'AOB item saved successfully.');
   };
 
   return (
@@ -86,6 +98,8 @@ export default function AOBPage() {
             Items raised during or after a meeting
           </p>
         </header>
+
+        <InlineNoticeBanner notice={notice} className="mb-6" />
 
         {/* Add AOB item */}
         <section className="mb-10 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">

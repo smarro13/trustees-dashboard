@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
+import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 
 export default function RugbyReportPage() {
   const [reports, setReports] = useState<any[]>([]);
@@ -15,6 +16,11 @@ export default function RugbyReportPage() {
   const [seniorRequests, setSeniorRequests] = useState('');
 
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<InlineNotice | null>(null);
+
+  const showNotice = (type: InlineNotice['type'], message: string) => {
+    setNotice({ type, message });
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -40,13 +46,19 @@ export default function RugbyReportPage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   const saveReport = async (section: 'mini' | 'junior' | 'senior') => {
     const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
     if (userError) {
       console.error('Error fetching user:', userError);
     }
     if (!currentUser) {
-      alert('You must be logged in to save');
+      showNotice('error', 'You must be logged in to save.');
       return;
     }
 
@@ -73,7 +85,7 @@ export default function RugbyReportPage() {
 
     if (error) {
       console.error('Error saving rugby report:', error);
-      alert('Failed to save rugby report: ' + error.message);
+      showNotice('error', 'Failed to save rugby report: ' + error.message);
       setLoading(false);
       return;
     }
@@ -93,7 +105,7 @@ export default function RugbyReportPage() {
 
     setLoading(false);
     loadData();
-    alert('Rugby report saved successfully!');
+    showNotice('success', 'Rugby report saved successfully.');
   };
 
   return (
@@ -114,6 +126,8 @@ export default function RugbyReportPage() {
             Updates from Mini, Junior and Senior rugby sections
           </p>
         </header>
+
+        <InlineNoticeBanner notice={notice} className="mb-6" />
 
         {/* New report */}
         <section className="mb-10 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
