@@ -96,7 +96,7 @@ const formatDateTime = (value: string | null) => {
 };
 
 const parseTaskAssignmentNote = (row: JobClubNote): TaskAssignmentSummary | null => {
-  if (!row?.notes || !row.notes.includes('[Task Assignment]')) return null;
+  if (!row?.notes) return null;
 
   const lines = row.notes.split('\n').map((line) => line.trim());
   const taskLine = lines.find((line) => line.startsWith('Task:'));
