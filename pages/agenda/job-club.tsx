@@ -37,6 +37,13 @@ type EditValues = Partial<ParsedJobMeta>;
 
 const JOB_META_PREFIX = 'JOB_META:';
 
+type TaskAssignmentSummary = {
+  taskLabel: string;
+  assignee: string;
+  notes: string;
+  createdAt: string | null;
+};
+
 const VALID_STATUSES: JobStatus[] = ['Not Started', 'Ongoing', 'Completed'];
 const VALID_PRIORITIES: JobPriority[] = ['High', 'Medium', 'Low'];
 
@@ -88,9 +95,30 @@ const formatDateTime = (value: string | null) => {
   return new Date(value).toLocaleString('en-GB');
 };
 
+const parseTaskAssignmentNote = (row: JobClubNote): TaskAssignmentSummary | null => {
+  if (!row?.notes || !row.notes.includes('[Task Assignment]')) return null;
+
+  const lines = row.notes.split('\n').map((line) => line.trim());
+  const taskLine = lines.find((line) => line.startsWith('Task:'));
+  const notesLine = lines.find((line) => line.startsWith('Notes:'));
+
+  if (!taskLine) return null;
+
+  const taskLabel = taskLine.replace('Task:', '').trim();
+  if (!taskLabel) return null;
+
+  return {
+    taskLabel,
+    assignee: row.name,
+    notes: notesLine ? notesLine.replace('Notes:', '').trim() : '',
+    createdAt: row.created_at || null,
+  };
+};
+
 export default function JobClubManagementPage() {
   const [posts, setPosts] = useState<JobClubPost[]>([]);
   const [notes, setNotes] = useState<JobClubNote[]>([]);
+  const [taskAssignments, setTaskAssignments] = useState<TaskAssignmentSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [editingPost, setEditingPost] = useState<string | null>(null);
@@ -197,6 +225,18 @@ export default function JobClubManagementPage() {
     return map;
   }, [notes]);
 
+  const latestAssignmentsByTask = useMemo(() => {
+    const map = new Map<string, TaskAssignmentSummary>();
+    for (const assignment of taskAssignments) {
+      if (!map.has(assignment.taskLabel)) {
+        map.set(assignment.taskLabel, assignment);
+      }
+    }
+    return map;
+  }, [taskAssignments]);
+
+  const getTaskLabel = (meta: ParsedJobMeta): string => `${meta.area} - ${meta.job}`;
+
   const filteredPosts = useMemo(() => {
     return posts.filter((post) => {
       const meta = parseJobMeta(post.description);
@@ -205,6 +245,26 @@ export default function JobClubManagementPage() {
       return true;
     });
   }, [posts, statusFilter, priorityFilter]);
+
+    const openJobs = useMemo(
+      () => filteredPosts.filter((post) => {
+        const meta = parseJobMeta(post.description);
+        if (!meta) return false;
+        const taskLabel = getTaskLabel(meta);
+        return !latestAssignmentsByTask.has(taskLabel);
+      }),
+      [filteredPosts, latestAssignmentsByTask],
+    );
+
+    const assignedJobs = useMemo(
+      () => filteredPosts.filter((post) => {
+        const meta = parseJobMeta(post.description);
+        if (!meta) return false;
+        const taskLabel = getTaskLabel(meta);
+        return latestAssignmentsByTask.has(taskLabel);
+      }),
+      [filteredPosts, latestAssignmentsByTask],
+    );
 
   const stats = useMemo(() => {
     const all = posts.map((p) => parseJobMeta(p.description)).filter(Boolean) as ParsedJobMeta[];
@@ -413,10 +473,312 @@ export default function JobClubManagementPage() {
                           type="button"
                           onClick={() => startEdit(post)}
                           className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+                          const renderJobCard = (post: JobClubPost) => {
+                            const meta = parseJobMeta(post.description);
+                            const postNotes = notesByPost.get(post.id) ?? [];
+                            const isEditing = editingPost === post.id;
+                            const isSaving = saving === post.id;
+                            const notesExpanded = expandedNotes.has(post.id);
+                            const taskLabel = meta ? getTaskLabel(meta) : null;
+                            const assignment = taskLabel ? latestAssignmentsByTask.get(taskLabel) : null;
+
+                            return (
+                              <section key={post.id} className="rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
+                                {/* Header */}
+                                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-200 px-6 py-4">
+                                  <div>
+                                    <h2 className="text-base font-semibold text-zinc-900">{post.title ?? 'Untitled'}</h2>
+                                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                                      {post.contact && <span>Submitted by: <span className="font-medium">{post.contact}</span></span>}
+                                      {post.created_at && <span>{formatDate(post.created_at)}</span>}
+                                      <span className={`rounded-full px-2 py-0.5 font-medium ${post.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-100 text-zinc-600'}`}>
+                                        {post.is_active ? 'Public: Open' : 'Public: Closed'}
+                                      </span>
+                                    </div>
+                                    {assignment && (
+                                      <div className="mt-2 rounded-md bg-blue-50 px-3 py-2 text-xs">
+                                        <p className="font-medium text-blue-900">Assigned to: {assignment.assignee}</p>
+                                        {assignment.notes && <p className="mt-1 text-blue-700">{assignment.notes}</p>}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {!isEditing && (
+                                      <button
+                                        type="button"
+                                        onClick={() => startEdit(post)}
+                                        className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+                                      >
+                                        Edit
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleActive(post)}
+                                      className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+                                    >
+                                      {post.is_active ? 'Close' : 'Open'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setDeleteTargetId(post.id)}
+                                      className="rounded-md border border-rose-200 bg-white px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-50"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Body */}
+                                {isEditing && meta ? (
+                                  <div className="space-y-4 px-6 py-5">
+                                    <div className="grid gap-4 sm:grid-cols-2">
+                                      <div>
+                                        <label className="mb-1 block text-sm font-medium text-zinc-700">Area</label>
+                                        <input
+                                          className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                                          value={editValues.area ?? meta.area}
+                                          onChange={(e) => setEditValues((prev) => ({ ...prev, area: e.target.value }))}
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="mb-1 block text-sm font-medium text-zinc-700">Job</label>
+                                        <input
+                                          className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                                          value={editValues.job ?? meta.job}
+                                          onChange={(e) => setEditValues((prev) => ({ ...prev, job: e.target.value }))}
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="mb-1 block text-sm font-medium text-zinc-700">Status</label>
+                                        <select
+                                          className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                                          value={editValues.status ?? meta.status}
+                                          onChange={(e) => setEditValues((prev) => ({ ...prev, status: e.target.value as JobStatus }))}
+                                        >
+                                          {VALID_STATUSES.map((s) => <option key={s}>{s}</option>)}
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label className="mb-1 block text-sm font-medium text-zinc-700">Priority</label>
+                                        <select
+                                          className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                                          value={editValues.priority ?? meta.priority}
+                                          onChange={(e) => setEditValues((prev) => ({ ...prev, priority: e.target.value as JobPriority }))}
+                                        >
+                                          {VALID_PRIORITIES.map((p) => <option key={p}>{p}</option>)}
+                                        </select>
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <label className="mb-1 block text-sm font-medium text-zinc-700">Materials / Notes</label>
+                                      <textarea
+                                        rows={3}
+                                        className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                                        value={editValues.materials ?? meta.materials}
+                                        onChange={(e) => setEditValues((prev) => ({ ...prev, materials: e.target.value }))}
+                                      />
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => saveEdit(post)}
+                                        disabled={isSaving}
+                                        className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                                      >
+                                        {isSaving ? 'Saving…' : 'Save changes'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={cancelEdit}
+                                        className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : meta ? (
+                                  <div className="grid gap-4 px-6 py-5 sm:grid-cols-2 lg:grid-cols-4">
+                                    <div>
+                                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Area</p>
+                                      <p className="mt-1 text-sm text-zinc-900">{meta.area}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Status</p>
+                                      <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${getStatusClasses(meta.status)}`}>
+                                        {meta.status}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Priority</p>
+                                      <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${getPriorityClasses(meta.priority)}`}>
+                                        {meta.priority}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Materials / Notes</p>
+                                      <p className="mt-1 text-sm text-zinc-900">{meta.materials}</p>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="px-6 py-5">
+                                    <p className="whitespace-pre-wrap text-sm text-zinc-700">{post.description}</p>
+                                  </div>
+                                )}
+
+                                {/* Member notes / task assignments */}
+                                {postNotes.length > 0 && (
+                                  <div className="border-t border-zinc-200">
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleNotes(post.id)}
+                                      className="flex w-full items-center justify-between px-6 py-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                                    >
+                                      <span>
+                                        {postNotes.length} member {postNotes.length === 1 ? 'note' : 'notes'} / {postNotes.length === 1 ? 'assignment' : 'assignments'}
+                                      </span>
+                                      <span aria-hidden>{notesExpanded ? '▴' : '▾'}</span>
+                                    </button>
+                                    {notesExpanded && (
+                                      <div className="space-y-3 px-6 pb-5">
+                                        {postNotes.map((note) => (
+                                          <div key={note.id} className="rounded-md border border-zinc-200 bg-zinc-50 p-4">
+                                            <div className="flex flex-wrap items-start justify-between gap-2">
+                                              <p className="text-sm font-semibold text-zinc-900">{note.name}</p>
+                                              <p className="text-xs text-zinc-400">{formatDateTime(note.created_at)}</p>
+                                            </div>
+                                            <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700">{note.notes}</p>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </section>
+                            );
+                          };
+
+                          return (
+                            <main className="min-h-screen">
+                              <div className="mx-auto w-full max-w-5xl px-4 py-10">
+                                <header className="mb-8">
+                                  <Link href="/" className="mb-3 inline-block text-sm font-medium text-blue-600 hover:underline">
+                                    ← Back to dashboard
+                                  </Link>
+                                  <div className="flex flex-wrap items-start justify-between gap-4">
+                                    <div>
+                                      <h1 className="text-3xl font-extrabold text-zinc-900">Job Club Management</h1>
+                                      <p className="mt-1 text-sm text-zinc-600">
+                                        Manage job listings, update metadata and status, and review member notes and assignments.
+                                      </p>
+                                      {lastSyncedAt && (
+                                        <p className="mt-2 text-xs text-zinc-500">Last synced: {formatDateTime(lastSyncedAt)}</p>
+                                      )}
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={refreshNow}
+                                        disabled={refreshing}
+                                        className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
+                                      >
+                                        {refreshing ? 'Refreshing…' : 'Refresh'}
+                                      </button>
+                                      <Link
+                                        href="/public/job-club"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+                                      >
+                                        View public page ↗
+                                      </Link>
+                                    </div>
+                                  </div>
+                                </header>
                         >
+                                <InlineNoticeBanner notice={notice} className="mb-6" />
                           Edit
+                                {/* Stats */}
+                                <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                                  {[
+                                    { label: 'Total jobs', value: stats.total },
+                                    { label: 'Not started', value: stats.notStarted },
+                                    { label: 'Ongoing', value: stats.ongoing },
+                                    { label: 'Completed', value: stats.completed },
+                                  ].map((stat) => (
+                                    <div key={stat.label} className="rounded-lg bg-white px-4 py-4 shadow-sm ring-1 ring-zinc-200">
+                                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">{stat.label}</p>
+                                      <p className="mt-1 text-2xl font-semibold text-zinc-900">{stat.value}</p>
+                                    </div>
+                                  ))}
+                                </div>
                         </button>
+                                {/* Filters */}
+                                <div className="mb-6 flex flex-wrap items-center gap-3">
+                                  <select
+                                    value={statusFilter}
+                                    onChange={(e) => setStatusFilter(e.target.value as 'All' | JobStatus)}
+                                    className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                                  >
+                                    <option value="All">All statuses</option>
+                                    {VALID_STATUSES.map((s) => <option key={s}>{s}</option>)}
+                                  </select>
+                                  <select
+                                    value={priorityFilter}
+                                    onChange={(e) => setPriorityFilter(e.target.value as 'All' | JobPriority)}
+                                    className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                                  >
+                                    <option value="All">All priorities</option>
+                                    {VALID_PRIORITIES.map((p) => <option key={p}>{p}</option>)}
+                                  </select>
+                                  {(statusFilter !== 'All' || priorityFilter !== 'All') && (
+                                    <button
+                                      type="button"
+                                      onClick={() => { setStatusFilter('All'); setPriorityFilter('All'); }}
+                                      className="rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100"
+                                    >
+                                      Clear filters
+                                    </button>
+                                  )}
+                                  <p className="ml-auto text-sm text-zinc-500">{filteredPosts.length} of {posts.length} shown</p>
+                                </div>
                       )}
+                                {loading ? (
+                                  <p className="text-sm text-zinc-500">Loading...</p>
+                                ) : filteredPosts.length === 0 ? (
+                                  <p className="text-sm text-zinc-500">No jobs match the current filters.</p>
+                                ) : (
+                                  <div className="space-y-8">
+                                    {/* Unassigned Jobs Section */}
+                                    {openJobs.length > 0 && (
+                                      <div>
+                                        <h2 className="mb-4 text-lg font-semibold text-zinc-900">
+                                          Unassigned Jobs ({openJobs.length})
+                                        </h2>
+                                        <div className="space-y-5">
+                                          {openJobs.map((post) => renderJobCard(post))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Assigned Jobs Section */}
+                                    {assignedJobs.length > 0 && (
+                                      <div>
+                                        <h2 className="mb-4 text-lg font-semibold text-zinc-900">
+                                          Assigned Jobs ({assignedJobs.length})
+                                        </h2>
+                                        <div className="space-y-5">
+                                          {assignedJobs.map((post) => renderJobCard(post))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* No jobs message */}
+                                    {openJobs.length === 0 && assignedJobs.length === 0 && (
+                                      <p className="text-sm text-zinc-500">No jobs match the current filters.</p>
+                                    )}
+                                  </div>
+                                )}
                       <button
                         type="button"
                         onClick={() => toggleActive(post)}
