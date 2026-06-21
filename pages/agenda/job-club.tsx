@@ -117,11 +117,13 @@ export default function JobClubManagementPage() {
       supabase
         .from('job_club_posts')
         .select('id, title, description, is_active, contact, created_at')
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(1000),
       supabase
         .from('job_club_notes')
         .select('id, name, notes, job_club_post_id, created_at')
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(1000),
     ]);
     if (postsResult.data) setPosts(postsResult.data);
     if (notesResult.data) setNotes(notesResult.data);
