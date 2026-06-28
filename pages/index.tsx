@@ -31,6 +31,11 @@ const SHAREABLE_PAGES = [
     description: 'Public Job Club opportunities and task assignments.',
     href: '/public/job-club',
   },
+  {
+    title: 'Gym',
+    description: 'Gym dashboard link.',
+    href: 'https://ald-net2-01.tail6b59c1.ts.net/',
+  },
 ];
 
 export default function LandingPage() {
