@@ -12,7 +12,7 @@ export default function PadelVoteTestPage() {
     event.preventDefault();
 
     if (!name.trim()) {
-      setStatus('Please enter your name.');
+      setStatus('Please enter your member name.');
       return;
     }
 
@@ -70,14 +70,14 @@ export default function PadelVoteTestPage() {
           <form className="mt-6 space-y-4" onSubmit={submitVote}>
             <div>
               <label htmlFor="vote-name" className="mb-1 block text-sm font-medium text-zinc-700">
-                Name
+                Member name
               </label>
               <input
                 id="vote-name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
-                placeholder="Your full name"
+                placeholder="Member full name"
               />
             </div>
 

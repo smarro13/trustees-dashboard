@@ -23,7 +23,7 @@ export default async function handler(
   }
 
   if (!name || typeof name !== 'string' || !name.trim()) {
-    return res.status(400).json({ ok: false, error: 'Name is required' });
+    return res.status(400).json({ ok: false, error: 'Member name is required' });
   }
 
   if (vote !== 'yes' && vote !== 'no') {

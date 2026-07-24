@@ -301,10 +301,16 @@ export default function PublicHomePage() {
     [actions],
   );
 
-  const allJobClubJobs = useMemo(
-    () => [...CLUB_REFRESH_JOBS, ...submittedJobs],
-    [submittedJobs],
-  );
+  const allJobClubJobs = useMemo(() => {
+    const seen = new Set<string>();
+
+    return [...CLUB_REFRESH_JOBS, ...submittedJobs].filter((job) => {
+      const key = getClubRefreshTaskLabel(job).toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [submittedJobs]);
 
   const clubRefreshAreas = useMemo(
     () => ['All areas', ...Array.from(new Set(allJobClubJobs.map((item) => item.area)))],
