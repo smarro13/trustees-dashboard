@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabaseClient';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
@@ -116,6 +117,8 @@ const parseTaskAssignmentNote = (row: JobClubNote): TaskAssignmentSummary | null
 };
 
 export default function JobClubManagementPage() {
+  const router = useRouter();
+  const embedded = router.query.embedded === '1';
   const [posts, setPosts] = useState<JobClubPost[]>([]);
   const [notes, setNotes] = useState<JobClubNote[]>([]);
   const [taskAssignments, setTaskAssignments] = useState<TaskAssignmentSummary[]>([]);
@@ -547,11 +550,13 @@ export default function JobClubManagementPage() {
 
   return (
     <main className="min-h-screen">
-      <div className="mx-auto w-full max-w-5xl px-4 py-10">
-        <header className="mb-8">
-          <Link href="/" className="mb-3 inline-block text-sm font-medium text-blue-600 hover:underline">
-            ← Back to dashboard
-          </Link>
+      <div className={embedded ? 'mx-auto w-full px-2 py-2' : 'mx-auto w-full max-w-5xl px-4 py-10'}>
+        <header className={embedded ? 'mb-4' : 'mb-8'}>
+          {!embedded && (
+            <Link href="/" className="mb-3 inline-block text-sm font-medium text-blue-600 hover:underline">
+              ← Back to dashboard
+            </Link>
+          )}
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h1 className="text-3xl font-extrabold text-zinc-900">Job Club Management</h1>

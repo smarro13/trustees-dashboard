@@ -83,6 +83,8 @@ const hasRequiredRole = (actual: DashboardRole, required: DashboardRole) => {
 };
 
 export async function proxy(req: NextRequest) {
+  const forceLogout = (process.env.FORCE_DASHBOARD_LOGOUT || '').toLowerCase() === 'true';
+
   let response = NextResponse.next({
     request: {
       headers: req.headers,
@@ -154,6 +156,26 @@ export async function proxy(req: NextRequest) {
   if (!session && !isPublicRoute) {
     const redirectUrl = new URL('/auth/login', req.url);
     return NextResponse.redirect(redirectUrl);
+  }
+
+  // Emergency switch to force re-authentication so new role claims are picked up.
+  if (session && forceLogout && !req.nextUrl.pathname.startsWith('/auth/')) {
+    const redirectUrl = new URL('/auth/login', req.url);
+    const logoutResponse = NextResponse.redirect(redirectUrl);
+
+    // Clear known Supabase auth cookies.
+    logoutResponse.cookies.set('sb-access-token', '', { path: '/', maxAge: 0 });
+    logoutResponse.cookies.set('sb-refresh-token', '', { path: '/', maxAge: 0 });
+    logoutResponse.cookies.set('sb:token', '', { path: '/', maxAge: 0 });
+
+    // Best-effort cleanup for project-ref cookie names.
+    for (const cookie of req.cookies.getAll()) {
+      if (cookie.name.startsWith('sb-') || cookie.name.startsWith('sb:')) {
+        logoutResponse.cookies.set(cookie.name, '', { path: '/', maxAge: 0 });
+      }
+    }
+
+    return logoutResponse;
   }
 
   if (session && req.nextUrl.pathname === '/auth/login') {
