@@ -121,9 +121,8 @@ export default function CommercialTransformationPage() {
 	}, [padelVotes]);
 
 	const loadData = async () => {
-		const [{ data: authData }, sessionResult, meetingsResult, reportsResult, jobsResult] = await Promise.all([
+		const [{ data: authData }, meetingsResult, reportsResult, jobsResult] = await Promise.all([
 			supabase.auth.getUser(),
-			supabase.auth.getSession(),
 			supabase.from('meetings').select('id, meeting_date').order('meeting_date', { ascending: true }),
 			supabase.from('commercial_transformation_updates').select('*').order('created_at', { ascending: false }),
 			supabase
@@ -138,7 +137,8 @@ export default function CommercialTransformationPage() {
 		setMeetings(meetingsResult.data || []);
 		setReports(reportsResult.data || []);
 
-		const accessToken = sessionResult.session?.access_token;
+		const sessionResult = (await supabase.auth.getSession()) as unknown as Record<string, any>;
+		const accessToken = sessionResult?.data?.['session']?.['access_token'] as string | undefined;
 		if (!accessToken) {
 			setPadelVotes([]);
 		} else {
