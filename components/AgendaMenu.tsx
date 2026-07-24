@@ -74,6 +74,7 @@ export default function AgendaMenu() {
           { label: '👥 Membership Report', href: '/agenda/membership' },
           { label: '🏉 Rugby Report', href: '/agenda/rugby' },
           { label: '🔧 Job Club', href: '/agenda/job-club' },
+          { label: '🔐 Admin Roles', href: '/admin/roles' },
           { label: '📌 Matters Arising', href: '/agenda/matters-arising' },
           { label: '💬 AOB', href: '/agenda/aob' }
         ].map((item) => (

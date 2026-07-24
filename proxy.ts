@@ -25,7 +25,25 @@ const normalizeRole = (rawRole: unknown): DashboardRole => {
   return null;
 };
 
+const getHighestRoleFromList = (values: unknown[]): DashboardRole => {
+  let highest: DashboardRole = null;
+
+  for (const value of values) {
+    const normalized = normalizeRole(value);
+    if (!normalized) continue;
+    if (!highest || ROLE_RANK[normalized] > ROLE_RANK[highest]) {
+      highest = normalized;
+    }
+  }
+
+  return highest;
+};
+
 const getRequiredRoleForPath = (pathname: string): DashboardRole => {
+  if (pathname === '/admin/roles' || pathname.startsWith('/admin/')) {
+    return 'admin';
+  }
+
   if (
     pathname === '/agenda/agm' ||
     pathname === '/agenda/agm-minutes' ||
@@ -158,8 +176,8 @@ export async function proxy(req: NextRequest) {
       const userMetaRoles = Array.isArray((user?.user_metadata as any)?.roles)
         ? (user?.user_metadata as any).roles
         : [];
-      const roleFromAppArray = normalizeRole(appMetaRoles[0]);
-      const roleFromUserArray = normalizeRole(userMetaRoles[0]);
+      const roleFromAppArray = getHighestRoleFromList(appMetaRoles);
+      const roleFromUserArray = getHighestRoleFromList(userMetaRoles);
 
       const effectiveRole = roleFromAppMeta || roleFromUserMeta || roleFromAppArray || roleFromUserArray;
 
