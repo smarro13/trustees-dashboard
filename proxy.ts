@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   let response = NextResponse.next({
     request: {
       headers: req.headers,
@@ -55,31 +55,27 @@ export async function middleware(req: NextRequest) {
     }
   );
 
-  // Check if user is authenticated
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
-  // Public routes that don't require authentication
-    const publicRoutes = [
-      '/auth/login',
-      '/auth/callback',
-      '/auth/forgot-password',
-      '/auth/reset-password',
-      '/public',
-      '/public/actions',
-      '/public/minutes',
-      '/public/agm-minutes',
-    ];
+  const publicRoutes = [
+    '/auth/login',
+    '/auth/callback',
+    '/auth/forgot-password',
+    '/auth/reset-password',
+    '/public',
+    '/public/actions',
+    '/public/minutes',
+    '/public/agm-minutes',
+  ];
   const isPublicRoute = publicRoutes.some(route => req.nextUrl.pathname.startsWith(route));
 
-  // If no session and trying to access protected route, redirect to login
   if (!session && !isPublicRoute) {
     const redirectUrl = new URL('/auth/login', req.url);
     return NextResponse.redirect(redirectUrl);
   }
 
-  // If has session and trying to access login page, redirect to home
   if (session && req.nextUrl.pathname === '/auth/login') {
     const redirectUrl = new URL('/', req.url);
     return NextResponse.redirect(redirectUrl);
@@ -87,15 +83,9 @@ export async function middleware(req: NextRequest) {
 
   return response;
 }
+
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
 };
