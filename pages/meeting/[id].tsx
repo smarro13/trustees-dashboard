@@ -5,6 +5,14 @@ import { supabase } from '../../lib/supabaseClient';
 import { AGENDA_SECTIONS } from '../../components/agenda/agendaConfig';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 
+type CommercialAttachment = { name?: string; url?: string };
+
+const asCommercialAttachments = (value: unknown): CommercialAttachment[] =>
+  Array.isArray(value) ? (value as CommercialAttachment[]) : [];
+
+const asCommercialIdeas = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+
 // Truncate text component for mobile
 function TruncatedText({ text, maxLength = 100 }: { text: string; maxLength?: number }) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -45,6 +53,7 @@ export default function MeetingPage() {
   const [events, setEvents] = useState<any[]>([]);
   const [membership, setMembership] = useState<any[]>([]);
   const [trading, setTrading] = useState<any[]>([]);
+  const [commercialReports, setCommercialReports] = useState<any[]>([]);
   const [treasury, setTreasury] = useState<any[]>([]);
   const [actions, setActions] = useState<any[]>([]);
   const [openActions, setOpenActions] = useState<any[]>([]);
@@ -78,6 +87,7 @@ export default function MeetingPage() {
         ev,
         mem,
         trad,
+        comm,
         tres,
         act,
         openAct,
@@ -98,6 +108,7 @@ export default function MeetingPage() {
           .order('event_date', { ascending: true }),
         supabase.from('membership_reports').select('*').eq('meeting_id', meetingId),
         supabase.from('trading_reports').select('*').eq('meeting_id', meetingId),
+        supabase.from('commercial_transformation_updates').select('*').eq('meeting_id', meetingId),
         supabase.from('treasury_reports').select('*').eq('meeting_id', meetingId),
         supabase.from('action_items').select('*').eq('meeting_id', meetingId),
         supabase
@@ -129,6 +140,7 @@ export default function MeetingPage() {
       setEvents(ev.data ?? []);
       setMembership(mem.data ?? []);
       setTrading(trad.data ?? []);
+      setCommercialReports(comm.data ?? []);
       setTreasury(tres.data ?? []);
       setActions(act.data ?? []);
       setOpenActions(openAct.data ?? []);
@@ -557,6 +569,81 @@ export default function MeetingPage() {
                 )}
               </div>
             ))}
+          </div>
+        );
+
+      case 'commercial_transformation':
+        if (!commercialReports.length) return empty(emptyText);
+        return (
+          <div className="space-y-2">
+            {commercialReports.map((report) => {
+              const attachments = asCommercialAttachments(report.attachments);
+              const selectedIdeas = asCommercialIdeas(report.selected_job_club_ideas);
+              return (
+                <div key={report.id} className="rounded-md border p-3">
+                  <p className="font-semibold">{report.reporting_period}</p>
+
+                  {report.monthly_updates && (
+                    <p className="mt-2 text-sm text-zinc-700 whitespace-pre-wrap">{report.monthly_updates}</p>
+                  )}
+
+                  {report.gym_updates && (
+                    <p className="mt-3 text-sm text-zinc-700 whitespace-pre-wrap">
+                      <span className="font-semibold">Gym updates:</span>
+                      <br />
+                      {report.gym_updates}
+                    </p>
+                  )}
+
+                  {report.padel_updates && (
+                    <p className="mt-3 text-sm text-zinc-700 whitespace-pre-wrap">
+                      <span className="font-semibold">Padel:</span>
+                      <br />
+                      {report.padel_updates}
+                    </p>
+                  )}
+
+                  {report.other_areas_required_attention && (
+                    <p className="mt-3 text-sm text-zinc-700 whitespace-pre-wrap">
+                      <span className="font-semibold">Other areas required for attention:</span>
+                      <br />
+                      {report.other_areas_required_attention}
+                    </p>
+                  )}
+
+                  {selectedIdeas.length > 0 && (
+                    <div className="mt-3 text-sm text-zinc-700">
+                      <p className="font-semibold">Linked Job Club ideas/streams:</p>
+                      <ul className="mt-1 list-disc pl-5">
+                        {selectedIdeas.map((idea) => (
+                          <li key={`${report.id}-${idea}`}>{idea}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {attachments.length > 0 && (
+                    <div className="mt-3 text-sm text-zinc-700">
+                      <p className="font-semibold">Uploaded items:</p>
+                      <ul className="mt-1 list-disc pl-5">
+                        {attachments.map((asset) => (
+                          <li key={`${report.id}-${asset.url}`}>
+                            <a
+                              href={asset.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline"
+                            >
+                              {asset.name}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         );
 

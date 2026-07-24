@@ -52,6 +52,13 @@ type TaskAssignmentSummary = {
   createdAt?: string | null;
 };
 
+type PublicPadelUpdate = {
+  id: string;
+  reporting_period: string;
+  padel_updates: string | null;
+  created_at: string;
+};
+
 export const CLUB_REFRESH_JOBS: ClubRefreshJob[] = [
   { area: 'Eric Evans Lounge', job: 'Repair plaster around door', category: 'Repairs', status: 'Not Started', priority: 'Medium', materials: 'Plaster/filler, sandpaper, caulk, paint, brushes' },
   { area: 'Eric Evans Lounge', job: 'Improve NPI Cup display', category: 'Aesthetic', status: 'Not Started', priority: 'Low', materials: 'Shelving, display mounts, lighting, cleaning materials' },
@@ -284,6 +291,15 @@ export default function PublicHomePage() {
   const [taskAssignmentAttachmentsByJob, setTaskAssignmentAttachmentsByJob] = useState<Record<string, File[]>>({});
   const [taskAssignmentStatusByJob, setTaskAssignmentStatusByJob] = useState<Record<string, string | null>>({});
   const [submittingTaskAssignmentByJob, setSubmittingTaskAssignmentByJob] = useState<Record<string, boolean>>({});
+  const [publicPadelUpdates, setPublicPadelUpdates] = useState<PublicPadelUpdate[]>([]);
+
+  const commercialAttentionActions = useMemo(
+    () =>
+      actions.filter((action) =>
+        (action.source || '').toLowerCase().includes('commercial & transformation'),
+      ),
+    [actions],
+  );
 
   const allJobClubJobs = useMemo(
     () => [...CLUB_REFRESH_JOBS, ...submittedJobs],
@@ -391,6 +407,14 @@ export default function PublicHomePage() {
           .limit(300),
     ]);
 
+    let padelUpdatesPayload: { ok?: boolean; updates?: PublicPadelUpdate[] } = {};
+    try {
+      const response = await fetch('/api/public/padel-updates');
+      padelUpdatesPayload = await response.json();
+    } catch {
+      padelUpdatesPayload = {};
+    }
+
     const loadError = actionsResult.error || minutesResult.error || agmMinutesResult.error;
     if (loadError) {
       setError(loadError.message);
@@ -399,6 +423,7 @@ export default function PublicHomePage() {
       setAgmMinutes([]);
       setSubmittedJobs([]);
       setTaskAssignments([]);
+      setPublicPadelUpdates([]);
       setLoading(false);
       return;
     }
@@ -423,6 +448,12 @@ export default function PublicHomePage() {
         .map((row) => parseTaskAssignmentNote(row))
         .filter((row): row is TaskAssignmentSummary => Boolean(row));
       setTaskAssignments(parsedAssignments);
+    }
+
+    if (padelUpdatesPayload.ok && Array.isArray(padelUpdatesPayload.updates)) {
+      setPublicPadelUpdates(padelUpdatesPayload.updates);
+    } else {
+      setPublicPadelUpdates([]);
     }
 
     setLoading(false);
@@ -987,6 +1018,65 @@ export default function PublicHomePage() {
                     {submitting ? 'Submitting...' : 'Submit action'}
                   </button>
                 </form>
+              </section>
+
+              <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-2xl font-semibold text-zinc-900">Other Areas Requiring Attention</h2>
+                    <p className="mt-1 text-sm text-zinc-600">
+                      Published by trustees from Commercial & Transformation updates.
+                    </p>
+                  </div>
+                  <Link
+                    href="/public/actions"
+                    className="inline-flex items-center rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition hover:border-red-300 hover:text-red-800"
+                  >
+                    View all actions
+                  </Link>
+                </div>
+
+                {commercialAttentionActions.length === 0 ? (
+                  <p className="mt-4 text-sm text-zinc-500">No commercial attention items are shared at the moment.</p>
+                ) : (
+                  <div className="mt-4 space-y-3">
+                    {commercialAttentionActions.slice(0, 4).map((action) => (
+                      <article key={action.id} className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                        <h3 className="font-semibold text-zinc-900">{action.title}</h3>
+                        {action.description && (
+                          <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700">{action.description}</p>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-2xl font-semibold text-zinc-900">Padel Updates</h2>
+                    <p className="mt-1 text-sm text-zinc-600">
+                      Selected updates shared by trustees.
+                    </p>
+                  </div>
+                </div>
+
+                {publicPadelUpdates.length === 0 ? (
+                  <p className="mt-4 text-sm text-zinc-500">No Padel updates are shared at the moment.</p>
+                ) : (
+                  <div className="mt-4 space-y-3">
+                    {publicPadelUpdates.map((item) => (
+                      <article key={item.id} className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                        <h3 className="font-semibold text-zinc-900">{item.reporting_period}</h3>
+                        {item.padel_updates && (
+                          <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700">{item.padel_updates}</p>
+                        )}
+                        <p className="mt-2 text-xs text-zinc-500">Shared {formatDate(item.created_at, item.created_at)}</p>
+                      </article>
+                    ))}
+                  </div>
+                )}
               </section>
 
               <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
