@@ -5,6 +5,67 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import AgendaMenu from '../components/AgendaMenu';
 
+type DashboardRole = 'admin' | 'management' | 'safeguarding' | 'commercial' | null;
+
+const ROLE_RANK: Record<Exclude<DashboardRole, null>, number> = {
+  admin: 4,
+  management: 3,
+  safeguarding: 2,
+  commercial: 1,
+};
+
+const normalizeRole = (rawRole: unknown): DashboardRole => {
+  if (typeof rawRole !== 'string') return null;
+
+  const value = rawRole.trim().toLowerCase();
+  if (!value) return null;
+
+  if (value === 'admin') return 'admin';
+  if (value === 'management' || value === 'mangement') return 'management';
+  if (value === 'safeguarding') return 'safeguarding';
+  if (value === 'commercial' || value === 'commerical') return 'commercial';
+
+  return null;
+};
+
+const getHighestRoleFromList = (values: unknown[]): DashboardRole => {
+  let highest: DashboardRole = null;
+
+  for (const value of values) {
+    const normalized = normalizeRole(value);
+    if (!normalized) continue;
+    if (!highest || ROLE_RANK[normalized] > ROLE_RANK[highest]) {
+      highest = normalized;
+    }
+  }
+
+  return highest;
+};
+
+const resolveRole = (user: any): DashboardRole => {
+  const roleFromAppMeta = normalizeRole(user?.app_metadata?.role);
+  const roleFromUserMeta = normalizeRole(user?.user_metadata?.role);
+  const appMetaRoles = Array.isArray(user?.app_metadata?.roles) ? user.app_metadata.roles : [];
+  const userMetaRoles = Array.isArray(user?.user_metadata?.roles) ? user.user_metadata.roles : [];
+  const roleFromAppArray = getHighestRoleFromList(appMetaRoles);
+  const roleFromUserArray = getHighestRoleFromList(userMetaRoles);
+
+  return roleFromAppMeta || roleFromUserMeta || roleFromAppArray || roleFromUserArray;
+};
+
+const roleLabel = (role: DashboardRole) => {
+  if (!role) return 'No role';
+  return role.charAt(0).toUpperCase() + role.slice(1);
+};
+
+const roleBadgeClass = (role: DashboardRole) => {
+  if (role === 'admin') return 'bg-purple-100 text-purple-800';
+  if (role === 'management') return 'bg-blue-100 text-blue-800';
+  if (role === 'safeguarding') return 'bg-emerald-100 text-emerald-800';
+  if (role === 'commercial') return 'bg-amber-100 text-amber-800';
+  return 'bg-zinc-100 text-zinc-700';
+};
+
 const SHAREABLE_PAGES = [
   {
     title: 'Members Homepage',
@@ -42,6 +103,7 @@ export default function LandingPage() {
   const [meetings, setMeetings] = useState<any[]>([]);
   const [dueActions, setDueActions] = useState<any[]>([]);
   const [userEmail, setUserEmail] = useState<string>('');
+  const [userRole, setUserRole] = useState<DashboardRole>(null);
   const [meetingsOpen, setMeetingsOpen] = useState(true);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -54,6 +116,7 @@ export default function LandingPage() {
         
         if (session?.user) {
           setUserEmail(session.user.email || '');
+          setUserRole(resolveRole(session.user));
           setLoading(false);
         } else {
           // Redirect to login if not authenticated
@@ -170,7 +233,12 @@ export default function LandingPage() {
             {userEmail && (
               <div className="text-right">
                 <p className="text-sm font-medium text-zinc-900">{userEmail}</p>
-                <p className="text-xs text-zinc-500">Logged in</p>
+                <div className="mt-1 flex items-center justify-end gap-2">
+                  <p className="text-xs text-zinc-500">Logged in</p>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${roleBadgeClass(userRole)}`}>
+                    {roleLabel(userRole)}
+                  </span>
+                </div>
               </div>
             )}
           </div>
