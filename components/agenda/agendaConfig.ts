@@ -8,6 +8,7 @@ export type AgendaSectionKey =
   | 'treasury'
   | 'trading'
   | 'commercial_transformation'
+  | 'gym'
   | 'events'
   | 'membership'
   | 'rugby_reports'
@@ -33,11 +34,13 @@ export const AGENDA_SECTIONS: AgendaSectionDef[] = [
   { key: 'treasury', label: 'Treasury', href: '/agenda/treasury', emptyText: 'No treasury report.' },
   { key: 'trading', label: 'Trading Report', href: '/agenda/trading', emptyText: 'No trading report.' },
   { key: 'commercial_transformation', label: 'Commercial & Transformation', href: '/agenda/commercial-transformation', emptyText: 'No commercial or transformation updates.' },
+  { key: 'gym', label: 'Gym Updates', href: '/agenda/gym', emptyText: 'No gym updates.' },
   { key: 'events', label: 'Events', href: '/agenda/events', emptyText: 'No event updates.' },
   { key: 'membership', label: 'Membership Report', href: '/agenda/membership', emptyText: 'No membership update.' },
   { key: 'rugby_reports', label: 'Rugby Reports', href: '/agenda/rugby', emptyText: 'No rugby updates.' },
   { key: 'matters_arising', label: 'Matters Arising', href: '/agenda/matters-arising', emptyText: 'No matters arising.' },
   { key: 'aob', label: 'AOB', href: '/agenda/aob', emptyText: 'No AOB items.' },
 ];
+
 
 

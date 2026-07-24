@@ -54,6 +54,7 @@ export default function MeetingPage() {
   const [membership, setMembership] = useState<any[]>([]);
   const [trading, setTrading] = useState<any[]>([]);
   const [commercialReports, setCommercialReports] = useState<any[]>([]);
+  const [gymReports, setGymReports] = useState<any[]>([]);
   const [treasury, setTreasury] = useState<any[]>([]);
   const [actions, setActions] = useState<any[]>([]);
   const [openActions, setOpenActions] = useState<any[]>([]);
@@ -88,6 +89,7 @@ export default function MeetingPage() {
         mem,
         trad,
         comm,
+        gym,
         tres,
         act,
         openAct,
@@ -109,6 +111,7 @@ export default function MeetingPage() {
         supabase.from('membership_reports').select('*').eq('meeting_id', meetingId),
         supabase.from('trading_reports').select('*').eq('meeting_id', meetingId),
         supabase.from('commercial_transformation_updates').select('*').eq('meeting_id', meetingId),
+        supabase.from('gym_updates').select('*').eq('meeting_id', meetingId),
         supabase.from('treasury_reports').select('*').eq('meeting_id', meetingId),
         supabase.from('action_items').select('*').eq('meeting_id', meetingId),
         supabase
@@ -141,6 +144,7 @@ export default function MeetingPage() {
       setMembership(mem.data ?? []);
       setTrading(trad.data ?? []);
       setCommercialReports(comm.data ?? []);
+      setGymReports(gym.data ?? []);
       setTreasury(tres.data ?? []);
       setActions(act.data ?? []);
       setOpenActions(openAct.data ?? []);
@@ -614,6 +618,85 @@ export default function MeetingPage() {
                   {selectedIdeas.length > 0 && (
                     <div className="mt-3 text-sm text-zinc-700">
                       <p className="font-semibold">Linked Job Club ideas/streams:</p>
+                      <ul className="mt-1 list-disc pl-5">
+                        {selectedIdeas.map((idea) => (
+                          <li key={`${report.id}-${idea}`}>{idea}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {attachments.length > 0 && (
+                    <div className="mt-3 text-sm text-zinc-700">
+                      <p className="font-semibold">Uploaded items:</p>
+                      <ul className="mt-1 list-disc pl-5">
+                        {attachments.map((asset) => (
+                          <li key={`${report.id}-${asset.url}`}>
+                            <a
+                              href={asset.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline"
+                            >
+                              {asset.name}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+
+      case 'gym':
+        if (!gymReports.length) return empty(emptyText);
+        return (
+          <div className="space-y-2">
+            {gymReports.map((report) => {
+              const attachments = asCommercialAttachments(report.attachments);
+              const selectedIdeas = asCommercialIdeas(report.selected_job_club_ideas);
+              return (
+                <div key={report.id} className="rounded-md border p-3">
+                  <p className="font-semibold">{report.reporting_period}</p>
+
+                  {report.issues && (
+                    <p className="mt-2 text-sm text-zinc-700 whitespace-pre-wrap">
+                      <span className="font-semibold">Issues:</span>
+                      <br />
+                      {report.issues}
+                    </p>
+                  )}
+
+                  {report.updates && (
+                    <p className="mt-3 text-sm text-zinc-700 whitespace-pre-wrap">
+                      <span className="font-semibold">Updates:</span>
+                      <br />
+                      {report.updates}
+                    </p>
+                  )}
+
+                  {report.equipment && (
+                    <p className="mt-3 text-sm text-zinc-700 whitespace-pre-wrap">
+                      <span className="font-semibold">Equipment:</span>
+                      <br />
+                      {report.equipment}
+                    </p>
+                  )}
+
+                  {report.other && (
+                    <p className="mt-3 text-sm text-zinc-700 whitespace-pre-wrap">
+                      <span className="font-semibold">Other:</span>
+                      <br />
+                      {report.other}
+                    </p>
+                  )}
+
+                  {selectedIdeas.length > 0 && (
+                    <div className="mt-3 text-sm text-zinc-700">
+                      <p className="font-semibold">Linked Gym Job Club ideas:</p>
                       <ul className="mt-1 list-disc pl-5">
                         {selectedIdeas.map((idea) => (
                           <li key={`${report.id}-${idea}`}>{idea}</li>
