@@ -76,7 +76,6 @@ export default function CommercialTransformationPage() {
 	const [period, setPeriod] = useState('');
 	const [meetingId, setMeetingId] = useState<string | null>(null);
 	const [monthlyUpdates, setMonthlyUpdates] = useState('');
-	const [gymUpdates, setGymUpdates] = useState('');
 	const [padelUpdates, setPadelUpdates] = useState('');
 	const [otherAreasRequiredAttention, setOtherAreasRequiredAttention] = useState('');
 	const [publishAttentionToPublic, setPublishAttentionToPublic] = useState(true);
@@ -161,7 +160,8 @@ export default function CommercialTransformationPage() {
 
 		const parsedIdeas = ((jobsResult.data || []) as any[])
 			.map((row) => parseJobClubIdea(row))
-			.filter((row): row is JobClubIdea => Boolean(row));
+			.filter((row): row is JobClubIdea => Boolean(row))
+			.filter((row) => !row.area.toLowerCase().includes('gym'));
 		setJobIdeas(parsedIdeas);
 	};
 
@@ -228,7 +228,6 @@ export default function CommercialTransformationPage() {
 				reporting_period: period.trim(),
 				meeting_id: meetingId,
 				monthly_updates: monthlyUpdates.trim(),
-				gym_updates: gymUpdates.trim() || null,
 				padel_updates: padelUpdates.trim() || null,
 				other_areas_required_attention: otherAreasRequiredAttention.trim() || null,
 				attachments: uploadedAssets,
@@ -265,7 +264,6 @@ export default function CommercialTransformationPage() {
 			setPeriod('');
 			setMeetingId(null);
 			setMonthlyUpdates('');
-			setGymUpdates('');
 			setPadelUpdates('');
 			setOtherAreasRequiredAttention('');
 			setSelectedJobClubIdeas([]);
@@ -334,7 +332,7 @@ export default function CommercialTransformationPage() {
 					</Link>
 
 					<h1 className="text-3xl font-extrabold text-zinc-900">Commercial & Transformation</h1>
-					<p className="mt-1 text-zinc-600">Capture monthly updates, gym updates, and areas that need attention.</p>
+					<p className="mt-1 text-zinc-600">Capture monthly updates, padel updates, and areas that need attention.</p>
 				</header>
 
 				<InlineNoticeBanner notice={notice} className="mb-6" />
@@ -433,17 +431,6 @@ export default function CommercialTransformationPage() {
 						</div>
 
 						<div>
-							<label className="mb-1 block text-sm font-medium text-zinc-700">Gym Updates</label>
-							<textarea
-								value={gymUpdates}
-								onChange={(e) => setGymUpdates(e.target.value)}
-								rows={4}
-								className="w-full rounded-md border border-zinc-300 px-3 py-2"
-								placeholder="Free text for gym-specific updates"
-							/>
-						</div>
-
-						<div>
 							<label className="mb-1 block text-sm font-medium text-zinc-700">Padel</label>
 							<textarea
 								value={padelUpdates}
@@ -461,10 +448,10 @@ export default function CommercialTransformationPage() {
 						</div>
 
 						<div>
-							<p className="mb-2 text-sm font-medium text-zinc-700">Optional Job Club Transformation Ideas/Streams</p>
+							<p className="mb-2 text-sm font-medium text-zinc-700">Optional Job Club Transformation Ideas/Streams (non-gym)</p>
 							<div className="max-h-56 space-y-2 overflow-y-auto rounded-md border border-zinc-200 p-3">
 								{jobIdeas.length === 0 ? (
-									<p className="text-sm text-zinc-500">No Job Club transformation ideas available.</p>
+									<p className="text-sm text-zinc-500">No non-gym Job Club transformation ideas available.</p>
 								) : (
 									jobIdeas.map((idea) => (
 										<label key={idea.id} className="flex items-start gap-2 text-sm text-zinc-700">
@@ -554,13 +541,6 @@ export default function CommercialTransformationPage() {
 									</div>
 									{report.monthly_updates && (
 										<p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700">{report.monthly_updates}</p>
-									)}
-									{report.gym_updates && (
-										<p className="mt-3 whitespace-pre-wrap text-sm text-zinc-700">
-											<span className="font-semibold">Gym updates:</span>
-											<br />
-											{report.gym_updates}
-										</p>
 									)}
 									{report.padel_updates && (
 										<div className="mt-3 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
