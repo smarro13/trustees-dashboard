@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import PublicSectionNav from '../../components/PublicSectionNav';
-import type { ClubRefreshJob } from './index';
+import { CLUB_REFRESH_JOBS, type ClubRefreshJob } from './index';
 import { supabase } from '../../lib/supabaseClient';
 
 type JobClubPostRow = {
@@ -132,10 +132,16 @@ export default function PublicJobClubPage() {
   const [taskAssignmentStatusByJob, setTaskAssignmentStatusByJob] = useState<Record<string, string | null>>({});
   const [submittingTaskAssignmentByJob, setSubmittingTaskAssignmentByJob] = useState<Record<string, boolean>>({});
 
-  const allJobClubJobs = useMemo(
-    () => submittedJobs,
-    [submittedJobs],
-  );
+  const allJobClubJobs = useMemo(() => {
+    const seen = new Set<string>();
+
+    return [...CLUB_REFRESH_JOBS, ...submittedJobs].filter((job) => {
+      const key = getClubRefreshTaskLabel(job).toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [submittedJobs]);
 
   const latestAssignmentsByTask = useMemo(() => {
     const map = new Map<string, TaskAssignmentSummary>();

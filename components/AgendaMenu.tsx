@@ -61,6 +61,7 @@ export default function AgendaMenu() {
           { label: '🙏 Apologies', href: '/agenda/apologies' },
           { label: '🏛️ AGM', href: '/agenda/agm' },
           { label: '📝 Previous Minutes', href: '/agenda/minutes' },
+          { label: '🧾 Minutes Formatter', href: '/agenda/minutes-formatter' },
           { label: '✅ Action Tracker', href: '/agenda/actions' },
           { label: '✉️ Correspondence', href: '/agenda/correspondence' },
           { label: '🛡️ Safeguarding', href: '/agenda/safeguarding' },

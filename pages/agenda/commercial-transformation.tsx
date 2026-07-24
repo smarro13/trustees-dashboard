@@ -137,8 +137,7 @@ export default function CommercialTransformationPage() {
 		setMeetings(meetingsResult.data || []);
 		setReports(reportsResult.data || []);
 
-		const sessionResult = (await supabase.auth.getSession()) as unknown as Record<string, any>;
-		const accessToken = sessionResult?.data?.['session']?.['access_token'] as string | undefined;
+		const accessToken = ((await supabase.auth.getSession()) as any)?.data?.session?.access_token as string | undefined;
 		if (!accessToken) {
 			setPadelVotes([]);
 		} else {
@@ -386,13 +385,25 @@ export default function CommercialTransformationPage() {
 
 						<div>
 							<label className="mb-1 block text-sm font-medium text-zinc-700">Upload Items</label>
-							<input
-								type="file"
-								multiple
-								accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
-								onChange={(e) => setFiles(Array.from(e.target.files || []))}
-								className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2"
-							/>
+							<div className="flex flex-wrap items-center gap-3">
+								<label
+									htmlFor="commercial-upload-items"
+									className="inline-flex items-center rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 cursor-pointer"
+								>
+									Choose files
+								</label>
+								<input
+									id="commercial-upload-items"
+									type="file"
+									multiple
+									accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+									onChange={(e) => setFiles(Array.from(e.target.files || []))}
+									className="hidden"
+								/>
+								<span className="text-sm text-zinc-600">
+									{files.length > 0 ? `${files.length} file${files.length === 1 ? '' : 's'} selected` : 'No file chosen'}
+								</span>
+							</div>
 							{files.length > 0 && (
 								<ul className="mt-2 space-y-1 text-sm text-zinc-600">
 									{files.map((file) => (
@@ -441,6 +452,12 @@ export default function CommercialTransformationPage() {
 								className="w-full rounded-md border border-zinc-300 px-3 py-2"
 								placeholder="Free text for padel updates"
 							/>
+							<p className="mt-2 text-sm text-zinc-600">
+								Need to test or share voting quickly?{' '}
+								<Link href="/public/padel-vote-test" target="_blank" className="font-medium text-blue-600 hover:underline">
+									Open public Padel vote page
+								</Link>
+							</p>
 						</div>
 
 						<div>
@@ -633,7 +650,7 @@ export default function CommercialTransformationPage() {
 								<table className="min-w-full divide-y divide-zinc-200 text-sm">
 									<thead>
 										<tr>
-											<th className="px-3 py-2 text-left font-semibold text-zinc-700">Name</th>
+											<th className="px-3 py-2 text-left font-semibold text-zinc-700">Member name</th>
 											<th className="px-3 py-2 text-left font-semibold text-zinc-700">Vote</th>
 											<th className="px-3 py-2 text-left font-semibold text-zinc-700">Submitted</th>
 										</tr>
