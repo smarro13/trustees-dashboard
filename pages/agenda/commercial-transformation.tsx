@@ -67,6 +67,7 @@ const asStringArray = (value: unknown): string[] => {
 };
 
 export default function CommercialTransformationPage() {
+	const [activeTab, setActiveTab] = useState<'updates' | 'gym' | 'jobclub'>('updates');
 	const [user, setUser] = useState<User | null>(null);
 	const [meetings, setMeetings] = useState<any[]>([]);
 	const [reports, setReports] = useState<any[]>([]);
@@ -332,10 +333,39 @@ export default function CommercialTransformationPage() {
 					</Link>
 
 					<h1 className="text-3xl font-extrabold text-zinc-900">Commercial & Transformation</h1>
-					<p className="mt-1 text-zinc-600">Capture monthly updates, padel updates, and areas that need attention.</p>
+					<p className="mt-1 text-zinc-600">Manage updates/issues, gym updates, and Job Club from one place.</p>
 				</header>
 
 				<InlineNoticeBanner notice={notice} className="mb-6" />
+
+				<section className="mb-6 rounded-lg border border-zinc-200 bg-zinc-50 p-2">
+					<div className="grid gap-2 sm:grid-cols-3">
+						<button
+							type="button"
+							onClick={() => setActiveTab('updates')}
+							className={`rounded-md px-4 py-2 text-sm font-medium transition ${activeTab === 'updates' ? 'bg-red-600 text-white' : 'bg-white text-zinc-700 hover:bg-zinc-100'}`}
+						>
+							Updates / Issues
+						</button>
+						<button
+							type="button"
+							onClick={() => setActiveTab('gym')}
+							className={`rounded-md px-4 py-2 text-sm font-medium transition ${activeTab === 'gym' ? 'bg-red-600 text-white' : 'bg-white text-zinc-700 hover:bg-zinc-100'}`}
+						>
+							Gym Updates
+						</button>
+						<button
+							type="button"
+							onClick={() => setActiveTab('jobclub')}
+							className={`rounded-md px-4 py-2 text-sm font-medium transition ${activeTab === 'jobclub' ? 'bg-red-600 text-white' : 'bg-white text-zinc-700 hover:bg-zinc-100'}`}
+						>
+							Job Club
+						</button>
+					</div>
+				</section>
+
+				{activeTab === 'updates' && (
+					<>
 
 				<section className="mb-10 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
 					<div className="border-b border-zinc-200 px-6 py-4">
@@ -655,6 +685,44 @@ export default function CommercialTransformationPage() {
 						)}
 					</div>
 				</section>
+					</>
+				)}
+
+				{activeTab === 'gym' && (
+					<section className="space-y-4">
+						<div className="rounded-lg border border-zinc-200 bg-white p-4">
+							<div className="mb-3 flex items-center justify-between gap-3">
+								<h2 className="text-xl font-semibold text-zinc-900">Gym Updates</h2>
+								<Link href="/agenda/gym" className="text-sm font-medium text-blue-600 hover:underline">
+									Open full page
+								</Link>
+							</div>
+							<iframe
+								title="Gym Updates"
+								src="/agenda/gym?embedded=1"
+								className="h-[1700px] w-full rounded-md border border-zinc-200"
+							/>
+						</div>
+					</section>
+				)}
+
+				{activeTab === 'jobclub' && (
+					<section className="space-y-4">
+						<div className="rounded-lg border border-zinc-200 bg-white p-4">
+							<div className="mb-3 flex items-center justify-between gap-3">
+								<h2 className="text-xl font-semibold text-zinc-900">Job Club</h2>
+								<Link href="/agenda/job-club" className="text-sm font-medium text-blue-600 hover:underline">
+									Open full page
+								</Link>
+							</div>
+							<iframe
+								title="Job Club"
+								src="/agenda/job-club?embedded=1"
+								className="h-[1800px] w-full rounded-md border border-zinc-200"
+							/>
+						</div>
+					</section>
+				)}
 			</div>
 		</main>
 	);

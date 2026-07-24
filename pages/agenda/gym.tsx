@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabaseClient';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
@@ -59,6 +60,8 @@ const asStringArray = (value: unknown): string[] => {
 };
 
 export default function GymUpdatesPage() {
+  const router = useRouter();
+  const embedded = router.query.embedded === '1';
   const [user, setUser] = useState<User | null>(null);
   const [meetings, setMeetings] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
@@ -248,14 +251,16 @@ export default function GymUpdatesPage() {
 
   return (
     <main className="min-h-screen">
-      <div className="mx-auto w-full max-w-[1200px] px-4 py-10">
-        <header className="mb-8">
-          <Link
-            href="/"
-            className="mb-3 inline-block text-sm font-medium text-blue-600 hover:underline"
-          >
-            ← Back to dashboard
-          </Link>
+      <div className={embedded ? 'mx-auto w-full px-2 py-2' : 'mx-auto w-full max-w-[1200px] px-4 py-10'}>
+        <header className={embedded ? 'mb-4' : 'mb-8'}>
+          {!embedded && (
+            <Link
+              href="/"
+              className="mb-3 inline-block text-sm font-medium text-blue-600 hover:underline"
+            >
+              ← Back to dashboard
+            </Link>
+          )}
 
           <h1 className="text-3xl font-extrabold text-zinc-900">Gym Updates</h1>
           <p className="mt-1 text-zinc-600">Track gym issues, updates, equipment changes, and other notes.</p>

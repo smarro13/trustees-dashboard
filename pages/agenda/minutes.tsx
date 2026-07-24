@@ -120,6 +120,14 @@ export default function MinutesPage() {
           <p className="mt-1 text-zinc-600">
             Upload and review approved board minutes
           </p>
+          <div className="mt-4">
+            <Link
+              href="/agenda/minutes-formatter"
+              className="inline-flex items-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+            >
+              Open Minutes Formatter
+            </Link>
+          </div>
         </header>
 
         <InlineNoticeBanner notice={notice} className="mb-6" />
