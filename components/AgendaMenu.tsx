@@ -67,6 +67,7 @@ export default function AgendaMenu() {
           { label: '⚖️ Conflicts of Interest', href: '/agenda/conflicts' },
           { label: '💰 Treasury Report', href: '/agenda/treasury' },
           { label: '🏢 Trading Company Report', href: '/agenda/trading' },
+          { label: '📈 Commercial & Transformation', href: '/agenda/commercial-transformation' },
           { label: '🎉 Events Planning', href: '/agenda/events' },
           { label: '👥 Membership Report', href: '/agenda/membership' },
           { label: '🏉 Rugby Report', href: '/agenda/rugby' },
