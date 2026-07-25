@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 import { supabase } from '../../lib/supabaseClient';
-import { User } from '@supabase/supabase-js';
 
 type AgendaBucket = {
   title: string;
@@ -187,18 +186,13 @@ const extractActionCandidatesFromMinutesText = (text: string): ActionCandidate[]
 };
 
 export default function MinutesFormatterPage() {
-  const [user, setUser] = useState<User | null>(null);
   const [meetings, setMeetings] = useState<any[]>([]);
   const [meetingTitle, setMeetingTitle] = useState('Aldwinians Management Meeting Minutes');
   const [meetingDate, setMeetingDate] = useState('');
   const [transcript, setTranscript] = useState('');
-  const [sanitizedTranscript, setSanitizedTranscript] = useState('');
   const [generated, setGenerated] = useState(false);
-  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
-  const [isImprovingAi, setIsImprovingAi] = useState(false);
   const [saveMeetingId, setSaveMeetingId] = useState<string | null>(null);
   const [savingMinutesDoc, setSavingMinutesDoc] = useState(false);
-  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [editableMinutes, setEditableMinutes] = useState('');
   const [actionMeetingId, setActionMeetingId] = useState<string | null>(null);
   const [selectedActionIds, setSelectedActionIds] = useState<Set<string>>(new Set());
@@ -217,15 +211,12 @@ export default function MinutesFormatterPage() {
 
   useEffect(() => {
     const loadMeta = async () => {
-      const [{ data: auth }, meetingsResult] = await Promise.all([
-        supabase.auth.getUser(),
-        supabase.from('meetings').select('id, meeting_date').order('meeting_date', { ascending: true }),
-      ]);
-
-      setUser(auth.user);
+      const meetingsResult = await supabase
+        .from('meetings')
+        .select('id, meeting_date')
+        .order('meeting_date', { ascending: true });
       setMeetings(meetingsResult.data || []);
     };
-
     loadMeta();
   }, []);
 
@@ -238,63 +229,10 @@ export default function MinutesFormatterPage() {
       showNotice('error', 'Paste your Otter transcript first.');
       return;
     }
-    setAiSuggestions([]);
-    setSanitizedTranscript('');
     setEditableMinutes(minutesText);
     setSelectedActionIds(new Set(actionCandidates.map((item) => item.id)));
     setGenerated(true);
     showNotice('success', 'Minutes formatted by agenda sections.');
-  };
-
-  const callAiMinutes = async (mode: 'generate' | 'improve') => {
-    if (!transcript.trim()) {
-      showNotice('error', 'Paste your transcript first.');
-      return;
-    }
-
-    const token = (await supabase.auth.getSession() as any)?.data?.session?.access_token as string | undefined;
-    if (!token) {
-      showNotice('error', 'You must be logged in to use AI minutes generation.');
-      return;
-    }
-
-    if (mode === 'generate') setIsGeneratingAi(true);
-    if (mode === 'improve') setIsImprovingAi(true);
-
-    try {
-      const response = await fetch('/api/private/minutes-ai', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          mode,
-          meetingTitle,
-          meetingDate,
-          transcript,
-          currentDraft: editableMinutes || minutesText,
-        }),
-      });
-
-      const payload = await response.json();
-      if (!response.ok || !payload.ok || typeof payload.minutesText !== 'string') {
-        showNotice('error', payload.error || 'AI generation failed.');
-        return;
-      }
-
-      setEditableMinutes(payload.minutesText);
-      setAiSuggestions(Array.isArray(payload.suggestions) ? payload.suggestions : []);
-      setSanitizedTranscript(typeof payload.sanitizedTranscript === 'string' ? payload.sanitizedTranscript : '');
-      setSelectedActionIds(new Set(extractActionCandidatesFromMinutesText(payload.minutesText).map((item) => item.id)));
-      setGenerated(true);
-      showNotice('success', mode === 'generate' ? 'AI minutes generated.' : 'AI suggestions applied to minutes draft.');
-    } catch {
-      showNotice('error', 'AI generation failed.');
-    } finally {
-      if (mode === 'generate') setIsGeneratingAi(false);
-      if (mode === 'improve') setIsImprovingAi(false);
-    }
   };
 
   const copyMinutes = async () => {
@@ -370,10 +308,8 @@ export default function MinutesFormatterPage() {
 
   const clearAll = () => {
     setTranscript('');
-    setSanitizedTranscript('');
     setGenerated(false);
     setEditableMinutes('');
-    setAiSuggestions([]);
     setSelectedActionIds(new Set());
     setActionMeetingId(null);
     setSaveMeetingId(null);
@@ -409,7 +345,7 @@ export default function MinutesFormatterPage() {
       meeting_id: actionMeetingId,
       source: 'Minutes Formatter',
       status: 'Open',
-      created_by: user?.email || null,
+      created_by: null,
     }));
 
     const { error } = await supabase.from('action_items').insert(payload);
@@ -479,22 +415,6 @@ export default function MinutesFormatterPage() {
               </button>
               <button
                 type="button"
-                onClick={() => void callAiMinutes('generate')}
-                disabled={isGeneratingAi}
-                className="rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                {isGeneratingAi ? 'Generating AI draft...' : 'Generate with AI'}
-              </button>
-              <button
-                type="button"
-                onClick={() => void callAiMinutes('improve')}
-                disabled={!generated || isImprovingAi}
-                className="rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {isImprovingAi ? 'Improving...' : 'Suggest Improvements'}
-              </button>
-              <button
-                type="button"
                 onClick={copyMinutes}
                 disabled={!generated}
                 className="rounded-md bg-zinc-900 px-4 py-2 font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
@@ -517,12 +437,6 @@ export default function MinutesFormatterPage() {
                 Clear
               </button>
             </div>
-
-            {sanitizedTranscript && (
-              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                PII scrubbing applied to transcript before AI processing.
-              </div>
-            )}
           </div>
         </section>
 
@@ -594,17 +508,6 @@ export default function MinutesFormatterPage() {
                 rows={20}
                 className="w-full rounded-lg border border-zinc-200 bg-white p-4 font-mono text-sm text-zinc-800"
               />
-
-              {aiSuggestions.length > 0 && (
-                <div className="rounded-lg border border-zinc-200 bg-white p-4">
-                  <h3 className="text-base font-semibold text-zinc-900">AI suggestions</h3>
-                  <ul className="mt-2 list-disc pl-5 text-sm text-zinc-700">
-                    {aiSuggestions.map((item, index) => (
-                      <li key={`${index}-${item}`}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
 
               <div className="rounded-lg border border-zinc-200 bg-white p-4">
                 <h3 className="text-base font-semibold text-zinc-900">Save as minutes document</h3>
