@@ -24,7 +24,7 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022';
+const MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
 
 const scrubPII = (input: string) => {
   let output = input;
@@ -147,8 +147,8 @@ export default async function handler(
     return res.status(400).json({ ok: false, error: 'Current draft is required for improvement mode.' });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ ok: false, error: 'ANTHROPIC_API_KEY is not configured.' });
+  if (!process.env.OPENAI_API_KEY) {
+    return res.status(500).json({ ok: false, error: 'OPENAI_API_KEY is not configured.' });
   }
 
   const sanitizedTranscript = scrubPII(transcript);
@@ -164,18 +164,21 @@ export default async function handler(
   );
 
   try {
-    const aiResponse = await fetch('https://api.anthropic.com/v1/messages', {
+    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY!,
-        'anthropic-version': '2023-06-01',
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY!}`,
       },
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 4096,
-        system: 'You format meeting minutes into strict agenda sections. Output must be JSON only.',
+        response_format: { type: 'json_object' },
         messages: [
+          {
+            role: 'system',
+            content: 'You format meeting minutes into strict agenda sections. Output must be JSON only with keys minutesText (string) and suggestions (array of strings).',
+          },
           {
             role: 'user',
             content: prompt,
@@ -185,7 +188,7 @@ export default async function handler(
     });
 
     const payload = await aiResponse.json();
-    const content = payload?.content?.[0]?.text;
+    const content = payload?.choices?.[0]?.message?.content;
 
     if (!aiResponse.ok || typeof content !== 'string') {
       return res.status(500).json({ ok: false, error: payload?.error?.message || 'AI generation failed.' });

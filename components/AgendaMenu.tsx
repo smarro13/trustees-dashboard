@@ -89,6 +89,7 @@ export default function AgendaMenu() {
     { label: '🎉 Events Planning', href: '/agenda/events' },
     { label: '👥 Membership Report', href: '/agenda/membership' },
     { label: '🏉 Rugby Report', href: '/agenda/rugby' },
+    { label: '🎰 Presidents Lotto', href: '/agenda/presidents-lotto' },
     { label: '📌 Matters Arising', href: '/agenda/matters-arising' },
     { label: '💬 AOB', href: '/agenda/aob' },
   ];
