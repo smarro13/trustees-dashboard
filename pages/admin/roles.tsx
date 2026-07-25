@@ -222,6 +222,8 @@ export default function AdminRolesPage() {
     setNewRole('management');
     setStatus(`User ${created.email} created. A password reset email has been sent.`);
   };
+
+  return (
     <main className="min-h-screen">
       <div className="mx-auto w-full max-w-[1200px] px-4 py-10">
         <header className="mb-8">
