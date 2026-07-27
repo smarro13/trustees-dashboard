@@ -244,8 +244,12 @@ export default function PresidentsLottoPage() {
     setConfetti(false);
     setDrawing(true);
 
-    // Pick winners up front
-    const shuffled = [...activeMembers].sort(() => Math.random() - 0.5);
+    // Fisher-Yates shuffle for truly random selection
+    const shuffled = [...activeMembers];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
     const winners: [string, string, string] = [shuffled[0].name, shuffled[1].name, shuffled[2].name];
     const names = activeMembers.map((m) => m.name);
 
