@@ -290,13 +290,18 @@ export default function JobClubManagementPage() {
     [filteredPosts],
   );
 
+  const showArchivedSection = statusFilter === 'Completed';
+  const visibleJobsCount = showArchivedSection ? completedOrClosedJobs.length : openJobs.length + assignedJobs.length;
+
   const stats = useMemo(() => {
-    const all = posts.map((p) => parseJobMeta(p.description)).filter(Boolean) as ParsedJobMeta[];
+    const rows = posts.map((post) => ({ post, meta: parseJobMeta(post.description) }));
+    const activeRows = rows.filter(({ post }) => post.is_active !== false);
+
     return {
-      total: posts.length,
-      notStarted: all.filter((m) => m.status === 'Not Started').length,
-      ongoing: all.filter((m) => m.status === 'Ongoing').length,
-      completed: all.filter((m) => m.status === 'Completed').length,
+      activeTotal: activeRows.length,
+      notStarted: activeRows.filter(({ meta }) => meta?.status === 'Not Started').length,
+      ongoing: activeRows.filter(({ meta }) => meta?.status === 'Ongoing').length,
+      archived: rows.filter(({ post, meta }) => post.is_active === false || meta?.status === 'Completed').length,
     };
   }, [posts]);
 
@@ -625,10 +630,10 @@ export default function JobClubManagementPage() {
         {/* Stats */}
         <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
           {[
-            { label: 'Total jobs', value: stats.total },
+            { label: 'Active jobs', value: stats.activeTotal },
             { label: 'Not started', value: stats.notStarted },
             { label: 'Ongoing', value: stats.ongoing },
-            { label: 'Completed', value: stats.completed },
+            { label: 'Archived', value: stats.archived },
           ].map((stat) => (
             <div key={stat.label} className="rounded-lg bg-white px-4 py-4 shadow-sm ring-1 ring-zinc-200">
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">{stat.label}</p>
@@ -664,12 +669,12 @@ export default function JobClubManagementPage() {
               Clear filters
             </button>
           )}
-          <p className="ml-auto text-sm text-zinc-500">{filteredPosts.length} of {posts.length} shown</p>
+          <p className="ml-auto text-sm text-zinc-500">{visibleJobsCount} of {posts.length} shown</p>
         </div>
 
         {loading ? (
           <p className="text-sm text-zinc-500">Loading...</p>
-        ) : filteredPosts.length === 0 ? (
+        ) : visibleJobsCount === 0 ? (
           <p className="text-sm text-zinc-500">No jobs match the current filters.</p>
         ) : (
           <div className="space-y-8">
@@ -695,7 +700,7 @@ export default function JobClubManagementPage() {
               </div>
             )}
 
-            {completedOrClosedJobs.length > 0 && (
+            {showArchivedSection && completedOrClosedJobs.length > 0 && (
               <div>
                 <h2 className="mb-4 text-lg font-semibold text-zinc-900">
                   Completed / Closed Jobs ({completedOrClosedJobs.length})
@@ -706,7 +711,7 @@ export default function JobClubManagementPage() {
               </div>
             )}
 
-            {openJobs.length === 0 && assignedJobs.length === 0 && completedOrClosedJobs.length === 0 && (
+            {openJobs.length === 0 && assignedJobs.length === 0 && (!showArchivedSection || completedOrClosedJobs.length === 0) && (
               <p className="text-sm text-zinc-500">No jobs match the current filters.</p>
             )}
           </div>
