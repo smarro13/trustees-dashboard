@@ -104,13 +104,14 @@ export default function CommercialTransformationPage() {
 	const [meetingId, setMeetingId] = useState<string | null>(null);
 	const [monthlyUpdates, setMonthlyUpdates] = useState('');
 	const [padelUpdates, setPadelUpdates] = useState('');
-	const [supportingEvidenceUrl, setSupportingEvidenceUrl] = useState('');
+	const [padelSupportingEvidenceInput, setPadelSupportingEvidenceInput] = useState('');
 	const [otherAreasRequiredAttention, setOtherAreasRequiredAttention] = useState('');
 	const [publishAttentionToPublic, setPublishAttentionToPublic] = useState(true);
 	const [selectedJobClubIdeas, setSelectedJobClubIdeas] = useState<string[]>([]);
 	const [files, setFiles] = useState<File[]>([]);
 
 	const [saving, setSaving] = useState(false);
+	const [savingPadelEvidence, setSavingPadelEvidence] = useState(false);
 	const [shareUpdatingReportId, setShareUpdatingReportId] = useState<string | null>(null);
 	const [linkingReportId, setLinkingReportId] = useState<string | null>(null);
 	const [meetingSelectionByReport, setMeetingSelectionByReport] = useState<Record<string, string>>({});
@@ -167,22 +168,40 @@ export default function CommercialTransformationPage() {
 		const accessToken = ((await supabase.auth.getSession()) as any)?.data?.session?.access_token as string | undefined;
 		if (!accessToken) {
 			setPadelVotes([]);
+			setPadelSupportingEvidenceInput('');
 		} else {
 			try {
-				const votesResponse = await fetch('/api/private/padel-votes', {
-					method: 'GET',
-					headers: {
-						Authorization: `Bearer ${accessToken}`,
-					},
-				});
-				const payload = await votesResponse.json();
-				if (votesResponse.ok && payload.ok && Array.isArray(payload.votes)) {
-					setPadelVotes(payload.votes as PadelVote[]);
+				const [votesResponse, evidenceResponse] = await Promise.all([
+					fetch('/api/private/padel-votes', {
+						method: 'GET',
+						headers: {
+							Authorization: `Bearer ${accessToken}`,
+						},
+					}),
+					fetch('/api/private/padel-supporting-evidence', {
+						method: 'GET',
+						headers: {
+							Authorization: `Bearer ${accessToken}`,
+						},
+					}),
+				]);
+
+				const votesPayload = await votesResponse.json();
+				if (votesResponse.ok && votesPayload.ok && Array.isArray(votesPayload.votes)) {
+					setPadelVotes(votesPayload.votes as PadelVote[]);
 				} else {
 					setPadelVotes([]);
 				}
+
+				const evidencePayload = await evidenceResponse.json();
+				if (evidenceResponse.ok && evidencePayload.ok && Array.isArray(evidencePayload.urls)) {
+					setPadelSupportingEvidenceInput((evidencePayload.urls as string[]).join('\n'));
+				} else {
+					setPadelSupportingEvidenceInput('');
+				}
 			} catch {
 				setPadelVotes([]);
+				setPadelSupportingEvidenceInput('');
 			}
 		}
 
@@ -251,14 +270,12 @@ export default function CommercialTransformationPage() {
 
 		try {
 			const uploadedAssets = await uploadAttachments();
-			const evidenceUrls = parseSupportingEvidenceUrls(supportingEvidenceUrl);
 
 			const { error: insertError } = await supabase.from('commercial_transformation_updates').insert({
 				reporting_period: period.trim(),
 				meeting_id: meetingId,
 				monthly_updates: monthlyUpdates.trim(),
 				padel_updates: padelUpdates.trim() || null,
-				supporting_evidence_url: evidenceUrls.length > 0 ? JSON.stringify(evidenceUrls) : null,
 				other_areas_required_attention: otherAreasRequiredAttention.trim() || null,
 				attachments: uploadedAssets,
 				selected_job_club_ideas: selectedIdeasLabel,
@@ -295,7 +312,6 @@ export default function CommercialTransformationPage() {
 			setMeetingId(null);
 			setMonthlyUpdates('');
 			setPadelUpdates('');
-			setSupportingEvidenceUrl('');
 			setOtherAreasRequiredAttention('');
 			setSelectedJobClubIdeas([]);
 			setFiles([]);
@@ -349,6 +365,41 @@ export default function CommercialTransformationPage() {
 		await loadData();
 		showNotice('success', nextValue ? 'Padel update shared to public page.' : 'Padel update hidden from public page.');
 		setShareUpdatingReportId(null);
+	};
+
+	const savePadelSupportingEvidence = async () => {
+		const accessToken = ((await supabase.auth.getSession()) as any)?.data?.session?.access_token as string | undefined;
+		if (!accessToken) {
+			showNotice('error', 'You must be logged in to update supporting evidence links.');
+			return;
+		}
+
+		setSavingPadelEvidence(true);
+		try {
+			const urls = parseSupportingEvidenceUrls(padelSupportingEvidenceInput);
+			const response = await fetch('/api/private/padel-supporting-evidence', {
+				method: 'PUT',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${accessToken}`,
+				},
+				body: JSON.stringify({ urls }),
+			});
+
+			const payload = await response.json();
+			if (!response.ok || !payload.ok) {
+				showNotice('error', payload.error || 'Failed to update supporting evidence links.');
+				setSavingPadelEvidence(false);
+				return;
+			}
+
+			setPadelSupportingEvidenceInput((payload.urls as string[]).join('\n'));
+			showNotice('success', 'Supporting evidence links updated.');
+		} catch {
+			showNotice('error', 'Failed to update supporting evidence links.');
+		}
+
+		setSavingPadelEvidence(false);
 	};
 
 	return (
@@ -499,13 +550,6 @@ export default function CommercialTransformationPage() {
 								className="w-full rounded-md border border-zinc-300 px-3 py-2"
 								placeholder="Free text for padel updates"
 							/>
-							<textarea
-								value={supportingEvidenceUrl}
-								onChange={(e) => setSupportingEvidenceUrl(e.target.value)}
-								rows={3}
-								placeholder="Supporting evidence PDF URLs (optional, one per line)"
-								className="mt-3 w-full rounded-md border border-zinc-300 px-3 py-2"
-							/>
 							<p className="mt-2 text-sm text-zinc-600">
 								Need to test or share voting quickly?{' '}
 								<Link href="/public/padel-vote" target="_blank" className="font-medium text-blue-600 hover:underline">
@@ -633,25 +677,6 @@ export default function CommercialTransformationPage() {
 															: 'Share to public page'}
 												</button>
 											</div>
-													{parseSupportingEvidenceUrls(report.supporting_evidence_url).length > 0 && (
-														<div className="mt-3 text-sm">
-															<p className="font-semibold text-zinc-700">Supporting evidence PDFs:</p>
-															<ul className="mt-1 list-disc pl-5">
-																{parseSupportingEvidenceUrls(report.supporting_evidence_url).map((url) => (
-																	<li key={`${report.id}-${url}`}>
-																		<a
-																			href={url}
-																			target="_blank"
-																			rel="noopener noreferrer"
-																			className="font-medium text-blue-600 hover:underline"
-																		>
-																			{url}
-																		</a>
-																	</li>
-																))}
-															</ul>
-														</div>
-													)}
 										</div>
 									)}
 									{report.other_areas_required_attention && (
@@ -689,6 +714,32 @@ export default function CommercialTransformationPage() {
 							);
 						})
 					)}
+				</section>
+
+				<section className="mb-10 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
+					<div className="border-b border-zinc-200 px-6 py-4">
+						<h2 className="text-xl font-semibold">Public Padel Supporting Evidence</h2>
+						<p className="mt-1 text-sm text-zinc-600">Managed separately from monthly updates so links can be updated anytime.</p>
+					</div>
+					<div className="space-y-4 px-6 py-6">
+						<textarea
+							value={padelSupportingEvidenceInput}
+							onChange={(e) => setPadelSupportingEvidenceInput(e.target.value)}
+							rows={4}
+							placeholder="One PDF URL per line"
+							className="w-full rounded-md border border-zinc-300 px-3 py-2"
+						/>
+						<div className="flex justify-end">
+							<button
+								type="button"
+								onClick={savePadelSupportingEvidence}
+								disabled={savingPadelEvidence}
+								className="rounded-md bg-zinc-900 px-4 py-2 font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
+							>
+								{savingPadelEvidence ? 'Saving...' : 'Save Supporting Evidence Links'}
+							</button>
+						</div>
+					</div>
 				</section>
 
 				<section className="space-y-4">
