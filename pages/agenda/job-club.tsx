@@ -328,16 +328,35 @@ export default function JobClubManagementPage() {
   };
 
   const toggleActive = async (post: JobClubPost) => {
+    const nextIsActive = !post.is_active;
+    const meta = parseJobMeta(post.description);
+
+    const updatePayload: Partial<JobClubPost> = {
+      is_active: nextIsActive,
+    };
+
+    if (meta) {
+      const nextMeta: ParsedJobMeta = {
+        ...meta,
+        status: nextIsActive
+          ? (meta.status === 'Completed' ? 'Ongoing' : meta.status)
+          : 'Completed',
+      };
+
+      updatePayload.title = `${nextMeta.area} - ${nextMeta.job}`;
+      updatePayload.description = buildDescription(nextMeta);
+    }
+
     const { error } = await supabase
       .from('job_club_posts')
-      .update({ is_active: !post.is_active })
+      .update(updatePayload)
       .eq('id', post.id);
     if (error) {
       showNotice('error', 'Failed to change visibility: ' + error.message);
       return;
     }
     await loadData();
-    showNotice('success', `Job visibility set to ${post.is_active ? 'closed' : 'open'}.`);
+    showNotice('success', `Job visibility set to ${post.is_active ? 'closed and completed' : 'open'}.`);
   };
 
   const deletePost = async () => {
