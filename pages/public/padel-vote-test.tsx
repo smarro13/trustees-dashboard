@@ -58,8 +58,7 @@ export default function PadelVoteTestPage() {
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Internal Test</p>
-              <h1 className="mt-2 text-2xl font-semibold text-zinc-900">Padel Partnership Vote</h1>
+              <h1 className="text-2xl font-semibold text-zinc-900">Padel Partnership Vote</h1>
               <p className="mt-2 text-sm text-zinc-600">Question: Should Aldwinians partner with Raw Padel?</p>
             </div>
             <Link href="/public" className="text-sm font-medium text-red-700 hover:underline">
@@ -78,6 +77,7 @@ export default function PadelVoteTestPage() {
                 onChange={(event) => setName(event.target.value)}
                 className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
                 placeholder="Member full name"
+                required
               />
             </div>
 
