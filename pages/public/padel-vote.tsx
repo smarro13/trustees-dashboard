@@ -2,38 +2,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import PublicSectionNav from '../../components/PublicSectionNav';
 
-type PublicPadelUpdate = {
-  id: string;
-  reporting_period: string;
-  padel_updates: string | null;
-  supporting_evidence_url: string | null;
-  created_at: string;
-};
-
-const parseSupportingEvidenceUrls = (value: string | null): string[] => {
-  if (!value) return [];
-
-  const trimmed = value.trim();
-  if (!trimmed) return [];
-
-  if (trimmed.startsWith('[')) {
-    try {
-      const parsed = JSON.parse(trimmed) as unknown;
-      if (Array.isArray(parsed)) {
-        return parsed
-          .filter((item): item is string => typeof item === 'string')
-          .map((item) => item.trim())
-          .filter((item) => item.length > 0);
-      }
-    } catch {
-      // Fall back to plain text handling
-    }
-  }
-
-  return trimmed
-    .split(/\r?\n|,/)
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
+type PublicPadelSupportingEvidenceResponse = {
+  urls?: string[];
 };
 
 export default function PadelVotePage() {
@@ -46,19 +16,16 @@ export default function PadelVotePage() {
   useEffect(() => {
     const loadSupportingEvidence = async () => {
       try {
-        const response = await fetch('/api/public/padel-updates');
+        const response = await fetch('/api/public/padel-supporting-evidence');
         const payload = await response.json();
 
-        if (!response.ok || !payload.ok || !Array.isArray(payload.updates)) {
+        if (!response.ok || !payload.ok || !Array.isArray(payload.urls)) {
           setSupportingEvidenceUrls([]);
           return;
         }
 
-        const updates = payload.updates as PublicPadelUpdate[];
-        const latestWithPdfs = updates
-          .map((item) => parseSupportingEvidenceUrls(item.supporting_evidence_url))
-          .find((urls) => urls.length > 0);
-        setSupportingEvidenceUrls(latestWithPdfs || []);
+        const data = payload as PublicPadelSupportingEvidenceResponse;
+        setSupportingEvidenceUrls((data.urls || []).filter((item) => typeof item === 'string' && item.trim().length > 0));
       } catch {
         setSupportingEvidenceUrls([]);
       }
