@@ -116,6 +116,12 @@ const parseTaskAssignmentNote = (row: JobClubNote): TaskAssignmentSummary | null
   };
 };
 
+const normalizeTaskKey = (meta: Pick<ParsedJobMeta, 'area' | 'job'>) =>
+  `${meta.area.trim().toLowerCase()}::${meta.job.trim().toLowerCase()}`;
+
+const normalizeTitleKey = (title: string | null | undefined) =>
+  (title || '').trim().toLowerCase();
+
 export default function JobClubManagementPage() {
   const router = useRouter();
   const embedded = router.query.embedded === '1';
@@ -350,30 +356,78 @@ export default function JobClubManagementPage() {
     const nextIsActive = !post.is_active;
     const meta = parseJobMeta(post.description);
 
-    const updatePayload: Partial<JobClubPost> = {
-      is_active: nextIsActive,
-    };
+    if (!meta) {
+      const { error } = await supabase
+        .from('job_club_posts')
+        .update({ is_active: nextIsActive })
+        .eq('id', post.id);
 
-    if (meta) {
+      if (error) {
+        showNotice('error', 'Failed to change visibility: ' + error.message);
+        return;
+      }
+
+      await loadData();
+      showNotice('success', `Job visibility set to ${post.is_active ? 'closed' : 'open'}.`);
+      return;
+    }
+
+    const taskKey = normalizeTaskKey(meta);
+    const titleKey = normalizeTitleKey(`${meta.area} - ${meta.job}`);
+    const matchingRows = posts.filter((candidate) => {
+      const candidateMeta = parseJobMeta(candidate.description);
+      if (candidateMeta) {
+        return normalizeTaskKey(candidateMeta) === taskKey;
+      }
+
+      return normalizeTitleKey(candidate.title) === titleKey;
+    });
+
+    const updates = matchingRows.map((row) => {
+      const rowMeta = parseJobMeta(row.description);
+      if (!rowMeta) {
+        return supabase
+          .from('job_club_posts')
+          .update({ is_active: nextIsActive })
+          .eq('id', row.id);
+      }
+
       const nextMeta: ParsedJobMeta = {
-        ...meta,
+        ...rowMeta,
         status: nextIsActive
-          ? (meta.status === 'Completed' ? 'Ongoing' : meta.status)
+          ? (rowMeta.status === 'Completed' ? 'Ongoing' : rowMeta.status)
           : 'Completed',
       };
 
-      updatePayload.title = `${nextMeta.area} - ${nextMeta.job}`;
-      updatePayload.description = buildDescription(nextMeta);
+      return supabase
+        .from('job_club_posts')
+        .update({
+          is_active: nextIsActive,
+          title: `${nextMeta.area} - ${nextMeta.job}`,
+          description: buildDescription(nextMeta),
+        })
+        .eq('id', row.id);
+    }).filter((update): update is ReturnType<typeof supabase.from<'job_club_posts'>['update']> => Boolean(update));
+
+    if (updates.length === 0) {
+      const { error } = await supabase
+        .from('job_club_posts')
+        .update({ is_active: nextIsActive })
+        .eq('id', post.id);
+
+      if (error) {
+        showNotice('error', 'Failed to change visibility: ' + error.message);
+        return;
+      }
+    } else {
+      const results = await Promise.all(updates);
+      const failed = results.find((result) => result.error);
+      if (failed?.error) {
+        showNotice('error', 'Failed to change visibility: ' + failed.error.message);
+        return;
+      }
     }
 
-    const { error } = await supabase
-      .from('job_club_posts')
-      .update(updatePayload)
-      .eq('id', post.id);
-    if (error) {
-      showNotice('error', 'Failed to change visibility: ' + error.message);
-      return;
-    }
     await loadData();
     showNotice('success', `Job visibility set to ${post.is_active ? 'closed and completed' : 'open'}.`);
   };
