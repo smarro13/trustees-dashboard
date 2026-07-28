@@ -122,6 +122,11 @@ const normalizeTaskKey = (meta: Pick<ParsedJobMeta, 'area' | 'job'>) =>
 const normalizeTitleKey = (title: string | null | undefined) =>
   (title || '').trim().toLowerCase();
 
+const getAccessToken = async () => {
+  const sessionResult = await supabase.auth.getSession();
+  return sessionResult.data.session?.access_token || '';
+};
+
 export default function JobClubManagementPage() {
   const router = useRouter();
   const embedded = router.query.embedded === '1';
@@ -335,14 +340,27 @@ export default function JobClubManagementPage() {
     };
 
     setSaving(post.id);
-    const { error } = await supabase
-      .from('job_club_posts')
-      .update({ description: buildDescription(updated), title: `${updated.area} - ${updated.job}` })
-      .eq('id', post.id);
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      setSaving(null);
+      showNotice('error', 'Your session has expired. Please sign in again.');
+      return;
+    }
+
+    const response = await fetch('/api/private/job-club-posts', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ action: 'save', id: post.id, values: updated }),
+    });
+
+    const payload = await response.json();
     setSaving(null);
 
-    if (error) {
-      showNotice('error', 'Failed to save changes: ' + error.message);
+    if (!response.ok || !payload.ok) {
+      showNotice('error', 'Failed to save changes: ' + (payload.error || 'Unknown error'));
       return;
     }
 
@@ -354,78 +372,25 @@ export default function JobClubManagementPage() {
 
   const toggleActive = async (post: JobClubPost) => {
     const nextIsActive = !post.is_active;
-    const meta = parseJobMeta(post.description);
-
-    if (!meta) {
-      const { error } = await supabase
-        .from('job_club_posts')
-        .update({ is_active: nextIsActive })
-        .eq('id', post.id);
-
-      if (error) {
-        showNotice('error', 'Failed to change visibility: ' + error.message);
-        return;
-      }
-
-      await loadData();
-      showNotice('success', `Job visibility set to ${post.is_active ? 'closed' : 'open'}.`);
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      showNotice('error', 'Your session has expired. Please sign in again.');
       return;
     }
 
-    const taskKey = normalizeTaskKey(meta);
-    const titleKey = normalizeTitleKey(`${meta.area} - ${meta.job}`);
-    const matchingRows = posts.filter((candidate) => {
-      const candidateMeta = parseJobMeta(candidate.description);
-      if (candidateMeta) {
-        return normalizeTaskKey(candidateMeta) === taskKey;
-      }
-
-      return normalizeTitleKey(candidate.title) === titleKey;
+    const response = await fetch('/api/private/job-club-posts', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ action: 'toggle-active', id: post.id, nextIsActive }),
     });
 
-    const updates = matchingRows.map((row) => {
-      const rowMeta = parseJobMeta(row.description);
-      if (!rowMeta) {
-        return supabase
-          .from('job_club_posts')
-          .update({ is_active: nextIsActive })
-          .eq('id', row.id);
-      }
-
-      const nextMeta: ParsedJobMeta = {
-        ...rowMeta,
-        status: nextIsActive
-          ? (rowMeta.status === 'Completed' ? 'Ongoing' : rowMeta.status)
-          : 'Completed',
-      };
-
-      return supabase
-        .from('job_club_posts')
-        .update({
-          is_active: nextIsActive,
-          title: `${nextMeta.area} - ${nextMeta.job}`,
-          description: buildDescription(nextMeta),
-        })
-        .eq('id', row.id);
-    }).filter((update): update is ReturnType<typeof supabase.from<'job_club_posts'>['update']> => Boolean(update));
-
-    if (updates.length === 0) {
-      const { error } = await supabase
-        .from('job_club_posts')
-        .update({ is_active: nextIsActive })
-        .eq('id', post.id);
-
-      if (error) {
-        showNotice('error', 'Failed to change visibility: ' + error.message);
-        return;
-      }
-    } else {
-      const results = await Promise.all(updates);
-      const failed = results.find((result) => result.error);
-      if (failed?.error) {
-        showNotice('error', 'Failed to change visibility: ' + failed.error.message);
-        return;
-      }
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) {
+      showNotice('error', 'Failed to change visibility: ' + (payload.error || 'Unknown error'));
+      return;
     }
 
     await loadData();
@@ -436,11 +401,27 @@ export default function JobClubManagementPage() {
     if (!deleteTargetId) return;
     setDeleting(true);
 
-    const { error } = await supabase.from('job_club_posts').delete().eq('id', deleteTargetId);
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      setDeleting(false);
+      showNotice('error', 'Your session has expired. Please sign in again.');
+      return;
+    }
+
+    const response = await fetch('/api/private/job-club-posts', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ id: deleteTargetId }),
+    });
+
+    const payload = await response.json();
     setDeleting(false);
 
-    if (error) {
-      showNotice('error', 'Failed to delete job: ' + error.message);
+    if (!response.ok || !payload.ok) {
+      showNotice('error', 'Failed to delete job: ' + (payload.error || 'Unknown error'));
       return;
     }
 
