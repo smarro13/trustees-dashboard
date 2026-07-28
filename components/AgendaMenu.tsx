@@ -33,38 +33,7 @@ const getEffectiveRole = (user: any): DashboardRole => {
 
 export default function AgendaMenu() {
   const [open, setOpen] = useState(true);
-  const [isScrolled, setIsScrolled] = useState(false);
   const [userRole, setUserRole] = useState<DashboardRole>(null);
-
-  useEffect(() => {
-    let lastScrollY = window.scrollY;
-    let ticking = false;
-
-    const handleScroll = () => {
-      lastScrollY = window.scrollY;
-
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          // On mobile, close the menu when scrolling down past 350px
-          if (window.innerWidth < 640 && lastScrollY > 350) {
-            setIsScrolled(true);
-            setOpen(false);
-          } else if (lastScrollY <= 350) {
-            setIsScrolled(false);
-          }
-          ticking = false;
-        });
-
-        ticking = true;
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-    };
-  }, []);
 
   useEffect(() => {
     const loadRole = async () => {
