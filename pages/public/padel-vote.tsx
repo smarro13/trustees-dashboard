@@ -1,12 +1,43 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import PublicSectionNav from '../../components/PublicSectionNav';
 
-export default function PadelVoteTestPage() {
+type PublicPadelUpdate = {
+  id: string;
+  reporting_period: string;
+  padel_updates: string | null;
+  supporting_evidence_url: string | null;
+  created_at: string;
+};
+
+export default function PadelVotePage() {
   const [name, setName] = useState('');
   const [vote, setVote] = useState<'yes' | 'no'>('yes');
   const [status, setStatus] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [supportingEvidenceUrl, setSupportingEvidenceUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadSupportingEvidence = async () => {
+      try {
+        const response = await fetch('/api/public/padel-updates');
+        const payload = await response.json();
+
+        if (!response.ok || !payload.ok || !Array.isArray(payload.updates)) {
+          setSupportingEvidenceUrl(null);
+          return;
+        }
+
+        const updates = payload.updates as PublicPadelUpdate[];
+        const latestWithPdf = updates.find((item) => typeof item.supporting_evidence_url === 'string' && item.supporting_evidence_url.trim().length > 0);
+        setSupportingEvidenceUrl(latestWithPdf?.supporting_evidence_url?.trim() || null);
+      } catch {
+        setSupportingEvidenceUrl(null);
+      }
+    };
+
+    loadSupportingEvidence();
+  }, []);
 
   const submitVote = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -64,6 +95,22 @@ export default function PadelVoteTestPage() {
             <Link href="/public" className="text-sm font-medium text-red-700 hover:underline">
               Back to members page
             </Link>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-4">
+            <p className="text-sm font-medium text-zinc-900">Supporting Evidence</p>
+            {supportingEvidenceUrl ? (
+              <a
+                href={supportingEvidenceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-flex text-sm font-medium text-red-700 hover:underline"
+              >
+                Open supporting evidence PDF
+              </a>
+            ) : (
+              <p className="mt-1 text-sm text-zinc-600">Supporting evidence will be published here when available.</p>
+            )}
           </div>
 
           <form className="mt-6 space-y-4" onSubmit={submitVote}>

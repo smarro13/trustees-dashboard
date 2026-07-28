@@ -78,6 +78,7 @@ export default function CommercialTransformationPage() {
 	const [meetingId, setMeetingId] = useState<string | null>(null);
 	const [monthlyUpdates, setMonthlyUpdates] = useState('');
 	const [padelUpdates, setPadelUpdates] = useState('');
+	const [supportingEvidenceUrl, setSupportingEvidenceUrl] = useState('');
 	const [otherAreasRequiredAttention, setOtherAreasRequiredAttention] = useState('');
 	const [publishAttentionToPublic, setPublishAttentionToPublic] = useState(true);
 	const [selectedJobClubIdeas, setSelectedJobClubIdeas] = useState<string[]>([]);
@@ -230,6 +231,7 @@ export default function CommercialTransformationPage() {
 				meeting_id: meetingId,
 				monthly_updates: monthlyUpdates.trim(),
 				padel_updates: padelUpdates.trim() || null,
+				supporting_evidence_url: supportingEvidenceUrl.trim() || null,
 				other_areas_required_attention: otherAreasRequiredAttention.trim() || null,
 				attachments: uploadedAssets,
 				selected_job_club_ideas: selectedIdeasLabel,
@@ -266,6 +268,7 @@ export default function CommercialTransformationPage() {
 			setMeetingId(null);
 			setMonthlyUpdates('');
 			setPadelUpdates('');
+			setSupportingEvidenceUrl('');
 			setOtherAreasRequiredAttention('');
 			setSelectedJobClubIdeas([]);
 			setFiles([]);
@@ -469,9 +472,16 @@ export default function CommercialTransformationPage() {
 								className="w-full rounded-md border border-zinc-300 px-3 py-2"
 								placeholder="Free text for padel updates"
 							/>
+							<input
+								type="url"
+								value={supportingEvidenceUrl}
+								onChange={(e) => setSupportingEvidenceUrl(e.target.value)}
+								placeholder="Supporting evidence PDF URL (optional)"
+								className="mt-3 w-full rounded-md border border-zinc-300 px-3 py-2"
+							/>
 							<p className="mt-2 text-sm text-zinc-600">
 								Need to test or share voting quickly?{' '}
-								<Link href="/public/padel-vote-test" target="_blank" className="font-medium text-blue-600 hover:underline">
+								<Link href="/public/padel-vote" target="_blank" className="font-medium text-blue-600 hover:underline">
 									Open public Padel vote page
 								</Link>
 							</p>
@@ -596,6 +606,18 @@ export default function CommercialTransformationPage() {
 															: 'Share to public page'}
 												</button>
 											</div>
+													{report.supporting_evidence_url && (
+														<p className="mt-3 text-sm">
+															<a
+																href={report.supporting_evidence_url}
+																target="_blank"
+																rel="noopener noreferrer"
+																className="font-medium text-blue-600 hover:underline"
+															>
+																Open supporting evidence PDF
+															</a>
+														</p>
+													)}
 										</div>
 									)}
 									{report.other_areas_required_attention && (
