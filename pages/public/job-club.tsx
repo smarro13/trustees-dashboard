@@ -156,19 +156,28 @@ export default function PublicJobClubPage() {
   }, [taskAssignments]);
 
   const openJobs = useMemo(
-    () => allJobClubJobs.filter((job) => !latestAssignmentsByTask.has(getClubRefreshTaskLabel(job))),
+    () =>
+      allJobClubJobs.filter(
+        (job) => job.status !== 'Completed' && !latestAssignmentsByTask.has(getClubRefreshTaskLabel(job)),
+      ),
     [allJobClubJobs, latestAssignmentsByTask],
   );
 
   const assignedJobs = useMemo(
     () =>
       allJobClubJobs
+        .filter((job) => job.status !== 'Completed')
         .map((job) => {
           const assignment = latestAssignmentsByTask.get(getClubRefreshTaskLabel(job));
           return assignment ? { job, assignment } : null;
         })
         .filter((value): value is { job: ClubRefreshJob; assignment: TaskAssignmentSummary } => Boolean(value)),
     [allJobClubJobs, latestAssignmentsByTask],
+  );
+
+  const completedJobs = useMemo(
+    () => allJobClubJobs.filter((job) => job.status === 'Completed'),
+    [allJobClubJobs],
   );
 
   const clubRefreshAreas = useMemo(
@@ -191,6 +200,11 @@ export default function PublicJobClubPage() {
   const filteredAssignedJobs = useMemo(
     () => assignedJobs.filter(({ job }) => jobMatchesFilters(job)),
     [assignedJobs, jobAreaFilter, jobStatusFilter, jobPriorityFilter],
+  );
+
+  const filteredCompletedJobs = useMemo(
+    () => completedJobs.filter((item) => jobMatchesFilters(item)),
+    [completedJobs, jobAreaFilter, jobStatusFilter, jobPriorityFilter],
   );
 
   const loadData = async () => {
@@ -568,6 +582,31 @@ export default function PublicJobClubPage() {
                       </div>
                       <p className="mt-2 text-xs text-zinc-600">Materials: {job.materials}</p>
                       {renderTaskAssignmentDropdown(job, true)}
+                    </article>
+                  ))
+                )}
+              </div>
+            </section>
+
+            <section className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="text-base font-semibold text-zinc-900">Completed Jobs</h3>
+                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 ring-1 ring-zinc-200">{filteredCompletedJobs.length}</span>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {filteredCompletedJobs.length === 0 ? (
+                  <p className="rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-500 md:col-span-2 xl:col-span-3">No completed jobs match the current filters.</p>
+                ) : (
+                  filteredCompletedJobs.map((item) => (
+                    <article key={`${item.area}-${item.job}-completed-card`} className="rounded-xl border border-zinc-200 bg-white p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{item.area}</p>
+                      <h3 className="mt-1 text-sm font-semibold text-zinc-900">{item.job}</h3>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClasses(item.status)}`}>{item.status}</span>
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getPriorityBadgeClasses(item.priority)}`}>{item.priority}</span>
+                      </div>
+                      <p className="mt-2 text-xs text-zinc-600">Materials: {item.materials}</p>
                     </article>
                   ))
                 )}
