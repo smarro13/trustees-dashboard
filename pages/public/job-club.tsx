@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import PublicSectionNav from '../../components/PublicSectionNav';
-import { CLUB_REFRESH_JOBS, type ClubRefreshJob } from './index';
+import { type ClubRefreshJob } from './index';
 import { supabase } from '../../lib/supabaseClient';
 
 type JobClubPostRow = {
@@ -135,7 +135,7 @@ export default function PublicJobClubPage() {
   const allJobClubJobs = useMemo(() => {
     const seen = new Set<string>();
 
-    return [...CLUB_REFRESH_JOBS, ...submittedJobs].filter((job) => {
+    return submittedJobs.filter((job) => {
       const key = getClubRefreshTaskLabel(job).toLowerCase();
       if (seen.has(key)) return false;
       seen.add(key);
