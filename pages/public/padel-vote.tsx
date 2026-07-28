@@ -10,12 +10,38 @@ type PublicPadelUpdate = {
   created_at: string;
 };
 
+const parseSupportingEvidenceUrls = (value: string | null): string[] => {
+  if (!value) return [];
+
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter((item): item is string => typeof item === 'string')
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0);
+      }
+    } catch {
+      // Fall back to plain text handling
+    }
+  }
+
+  return trimmed
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+};
+
 export default function PadelVotePage() {
   const [name, setName] = useState('');
   const [vote, setVote] = useState<'yes' | 'no'>('yes');
   const [status, setStatus] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [supportingEvidenceUrl, setSupportingEvidenceUrl] = useState<string | null>(null);
+  const [supportingEvidenceUrls, setSupportingEvidenceUrls] = useState<string[]>([]);
 
   useEffect(() => {
     const loadSupportingEvidence = async () => {
@@ -24,15 +50,17 @@ export default function PadelVotePage() {
         const payload = await response.json();
 
         if (!response.ok || !payload.ok || !Array.isArray(payload.updates)) {
-          setSupportingEvidenceUrl(null);
+          setSupportingEvidenceUrls([]);
           return;
         }
 
         const updates = payload.updates as PublicPadelUpdate[];
-        const latestWithPdf = updates.find((item) => typeof item.supporting_evidence_url === 'string' && item.supporting_evidence_url.trim().length > 0);
-        setSupportingEvidenceUrl(latestWithPdf?.supporting_evidence_url?.trim() || null);
+        const latestWithPdfs = updates
+          .map((item) => parseSupportingEvidenceUrls(item.supporting_evidence_url))
+          .find((urls) => urls.length > 0);
+        setSupportingEvidenceUrls(latestWithPdfs || []);
       } catch {
-        setSupportingEvidenceUrl(null);
+        setSupportingEvidenceUrls([]);
       }
     };
 
@@ -99,15 +127,21 @@ export default function PadelVotePage() {
 
           <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-4">
             <p className="text-sm font-medium text-zinc-900">Supporting Evidence</p>
-            {supportingEvidenceUrl ? (
-              <a
-                href={supportingEvidenceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-1 inline-flex text-sm font-medium text-red-700 hover:underline"
-              >
-                Open supporting evidence PDF
-              </a>
+            {supportingEvidenceUrls.length > 0 ? (
+              <ul className="mt-1 space-y-1">
+                {supportingEvidenceUrls.map((url, index) => (
+                  <li key={`${url}-${index}`}>
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex text-sm font-medium text-red-700 hover:underline"
+                    >
+                      Open supporting evidence PDF {supportingEvidenceUrls.length > 1 ? index + 1 : ''}
+                    </a>
+                  </li>
+                ))}
+              </ul>
             ) : (
               <p className="mt-1 text-sm text-zinc-600">Supporting evidence will be published here when available.</p>
             )}

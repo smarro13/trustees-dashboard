@@ -66,6 +66,32 @@ const asStringArray = (value: unknown): string[] => {
 	return value.filter((item): item is string => typeof item === 'string');
 };
 
+const parseSupportingEvidenceUrls = (value: unknown): string[] => {
+	if (typeof value !== 'string') return [];
+
+	const trimmed = value.trim();
+	if (!trimmed) return [];
+
+	if (trimmed.startsWith('[')) {
+		try {
+			const parsed = JSON.parse(trimmed) as unknown;
+			if (Array.isArray(parsed)) {
+				return parsed
+					.filter((item): item is string => typeof item === 'string')
+					.map((item) => item.trim())
+					.filter((item) => item.length > 0);
+			}
+		} catch {
+			// fall through to plain text handling
+		}
+	}
+
+	return trimmed
+		.split(/\r?\n|,/) 
+		.map((item) => item.trim())
+		.filter((item) => item.length > 0);
+};
+
 export default function CommercialTransformationPage() {
 	const [activeTab, setActiveTab] = useState<'updates' | 'gym' | 'jobclub'>('updates');
 	const [user, setUser] = useState<User | null>(null);
@@ -225,13 +251,14 @@ export default function CommercialTransformationPage() {
 
 		try {
 			const uploadedAssets = await uploadAttachments();
+			const evidenceUrls = parseSupportingEvidenceUrls(supportingEvidenceUrl);
 
 			const { error: insertError } = await supabase.from('commercial_transformation_updates').insert({
 				reporting_period: period.trim(),
 				meeting_id: meetingId,
 				monthly_updates: monthlyUpdates.trim(),
 				padel_updates: padelUpdates.trim() || null,
-				supporting_evidence_url: supportingEvidenceUrl.trim() || null,
+				supporting_evidence_url: evidenceUrls.length > 0 ? JSON.stringify(evidenceUrls) : null,
 				other_areas_required_attention: otherAreasRequiredAttention.trim() || null,
 				attachments: uploadedAssets,
 				selected_job_club_ideas: selectedIdeasLabel,
@@ -472,11 +499,11 @@ export default function CommercialTransformationPage() {
 								className="w-full rounded-md border border-zinc-300 px-3 py-2"
 								placeholder="Free text for padel updates"
 							/>
-							<input
-								type="url"
+							<textarea
 								value={supportingEvidenceUrl}
 								onChange={(e) => setSupportingEvidenceUrl(e.target.value)}
-								placeholder="Supporting evidence PDF URL (optional)"
+								rows={3}
+								placeholder="Supporting evidence PDF URLs (optional, one per line)"
 								className="mt-3 w-full rounded-md border border-zinc-300 px-3 py-2"
 							/>
 							<p className="mt-2 text-sm text-zinc-600">
@@ -606,17 +633,24 @@ export default function CommercialTransformationPage() {
 															: 'Share to public page'}
 												</button>
 											</div>
-													{report.supporting_evidence_url && (
-														<p className="mt-3 text-sm">
-															<a
-																href={report.supporting_evidence_url}
-																target="_blank"
-																rel="noopener noreferrer"
-																className="font-medium text-blue-600 hover:underline"
-															>
-																Open supporting evidence PDF
-															</a>
-														</p>
+													{parseSupportingEvidenceUrls(report.supporting_evidence_url).length > 0 && (
+														<div className="mt-3 text-sm">
+															<p className="font-semibold text-zinc-700">Supporting evidence PDFs:</p>
+															<ul className="mt-1 list-disc pl-5">
+																{parseSupportingEvidenceUrls(report.supporting_evidence_url).map((url) => (
+																	<li key={`${report.id}-${url}`}>
+																		<a
+																			href={url}
+																			target="_blank"
+																			rel="noopener noreferrer"
+																			className="font-medium text-blue-600 hover:underline"
+																		>
+																			{url}
+																		</a>
+																	</li>
+																))}
+															</ul>
+														</div>
 													)}
 										</div>
 									)}
