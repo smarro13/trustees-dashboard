@@ -256,25 +256,39 @@ export default function JobClubManagementPage() {
     });
   }, [posts, statusFilter, priorityFilter]);
 
+  const activePosts = useMemo(
+    () => filteredPosts.filter((post) => post.is_active !== false),
+    [filteredPosts],
+  );
+
     const openJobs = useMemo(
-      () => filteredPosts.filter((post) => {
+      () => activePosts.filter((post) => {
         const meta = parseJobMeta(post.description);
-        if (!meta) return false;
+        if (!meta || meta.status === 'Completed') return false;
         const taskLabel = getTaskLabel(meta);
         return !latestAssignmentsByTask.has(taskLabel);
       }),
-      [filteredPosts, latestAssignmentsByTask],
+      [activePosts, latestAssignmentsByTask],
     );
 
     const assignedJobs = useMemo(
-      () => filteredPosts.filter((post) => {
+      () => activePosts.filter((post) => {
         const meta = parseJobMeta(post.description);
-        if (!meta) return false;
+        if (!meta || meta.status === 'Completed') return false;
         const taskLabel = getTaskLabel(meta);
         return latestAssignmentsByTask.has(taskLabel);
       }),
-      [filteredPosts, latestAssignmentsByTask],
+      [activePosts, latestAssignmentsByTask],
     );
+
+  const completedOrClosedJobs = useMemo(
+    () =>
+      filteredPosts.filter((post) => {
+        const meta = parseJobMeta(post.description);
+        return post.is_active === false || meta?.status === 'Completed';
+      }),
+    [filteredPosts],
+  );
 
   const stats = useMemo(() => {
     const all = posts.map((p) => parseJobMeta(p.description)).filter(Boolean) as ParsedJobMeta[];
@@ -681,7 +695,18 @@ export default function JobClubManagementPage() {
               </div>
             )}
 
-            {openJobs.length === 0 && assignedJobs.length === 0 && (
+            {completedOrClosedJobs.length > 0 && (
+              <div>
+                <h2 className="mb-4 text-lg font-semibold text-zinc-900">
+                  Completed / Closed Jobs ({completedOrClosedJobs.length})
+                </h2>
+                <div className="space-y-5">
+                  {completedOrClosedJobs.map((post) => renderJobCard(post))}
+                </div>
+              </div>
+            )}
+
+            {openJobs.length === 0 && assignedJobs.length === 0 && completedOrClosedJobs.length === 0 && (
               <p className="text-sm text-zinc-500">No jobs match the current filters.</p>
             )}
           </div>
