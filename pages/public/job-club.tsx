@@ -114,7 +114,7 @@ export default function PublicJobClubPage() {
   const [taskAssignments, setTaskAssignments] = useState<TaskAssignmentSummary[]>([]);
 
   const [jobAreaFilter, setJobAreaFilter] = useState('All areas');
-  const [jobStatusFilter, setJobStatusFilter] = useState<'All statuses' | ClubRefreshJob['status']>('All statuses');
+  const [jobStatusFilter, setJobStatusFilter] = useState<'All statuses' | 'Not Started' | 'Ongoing'>('All statuses');
   const [jobPriorityFilter, setJobPriorityFilter] = useState<'All priorities' | ClubRefreshJob['priority']>('All priorities');
 
   const [newJobArea, setNewJobArea] = useState('');
@@ -175,11 +175,6 @@ export default function PublicJobClubPage() {
     [allJobClubJobs, latestAssignmentsByTask],
   );
 
-  const completedJobs = useMemo(
-    () => allJobClubJobs.filter((job) => job.status === 'Completed'),
-    [allJobClubJobs],
-  );
-
   const clubRefreshAreas = useMemo(
     () => ['All areas', ...Array.from(new Set(allJobClubJobs.map((item) => item.area)))],
     [allJobClubJobs],
@@ -200,11 +195,6 @@ export default function PublicJobClubPage() {
   const filteredAssignedJobs = useMemo(
     () => assignedJobs.filter(({ job }) => jobMatchesFilters(job)),
     [assignedJobs, jobAreaFilter, jobStatusFilter, jobPriorityFilter],
-  );
-
-  const filteredCompletedJobs = useMemo(
-    () => completedJobs.filter((item) => jobMatchesFilters(item)),
-    [completedJobs, jobAreaFilter, jobStatusFilter, jobPriorityFilter],
   );
 
   const loadData = async () => {
@@ -517,11 +507,10 @@ export default function PublicJobClubPage() {
               </div>
               <div>
                 <label htmlFor="club-refresh-status-filter" className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">Status</label>
-                <select id="club-refresh-status-filter" value={jobStatusFilter} onChange={(event) => setJobStatusFilter(event.target.value as 'All statuses' | ClubRefreshJob['status'])} className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100">
+                <select id="club-refresh-status-filter" value={jobStatusFilter} onChange={(event) => setJobStatusFilter(event.target.value as 'All statuses' | 'Not Started' | 'Ongoing')} className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100">
                   <option value="All statuses">All statuses</option>
                   <option value="Not Started">Not Started</option>
                   <option value="Ongoing">Ongoing</option>
-                  <option value="Completed">Completed</option>
                 </select>
               </div>
               <div>
@@ -582,31 +571,6 @@ export default function PublicJobClubPage() {
                       </div>
                       <p className="mt-2 text-xs text-zinc-600">Materials: {job.materials}</p>
                       {renderTaskAssignmentDropdown(job, true)}
-                    </article>
-                  ))
-                )}
-              </div>
-            </section>
-
-            <section className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <h3 className="text-base font-semibold text-zinc-900">Completed Jobs</h3>
-                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 ring-1 ring-zinc-200">{filteredCompletedJobs.length}</span>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {filteredCompletedJobs.length === 0 ? (
-                  <p className="rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-500 md:col-span-2 xl:col-span-3">No completed jobs match the current filters.</p>
-                ) : (
-                  filteredCompletedJobs.map((item) => (
-                    <article key={`${item.area}-${item.job}-completed-card`} className="rounded-xl border border-zinc-200 bg-white p-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{item.area}</p>
-                      <h3 className="mt-1 text-sm font-semibold text-zinc-900">{item.job}</h3>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClasses(item.status)}`}>{item.status}</span>
-                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getPriorityBadgeClasses(item.priority)}`}>{item.priority}</span>
-                      </div>
-                      <p className="mt-2 text-xs text-zinc-600">Materials: {item.materials}</p>
                     </article>
                   ))
                 )}

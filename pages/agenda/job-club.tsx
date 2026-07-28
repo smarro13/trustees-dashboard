@@ -138,7 +138,7 @@ export default function JobClubManagementPage() {
   const [editingPost, setEditingPost] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<EditValues>({});
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
-  const [statusFilter, setStatusFilter] = useState<'All' | JobStatus>('All');
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Not Started' | 'Ongoing'>('All');
   const [priorityFilter, setPriorityFilter] = useState<'All' | JobPriority>('All');
   const [refreshing, setRefreshing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
@@ -261,6 +261,7 @@ export default function JobClubManagementPage() {
   const filteredPosts = useMemo(() => {
     return posts.filter((post) => {
       const meta = parseJobMeta(post.description);
+      if (meta?.status === 'Completed' || post.is_active === false) return false;
       if (statusFilter !== 'All' && meta?.status !== statusFilter) return false;
       if (priorityFilter !== 'All' && meta?.priority !== priorityFilter) return false;
       return true;
@@ -292,17 +293,7 @@ export default function JobClubManagementPage() {
       [activePosts, latestAssignmentsByTask],
     );
 
-  const completedOrClosedJobs = useMemo(
-    () =>
-      filteredPosts.filter((post) => {
-        const meta = parseJobMeta(post.description);
-        return post.is_active === false || meta?.status === 'Completed';
-      }),
-    [filteredPosts],
-  );
-
-  const showArchivedSection = statusFilter === 'Completed';
-  const visibleJobsCount = showArchivedSection ? completedOrClosedJobs.length : openJobs.length + assignedJobs.length;
+  const visibleJobsCount = openJobs.length + assignedJobs.length;
 
   const stats = useMemo(() => {
     const rows = posts.map((post) => ({ post, meta: parseJobMeta(post.description) }));
@@ -312,7 +303,6 @@ export default function JobClubManagementPage() {
       activeTotal: activeRows.length,
       notStarted: activeRows.filter(({ meta }) => meta?.status === 'Not Started').length,
       ongoing: activeRows.filter(({ meta }) => meta?.status === 'Ongoing').length,
-      archived: rows.filter(({ post, meta }) => post.is_active === false || meta?.status === 'Completed').length,
     };
   }, [posts]);
 
@@ -663,12 +653,11 @@ export default function JobClubManagementPage() {
         <InlineNoticeBanner notice={notice} className="mb-6" />
 
         {/* Stats */}
-        <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3">
           {[
             { label: 'Active jobs', value: stats.activeTotal },
             { label: 'Not started', value: stats.notStarted },
             { label: 'Ongoing', value: stats.ongoing },
-            { label: 'Archived', value: stats.archived },
           ].map((stat) => (
             <div key={stat.label} className="rounded-lg bg-white px-4 py-4 shadow-sm ring-1 ring-zinc-200">
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">{stat.label}</p>
@@ -681,11 +670,12 @@ export default function JobClubManagementPage() {
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as 'All' | JobStatus)}
+            onChange={(e) => setStatusFilter(e.target.value as 'All' | 'Not Started' | 'Ongoing')}
             className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
           >
             <option value="All">All statuses</option>
-            {VALID_STATUSES.map((s) => <option key={s}>{s}</option>)}
+            <option value="Not Started">Not Started</option>
+            <option value="Ongoing">Ongoing</option>
           </select>
           <select
             value={priorityFilter}
@@ -735,18 +725,7 @@ export default function JobClubManagementPage() {
               </div>
             )}
 
-            {showArchivedSection && completedOrClosedJobs.length > 0 && (
-              <div>
-                <h2 className="mb-4 text-lg font-semibold text-zinc-900">
-                  Completed / Closed Jobs ({completedOrClosedJobs.length})
-                </h2>
-                <div className="space-y-5">
-                  {completedOrClosedJobs.map((post) => renderJobCard(post))}
-                </div>
-              </div>
-            )}
-
-            {openJobs.length === 0 && assignedJobs.length === 0 && (!showArchivedSection || completedOrClosedJobs.length === 0) && (
+            {openJobs.length === 0 && assignedJobs.length === 0 && (
               <p className="text-sm text-zinc-500">No jobs match the current filters.</p>
             )}
           </div>
