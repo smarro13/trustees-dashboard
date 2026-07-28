@@ -16,9 +16,9 @@ export default async function handler(
 
   const { data, error } = await supabaseAdmin
     .from('commercial_transformation_updates')
-    .select('id, reporting_period, padel_updates, created_at')
+    .select('id, reporting_period, padel_updates, supporting_evidence_url, created_at')
     .eq('share_padel_to_public', true)
-    .not('padel_updates', 'is', null)
+    .or('padel_updates.not.is.null,supporting_evidence_url.not.is.null')
     .order('created_at', { ascending: false })
     .limit(20);
 

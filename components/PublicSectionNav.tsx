@@ -9,7 +9,7 @@ const NAV_ITEMS = [
   { href: '/public/agm-questions', label: 'AGM Questions' },
   { href: '/public/minutes', label: 'Minutes' },
   { href: '/public/agm-minutes', label: 'AGM Minutes' },
-  { href: '/public/padel-vote-test', label: 'Padel Vote' },
+  { href: '/public/padel-vote', label: 'Padel Vote' },
 ];
 
 export default function PublicSectionNav() {
