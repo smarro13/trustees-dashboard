@@ -44,33 +44,16 @@ const getRequiredRoleForPath = (pathname: string): DashboardRole => {
     return 'admin';
   }
 
-  if (
-    pathname === '/agenda/agm' ||
-    pathname === '/agenda/agm-minutes' ||
-    pathname === '/agenda/agm-questions' ||
-    pathname === '/agenda/aob' ||
-    pathname === '/agenda/apologies' ||
-    pathname === '/agenda/conflicts' ||
-    pathname === '/agenda/correspondence' ||
-    pathname === '/agenda/events' ||
-    pathname === '/agenda/membership' ||
-    pathname === '/agenda/rugby' ||
-    pathname === '/agenda/trading' ||
-    pathname === '/agenda/treasury'
-  ) {
-    return 'management';
-  }
-
   if (pathname === '/agenda/safeguarding') {
     return 'safeguarding';
   }
 
-  if (
-    pathname === '/agenda/commercial-transformation' ||
-    pathname === '/agenda/gym' ||
-    pathname === '/agenda/job-club'
-  ) {
+  if (pathname === '/agenda/commercial-transformation') {
     return 'commercial';
+  }
+
+  if (pathname.startsWith('/agenda/')) {
+    return 'management';
   }
 
   return null;
@@ -79,7 +62,21 @@ const getRequiredRoleForPath = (pathname: string): DashboardRole => {
 const hasRequiredRole = (actual: DashboardRole, required: DashboardRole) => {
   if (!required) return true;
   if (!actual) return false;
-  return ROLE_RANK[actual] >= ROLE_RANK[required];
+
+  // Admin and management can access all protected agenda sections.
+  if (actual === 'admin' || actual === 'management') {
+    return true;
+  }
+
+  if (actual === 'safeguarding') {
+    return required === 'safeguarding';
+  }
+
+  if (actual === 'commercial') {
+    return required === 'commercial';
+  }
+
+  return false;
 };
 
 export async function proxy(req: NextRequest) {

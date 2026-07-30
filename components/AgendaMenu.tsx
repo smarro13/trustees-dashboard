@@ -44,7 +44,7 @@ export default function AgendaMenu() {
     void loadRole();
   }, []);
 
-  const items = [
+  const allItems = [
     { label: '🙏 Apologies', href: '/agenda/apologies' },
     { label: '🏛️ AGM', href: '/agenda/agm' },
     { label: '📝 Previous Minutes', href: '/agenda/minutes' },
@@ -62,6 +62,22 @@ export default function AgendaMenu() {
     { label: '📌 Matters Arising', href: '/agenda/matters-arising' },
     { label: '💬 AOB', href: '/agenda/aob' },
   ];
+
+  const items = allItems.filter((item) => {
+    if (!userRole || userRole === 'admin' || userRole === 'management') {
+      return true;
+    }
+
+    if (userRole === 'safeguarding') {
+      return item.href === '/agenda/safeguarding';
+    }
+
+    if (userRole === 'commercial') {
+      return item.href === '/agenda/commercial-transformation';
+    }
+
+    return false;
+  });
 
   if (userRole === 'admin') {
     items.splice(15, 0, { label: '🔐 Admin Roles', href: '/admin/roles' });
