@@ -10,6 +10,8 @@ import {
   type MatterGroup,
 } from '../../lib/minutesGenerator';
 
+const AI_ENDPOINT = '/api/private/minutes-ai';
+
 type AgendaBucket = {
   title: string;
   keywords: string[];
@@ -262,6 +264,9 @@ export default function MinutesFormatterPage() {
   const [parsedActions, setParsedActions] = useState<Action[]>([]);
   const [matterGroups, setMatterGroups] = useState<MatterGroup[]>([]);
   const [downloadingDocx, setDownloadingDocx] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [editRequest, setEditRequest] = useState('');
 
   const parsed = useMemo(() => buildSectionResults(transcript), [transcript]);
   const minutesText = useMemo(
@@ -288,25 +293,85 @@ export default function MinutesFormatterPage() {
     setNotice({ type, message });
   };
 
-  const generateMinutes = () => {
+  const generateMinutes = async () => {
     if (!transcript.trim()) {
       showNotice('error', 'Paste your Otter transcript first.');
       return;
     }
-    setEditableMinutes(minutesText);
-    setSelectedActionIds(new Set(actionCandidates.map((item) => item.id)));
-    
-    // Parse actions with better structure
-    const actionCandidateTexts = actionCandidates.map(c => c.description);
-    const parsedActs = actionCandidateTexts.map(text => parseAction(text, 'Minutes Formatter'));
-    setParsedActions(parsedActs);
 
-    // Merge Matters Arising, AOB, and unmatched into grouped subjects
+    setAiLoading(true);
+    setAiSuggestions([]);
+
+    let minutesContent = minutesText;
+    let suggestions: string[] = [];
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      if (token) {
+        const res = await fetch(AI_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ mode: 'generate', meetingTitle, meetingDate, transcript }),
+        });
+        const data = await res.json();
+        if (data.ok && data.minutesText) {
+          minutesContent = data.minutesText;
+          suggestions = data.suggestions || [];
+        } else {
+          showNotice('error', `AI generation failed: ${data.error || 'Unknown error'}. Using local formatting.`);
+        }
+      } else {
+        showNotice('error', 'Not authenticated. Using local formatting.');
+      }
+    } catch {
+      showNotice('error', 'Could not reach AI service. Using local formatting.');
+    }
+
+    setAiLoading(false);
+    setEditableMinutes(minutesContent);
+    setAiSuggestions(suggestions);
+    setSelectedActionIds(new Set(actionCandidates.map((item) => item.id)));
+
+    const actionCandidateTexts = actionCandidates.map(c => c.description);
+    setParsedActions(actionCandidateTexts.map(text => parseAction(text, 'Minutes Formatter')));
+
     const { matters, aob, unmatched: unmatchedItems } = getExtraSections(parsed.sections, parsed.unmatched);
     setMatterGroups(parseMatterItems(matters, aob, unmatchedItems));
 
     setGenerated(true);
-    showNotice('success', 'Minutes formatted with improved action and matters parsing.');
+  };
+
+  const improveWithAI = async () => {
+    const current = editableMinutes.trim();
+    if (!current) {
+      showNotice('error', 'Generate minutes first.');
+      return;
+    }
+    setAiLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) { showNotice('error', 'Not authenticated.'); setAiLoading(false); return; }
+
+      const res = await fetch(AI_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ mode: 'improve', meetingTitle, meetingDate, transcript, currentDraft: current, editRequest }),
+      });
+      const data = await res.json();
+      if (data.ok && data.minutesText) {
+        setEditableMinutes(data.minutesText);
+        setAiSuggestions(data.suggestions || []);
+        showNotice('success', 'Minutes refined by AI.');
+      } else {
+        showNotice('error', `AI refinement failed: ${data.error || 'Unknown error'}`);
+      }
+    } catch {
+      showNotice('error', 'Could not reach AI service.');
+    }
+    setAiLoading(false);
   };
 
   const copyMinutes = async () => {
@@ -363,7 +428,8 @@ export default function MinutesFormatterPage() {
         meetingDate,
         parsed.sections,
         parsedActions,
-        matterGroups
+        matterGroups,
+        editableMinutes || undefined,
       );
 
       const { error: uploadError } = await supabase.storage
@@ -407,6 +473,8 @@ export default function MinutesFormatterPage() {
     setSaveMeetingId(null);
     setParsedActions([]);
     setMatterGroups([]);
+    setAiSuggestions([]);
+    setEditRequest('');
     setNotice(null);
   };
 
@@ -463,7 +531,7 @@ export default function MinutesFormatterPage() {
           </Link>
           <h1 className="text-3xl font-extrabold text-zinc-900">Minutes Formatter</h1>
           <p className="mt-1 text-zinc-600">
-            Paste Otter transcript content and generate professional Word documents with structured action items, merged matters arising, and category suggestions.
+            Paste your Otter transcript to generate AI-written formal minutes. Review and refine them before downloading.
           </p>
         </header>
 
@@ -502,10 +570,11 @@ export default function MinutesFormatterPage() {
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={generateMinutes}
-                className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700"
+                onClick={() => void generateMinutes()}
+                disabled={aiLoading}
+                className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
-                Generate Minutes
+                {aiLoading ? 'Generating...' : 'Generate Minutes'}
               </button>
               <button
                 type="button"
@@ -683,9 +752,46 @@ export default function MinutesFormatterPage() {
               <textarea
                 value={editableMinutes || minutesText}
                 onChange={(e) => setEditableMinutes(e.target.value)}
-                rows={20}
+                rows={28}
                 className="w-full rounded-lg border border-zinc-200 bg-white p-4 font-mono text-sm text-zinc-800"
               />
+
+              {/* AI Refine panel */}
+              <div className="rounded-lg border border-zinc-200 bg-white p-4">
+                <h3 className="text-base font-semibold text-zinc-900">Refine with AI</h3>
+                <p className="mt-1 text-sm text-zinc-600">
+                  Describe the changes you'd like — e.g. "Expand the treasury section", "Make the language more formal", "Add a stronger closing statement".
+                </p>
+                <textarea
+                  value={editRequest}
+                  onChange={(e) => setEditRequest(e.target.value)}
+                  rows={3}
+                  className="mt-3 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="Describe your changes..."
+                />
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => void improveWithAI()}
+                    disabled={aiLoading || !editableMinutes.trim()}
+                    className="rounded-md bg-violet-600 px-4 py-2 font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+                  >
+                    {aiLoading ? 'Refining...' : 'Refine with AI'}
+                  </button>
+                </div>
+              </div>
+
+              {/* AI writing suggestions */}
+              {aiSuggestions.length > 0 && (
+                <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+                  <h3 className="mb-2 text-sm font-semibold text-blue-900">AI Suggestions</h3>
+                  <ul className="space-y-1">
+                    {aiSuggestions.map((s, i) => (
+                      <li key={i} className="text-sm text-blue-800">• {s}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               <div className="rounded-lg border border-zinc-200 bg-white p-4">
                 <h3 className="text-base font-semibold text-zinc-900">Save to Minutes Library</h3>

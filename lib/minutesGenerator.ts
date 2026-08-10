@@ -180,6 +180,30 @@ export const parseMatterItems = (
   return Array.from(groupMap.entries()).map(([heading, items]) => ({ heading, items }));
 };
 
+/** Convert a simple Markdown string to HTML for Word-compatible DOCX output. */
+export const markdownToHtml = (md: string): string => {
+  const lines = md.split('\n');
+  const out: string[] = [];
+  let inList = false;
+
+  const closeList = () => { if (inList) { out.push('</ul>'); inList = false; } };
+
+  for (const raw of lines) {
+    if (raw.startsWith('#### ')) { closeList(); out.push(`<h4>${raw.slice(5).trim()}</h4>`); }
+    else if (raw.startsWith('### ')) { closeList(); out.push(`<h3>${raw.slice(4).trim()}</h3>`); }
+    else if (raw.startsWith('## ')) { closeList(); out.push(`<h2>${raw.slice(3).trim()}</h2>`); }
+    else if (raw.startsWith('# ')) { closeList(); out.push(`<h1>${raw.slice(2).trim()}</h1>`); }
+    else if (raw.startsWith('- ') || raw.startsWith('* ')) {
+      if (!inList) { out.push('<ul>'); inList = true; }
+      out.push(`<li>${raw.slice(2).trim()}</li>`);
+    } else if (raw.trim() === '---') { closeList(); out.push('<hr/>'); }
+    else if (raw.trim() === '') { closeList(); }
+    else { closeList(); out.push(`<p>${raw.trim()}</p>`); }
+  }
+  closeList();
+  return out.join('\n');
+};
+
 /**
  * Create a simple HTML representation of minutes that Word can open as DOCX
  */
@@ -189,7 +213,15 @@ export const createDocxBlob = (
   sections: Array<{ title: string; notes: string[] }>,
   actions: Action[],
   matterGroups: MatterGroup[],
+  richText?: string,
 ): Blob => {
+  const mainContent = richText
+    ? markdownToHtml(richText)
+    : `${sections
+        .filter((s) => s.notes.length > 0 && s.title !== 'Matters Arising' && s.title !== 'AOB')
+        .map((s) => `<h2>${s.title}</h2><ul>${s.notes.map((n) => `<li>${n}</li>`).join('')}</ul>`)
+        .join('')}
+       ${matterGroups.length > 0 ? `<h2>Matters Arising &amp; Other Business</h2>${matterGroups.map((g) => `<h3>${g.heading}</h3><ul>${g.items.map((item) => `<li>${item.text}${item.isAction ? ' <span class="action-flag">[ACTION]</span>' : ''}</li>`).join('')}</ul>`).join('')}` : ''}`;
   const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -216,17 +248,7 @@ export const createDocxBlob = (
     <p><strong>Generated:</strong> ${new Date().toLocaleString('en-GB')}</p>
   </div>
 
-  ${sections
-    .filter((s) => s.notes.length > 0 && s.title !== 'Matters Arising' && s.title !== 'AOB')
-    .map(
-      (s) => `
-    <h2>${s.title}</h2>
-    <ul>
-      ${s.notes.map((n) => `<li>${n}</li>`).join('')}
-    </ul>
-  `,
-    )
-    .join('')}
+  ${mainContent}
 
   ${
     actions.length > 0
@@ -256,24 +278,6 @@ export const createDocxBlob = (
           .join('')}
       </tbody>
     </table>
-  `
-      : ''
-  }
-
-  ${
-    matterGroups.length > 0
-      ? `
-    <h2>Matters Arising &amp; Other Business</h2>
-    ${matterGroups
-      .map(
-        (g) => `
-      <h3>${g.heading}</h3>
-      <ul>
-        ${g.items.map((item) => `<li>${item.text}${item.isAction ? ' <span class="action-flag">[ACTION]</span>' : ''}</li>`).join('')}
-      </ul>
-    `,
-      )
-      .join('')}
   `
       : ''
   }
