@@ -2,6 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 import { supabase } from '../../lib/supabaseClient';
+import {
+  parseAction,
+  parseMatterItems,
+  suggestCategory,
+  createDocxBlob,
+  type Action,
+  type MattersArising,
+} from '../../lib/minutesGenerator';
 
 type AgendaBucket = {
   title: string;
@@ -17,6 +25,13 @@ type ActionCandidate = {
   id: string;
   title: string;
   description: string;
+};
+
+// Helper to extract Matters Arising and AOB sections
+const getMattersAndAobSections = (sections: SectionResult[]): { matters: string[]; aob: string[] } => {
+  const matters = sections.find(s => s.title === 'Matters Arising')?.notes || [];
+  const aob = sections.find(s => s.title === 'AOB')?.notes || [];
+  return { matters, aob };
 };
 
 const AGENDA_BUCKETS: AgendaBucket[] = [
@@ -198,6 +213,9 @@ export default function MinutesFormatterPage() {
   const [selectedActionIds, setSelectedActionIds] = useState<Set<string>>(new Set());
   const [addingActions, setAddingActions] = useState(false);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
+  const [parsedActions, setParsedActions] = useState<Action[]>([]);
+  const [mattersArising, setMattersArising] = useState<MattersArising[]>([]);
+  const [downloadingDocx, setDownloadingDocx] = useState(false);
 
   const parsed = useMemo(() => buildSectionResults(transcript), [transcript]);
   const minutesText = useMemo(
@@ -231,8 +249,19 @@ export default function MinutesFormatterPage() {
     }
     setEditableMinutes(minutesText);
     setSelectedActionIds(new Set(actionCandidates.map((item) => item.id)));
+    
+    // Parse actions with better structure
+    const actionCandidateTexts = actionCandidates.map(c => c.description);
+    const parsedActs = actionCandidateTexts.map(text => parseAction(text, 'Minutes Formatter'));
+    setParsedActions(parsedActs);
+    
+    // Parse and merge Matters Arising & AOB
+    const { matters, aob } = getMattersAndAobSections(parsed.sections);
+    const mattersItems = parseMatterItems(matters, aob);
+    setMattersArising(mattersItems);
+    
     setGenerated(true);
-    showNotice('success', 'Minutes formatted by agenda sections.');
+    showNotice('success', 'Minutes formatted with improved action and matters parsing.');
   };
 
   const copyMinutes = async () => {
@@ -255,6 +284,32 @@ export default function MinutesFormatterPage() {
     document.body.removeChild(anchor);
     URL.revokeObjectURL(url);
     showNotice('success', 'Minutes text file downloaded.');
+  };
+
+  const downloadAsDocx = () => {
+    setDownloadingDocx(true);
+    try {
+      const blob = createDocxBlob(
+        meetingTitle,
+        meetingDate,
+        parsed.sections,
+        parsedActions,
+        mattersArising
+      );
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `${meetingTitle || 'minutes'}-${meetingDate || 'draft'}.docx`.replace(/\s+/g, '-');
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+      showNotice('success', 'Minutes Word document downloaded.');
+    } catch (error) {
+      showNotice('error', 'Failed to generate Word document.');
+      console.error(error);
+    }
+    setDownloadingDocx(false);
   };
 
   const saveDraftToMinutesLibrary = async () => {
@@ -313,6 +368,8 @@ export default function MinutesFormatterPage() {
     setSelectedActionIds(new Set());
     setActionMeetingId(null);
     setSaveMeetingId(null);
+    setParsedActions([]);
+    setMattersArising([]);
     setNotice(null);
   };
 
@@ -431,6 +488,14 @@ export default function MinutesFormatterPage() {
               </button>
               <button
                 type="button"
+                onClick={downloadAsDocx}
+                disabled={!generated || downloadingDocx}
+                className="rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {downloadingDocx ? 'Generating...' : 'Download .docx'}
+              </button>
+              <button
+                type="button"
                 onClick={clearAll}
                 className="rounded-md border border-zinc-300 px-4 py-2 font-medium text-zinc-700 hover:bg-zinc-100"
               >
@@ -444,12 +509,95 @@ export default function MinutesFormatterPage() {
           <>
             <section className="mb-8 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
               <div className="border-b border-zinc-200 px-6 py-4">
+                <h2 className="text-xl font-semibold">Action Items (Structured)</h2>
+              </div>
+              <div className="space-y-4 px-6 py-6">
+                {parsedActions.length === 0 ? (
+                  <p className="text-sm text-zinc-500">No actions detected. Generate minutes first.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {parsedActions.map((action) => (
+                      <div
+                        key={action.id}
+                        className="rounded-md border border-zinc-200 bg-zinc-50 p-4"
+                      >
+                        <div className="mb-2 flex items-start justify-between gap-2">
+                          <p className="font-medium text-zinc-900">{action.what}</p>
+                          <span
+                            className={`whitespace-nowrap rounded px-2 py-1 text-xs font-bold ${
+                              action.priority === 'high'
+                                ? 'bg-red-100 text-red-800'
+                                : action.priority === 'medium'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-green-100 text-green-800'
+                            }`}
+                          >
+                            {action.priority.toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="grid gap-2 text-sm sm:grid-cols-3">
+                          <div>
+                            <span className="font-semibold text-zinc-600">Owner:</span>
+                            <p className="text-zinc-800">{action.owner || 'TBD'}</p>
+                          </div>
+                          <div>
+                            <span className="font-semibold text-zinc-600">Due:</span>
+                            <p className="text-zinc-800">{action.byWhen || 'TBD'}</p>
+                          </div>
+                          <div>
+                            <span className="font-semibold text-zinc-600">Source:</span>
+                            <p className="text-zinc-800">{action.source}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="mb-8 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
+              <div className="border-b border-zinc-200 px-6 py-4">
+                <h2 className="text-xl font-semibold">Matters Arising & Other Business</h2>
+              </div>
+              <div className="space-y-4 px-6 py-6">
+                {mattersArising.length === 0 ? (
+                  <p className="text-sm text-zinc-500">No matters or AOB items detected.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {mattersArising.map((matter) => (
+                      <div
+                        key={matter.id}
+                        className={`rounded-md border p-4 ${
+                          matter.isAction
+                            ? 'border-amber-200 bg-amber-50'
+                            : 'border-zinc-200 bg-zinc-50'
+                        }`}
+                      >
+                        <div className="mb-2 flex items-start justify-between gap-2">
+                          <p className="font-semibold text-zinc-900">{matter.title}</p>
+                          {matter.isAction && (
+                            <span className="rounded bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800">
+                              ACTION
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-zinc-700">{matter.summary}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="mb-8 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
+              <div className="border-b border-zinc-200 px-6 py-4">
                 <h2 className="text-xl font-semibold">Add to Action Tracker</h2>
               </div>
               <div className="space-y-4 px-6 py-6">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <p className="text-sm text-zinc-600">
-                    Detected potential actions from Action Tracker, Matters Arising, and AOB sections.
+                    Add structured actions to your tracking system. Review the improved action items above.
                   </p>
                   <select
                     value={actionMeetingId ?? ''}
