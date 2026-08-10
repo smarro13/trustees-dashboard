@@ -607,96 +607,12 @@ export default function MinutesFormatterPage() {
           <>
             <section className="mb-8 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
               <div className="border-b border-zinc-200 px-6 py-4">
-                <h2 className="text-xl font-semibold">Action Items (Structured)</h2>
-              </div>
-              <div className="space-y-4 px-6 py-6">
-                {parsedActions.length === 0 ? (
-                  <p className="text-sm text-zinc-500">No actions detected. Generate minutes first.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {parsedActions.map((action) => (
-                      <div
-                        key={action.id}
-                        className="rounded-md border border-zinc-200 bg-zinc-50 p-4"
-                      >
-                        <div className="mb-2 flex items-start justify-between gap-2">
-                          <p className="font-medium text-zinc-900">{action.what}</p>
-                          <span
-                            className={`whitespace-nowrap rounded px-2 py-1 text-xs font-bold ${
-                              action.priority === 'high'
-                                ? 'bg-red-100 text-red-800'
-                                : action.priority === 'medium'
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : 'bg-green-100 text-green-800'
-                            }`}
-                          >
-                            {action.priority.toUpperCase()}
-                          </span>
-                        </div>
-                        <div className="grid gap-2 text-sm sm:grid-cols-3">
-                          <div>
-                            <span className="font-semibold text-zinc-600">Owner:</span>
-                            <p className="text-zinc-800">{action.owner || 'TBD'}</p>
-                          </div>
-                          <div>
-                            <span className="font-semibold text-zinc-600">Due:</span>
-                            <p className="text-zinc-800">{action.byWhen || 'TBD'}</p>
-                          </div>
-                          <div>
-                            <span className="font-semibold text-zinc-600">Source:</span>
-                            <p className="text-zinc-800">{action.source}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </section>
-
-            <section className="mb-8 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
-              <div className="border-b border-zinc-200 px-6 py-4">
-                <h2 className="text-xl font-semibold">Matters Arising & Other Business</h2>
-              </div>
-              <div className="space-y-6 px-6 py-6">
-                {matterGroups.length === 0 ? (
-                  <p className="text-sm text-zinc-500">No matters or AOB items detected.</p>
-                ) : (
-                  matterGroups.map((group) => (
-                    <div key={group.heading}>
-                      <h3 className="mb-2 text-base font-semibold text-zinc-900">{group.heading}</h3>
-                      <ul className="space-y-1">
-                        {group.items.map((item) => (
-                          <li
-                            key={item.id}
-                            className={`flex items-start gap-2 rounded-md px-3 py-2 text-sm ${
-                              item.isAction ? 'bg-amber-50 text-amber-900' : 'bg-zinc-50 text-zinc-700'
-                            }`}
-                          >
-                            <span className="mt-0.5 text-zinc-400">•</span>
-                            <span>{item.text}</span>
-                            {item.isAction && (
-                              <span className="ml-auto whitespace-nowrap rounded bg-amber-200 px-1.5 py-0.5 text-xs font-semibold text-amber-900">
-                                ACTION
-                              </span>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))
-                )}
-              </div>
-            </section>
-
-            <section className="mb-8 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
-              <div className="border-b border-zinc-200 px-6 py-4">
                 <h2 className="text-xl font-semibold">Add to Action Tracker</h2>
               </div>
               <div className="space-y-4 px-6 py-6">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <p className="text-sm text-zinc-600">
-                    Add structured actions to your tracking system. Review the improved action items above.
+                    Select actions from the generated minutes to add to the tracker.
                   </p>
                   <select
                     value={actionMeetingId ?? ''}
