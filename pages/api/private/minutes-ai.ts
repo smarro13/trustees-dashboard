@@ -25,7 +25,7 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-const MODEL = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
+const MODEL = process.env.OPENAI_MODEL || 'openai/gpt-oss-20b';
 const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
 
 const scrubPII = (input: string) => {
