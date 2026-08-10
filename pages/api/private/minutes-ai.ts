@@ -9,6 +9,7 @@ type MinutesAiRequest = {
   meetingDate?: string;
   transcript?: string;
   currentDraft?: string;
+  editRequest?: string;
 };
 
 type MinutesAiResponse = {
@@ -24,7 +25,7 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-const MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
+const MODEL = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
 
 const scrubPII = (input: string) => {
   let output = input;
@@ -55,29 +56,39 @@ const getPrompt = (payload: Required<MinutesAiRequest>, sanitizedTranscript: str
     '7. Conflicts of Interest',
     '8. Treasury Report',
     '9. Trading Company Report',
-    '10. Commercial & Transformation (includes Gym Updates and Job Club)',
+    '10. Commercial & Transformation (includes Gym Updates, Solar Panels and Job Club)',
     '11. Events Planning',
     '12. Membership Report',
     '13. Rugby Report',
-    '14. Matters Arising',
-    '15. AOB',
+    '14. Any Other Business / Matters Arising',
   ].join('\n');
 
-  const baseRules = [
-    'You are a minutes assistant.',
-    'Create concise, factual minutes aligned to the provided agenda.',
-    'Never include personal identifying information: no names, emails, phone numbers, addresses.',
-    'Do not invent facts. If a section has no relevant content write exactly: "- No discussion."',
-    'Do not include any Admin Roles section.',
+  const formatRules = [
+    'Write formal, professional meeting minutes.',
+    'Use Markdown formatting:',
+    '  - # for the meeting title',
+    '  - ## N. Section Name for each numbered agenda section',
+    '  - ### Sub-heading for distinct sub-topics within a section',
+    '  - Use --- as a horizontal rule divider between each ## section',
+    '  - Use bullet points (- ) for lists of items discussed',
+    'Write in formal third-person narrative: "The committee agreed...", "It was noted...", "Members discussed..."',
+    'Be thorough — include key discussion points, decisions and agreed actions.',
+    'For sections with no relevant content, write a brief professional placeholder (e.g. "No concerns were raised." or "The minutes of the previous meeting were approved as a true and accurate record.").',
+    'Group related discussion points under ### sub-headings when a section covers multiple distinct topics.',
+    'Never include names, email addresses, phone numbers or addresses.',
+    'End with: --- then ### Meeting Closed then: There being no further business, the Chair thanked everyone for their attendance and contributions and closed the meeting.',
     'Return ONLY valid JSON with keys: minutesText (string), suggestions (array of strings).',
-    'Suggestions must be practical writing improvements and never include PII.',
+    'suggestions must be practical improvements to the minutes and must never include PII.',
   ].join(' ');
 
   if (payload.mode === 'improve') {
-    return `${baseRules}\n\nMeeting Title: ${payload.meetingTitle}\nMeeting Date: ${payload.meetingDate}\n\nAgenda:\n${agenda}\n\nTranscript (PII scrubbed):\n${sanitizedTranscript}\n\nCurrent Draft:\n${payload.currentDraft}\n\nTask:\nImprove the draft for clarity and structure while preserving facts from transcript.`;
+    const editContext = payload.editRequest
+      ? `\n\nRequested changes:\n${payload.editRequest}`
+      : '';
+    return `${formatRules}\n\nMeeting Title: ${payload.meetingTitle}\nMeeting Date: ${payload.meetingDate}\n\nAgenda:\n${agenda}\n\nOriginal Transcript (PII scrubbed):\n${sanitizedTranscript}\n\nCurrent Draft:\n${payload.currentDraft}${editContext}\n\nTask:\nImprove the draft applying the requested changes. Preserve all factual content. Return the complete revised minutes.`;
   }
 
-  return `${baseRules}\n\nMeeting Title: ${payload.meetingTitle}\nMeeting Date: ${payload.meetingDate}\n\nAgenda:\n${agenda}\n\nTranscript (PII scrubbed):\n${sanitizedTranscript}\n\nTask:\nGenerate full minutes text with meeting heading and numbered agenda sections.`;
+  return `${formatRules}\n\nMeeting Title: ${payload.meetingTitle}\nMeeting Date: ${payload.meetingDate}\n\nAgenda:\n${agenda}\n\nTranscript (PII scrubbed):\n${sanitizedTranscript}\n\nTask:\nGenerate complete formal minutes following the agenda order and format rules above.`;
 };
 
 const tryParseModelJson = (text: string): { minutesText: string; suggestions: string[] } | null => {
@@ -138,6 +149,7 @@ export default async function handler(
   const meetingDate = (body.meetingDate || '').trim();
   const transcript = (body.transcript || '').trim();
   const currentDraft = (body.currentDraft || '').trim();
+  const editRequest = (body.editRequest || '').trim();
 
   if (!transcript) {
     return res.status(400).json({ ok: false, error: 'Transcript is required.' });
@@ -153,13 +165,7 @@ export default async function handler(
 
   const sanitizedTranscript = scrubPII(transcript);
   const prompt = getPrompt(
-    {
-      mode,
-      meetingTitle,
-      meetingDate,
-      transcript,
-      currentDraft,
-    },
+    { mode, meetingTitle, meetingDate, transcript, currentDraft, editRequest },
     sanitizedTranscript,
   );
 
@@ -172,7 +178,7 @@ export default async function handler(
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 4096,
+        max_tokens: 4000,
         response_format: { type: 'json_object' },
         messages: [
           {
