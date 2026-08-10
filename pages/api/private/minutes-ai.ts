@@ -26,6 +26,7 @@ const supabaseAdmin = createClient(
 );
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
+const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
 
 const scrubPII = (input: string) => {
   let output = input;
@@ -170,7 +171,7 @@ export default async function handler(
   );
 
   try {
-    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+    const aiResponse = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
