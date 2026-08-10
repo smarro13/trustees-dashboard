@@ -5,10 +5,9 @@ import { supabase } from '../../lib/supabaseClient';
 import {
   parseAction,
   parseMatterItems,
-  suggestCategory,
   createDocxBlob,
   type Action,
-  type MattersArising,
+  type MatterGroup,
 } from '../../lib/minutesGenerator';
 
 type AgendaBucket = {
@@ -27,12 +26,15 @@ type ActionCandidate = {
   description: string;
 };
 
-// Helper to extract Matters Arising and AOB sections
-const getMattersAndAobSections = (sections: SectionResult[]): { matters: string[]; aob: string[] } => {
-  const matters = sections.find(s => s.title === 'Matters Arising')?.notes || [];
-  const aob = sections.find(s => s.title === 'AOB')?.notes || [];
-  return { matters, aob };
-};
+// Pull Matters Arising, AOB, and unmatched into one list for the merged section
+const getExtraSections = (
+  sections: SectionResult[],
+  unmatched: string[],
+): { matters: string[]; aob: string[]; unmatched: string[] } => ({
+  matters: sections.find(s => s.title === 'Matters Arising')?.notes ?? [],
+  aob: sections.find(s => s.title === 'AOB')?.notes ?? [],
+  unmatched,
+});
 
 const AGENDA_BUCKETS: AgendaBucket[] = [
   { title: 'Apologies', keywords: ['apology', 'absent', 'unable to attend'] },
@@ -111,6 +113,8 @@ const buildSectionResults = (transcript: string): { sections: SectionResult[]; u
   return { sections, unmatched };
 };
 
+const MERGED_SECTION_TITLES = new Set(['Matters Arising', 'AOB']);
+
 const buildMinutesText = (
   title: string,
   meetingDate: string,
@@ -123,7 +127,9 @@ const buildMinutesText = (
   lines.push(`Generated: ${new Date().toLocaleString('en-GB')}`);
   lines.push('');
 
-  sections.forEach((section, idx) => {
+  const mainSections = sections.filter(s => !MERGED_SECTION_TITLES.has(s.title));
+
+  mainSections.forEach((section, idx) => {
     lines.push(`${idx + 1}. ${section.title}`);
     if (section.notes.length === 0) {
       lines.push('- Nothing discussed.');
@@ -133,11 +139,51 @@ const buildMinutesText = (
     lines.push('');
   });
 
-  lines.push('17. Additional Notes (Unmapped)');
-  if (unmatched.length === 0) {
-    lines.push('- Nothing additional identified.');
+  // Merged Matters Arising & Other Business — grouped by subject
+  const mattersNotes = sections.find(s => s.title === 'Matters Arising')?.notes ?? [];
+  const aobNotes = sections.find(s => s.title === 'AOB')?.notes ?? [];
+  const allExtra = [...mattersNotes, ...aobNotes, ...unmatched];
+
+  lines.push(`${mainSections.length + 1}. Matters Arising & Other Business`);
+
+  if (allExtra.length === 0) {
+    lines.push('- Nothing discussed.');
   } else {
-    unmatched.forEach((line) => lines.push(`- ${line}`));
+    const groupMap = new Map<string, string[]>();
+    const seen = new Set<string>();
+    for (const text of allExtra) {
+      const cleaned = text.replace(/^[-\s]+/, '').trim();
+      if (!cleaned || /^(no discussion|nothing discussed|nothing additional identified)\.?$/i.test(cleaned)) continue;
+      if (seen.has(cleaned.toLowerCase())) continue;
+      seen.add(cleaned.toLowerCase());
+      // Simple keyword grouping for the text preview
+      const heading = (() => {
+        const low = cleaned.toLowerCase();
+        if (low.match(/solar|panel/)) return 'Solar Panels';
+        if (low.match(/gym|treadmill|facility|maintenance|repair|building|shower|boiler/)) return 'Facilities';
+        if (low.match(/email|notify|announce|message|social|website/)) return 'Communications';
+        if (low.match(/budget|cost|expense|payment|invoice|treasurer|financial|fund/)) return 'Finance';
+        if (low.match(/policy|procedures|governance|rules|compliance|code of conduct/)) return 'Governance';
+        if (low.match(/event|social|gathering|summer|party|celebration|dinner/)) return 'Club Social';
+        if (low.match(/member|renewal|signup|recruitment|retention/)) return 'Membership';
+        if (low.match(/rugby|team|fixtures|training|coaching|junior|senior/)) return 'Rugby';
+        if (low.match(/sponsorship|partnership|revenue|business|commercial/)) return 'Commercial';
+        if (low.match(/waste|contract|internet|infrastructure/)) return 'Infrastructure & Operations';
+        return 'Other Matters';
+      })();
+      const existing = groupMap.get(heading) ?? [];
+      existing.push(cleaned);
+      groupMap.set(heading, existing);
+    }
+    if (groupMap.size === 0) {
+      lines.push('- Nothing discussed.');
+    } else {
+      for (const [heading, items] of groupMap.entries()) {
+        lines.push('');
+        lines.push(`  ${heading}`);
+        items.forEach(item => lines.push(`  - ${item}`));
+      }
+    }
   }
 
   return lines.join('\n');
@@ -214,7 +260,7 @@ export default function MinutesFormatterPage() {
   const [addingActions, setAddingActions] = useState(false);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
   const [parsedActions, setParsedActions] = useState<Action[]>([]);
-  const [mattersArising, setMattersArising] = useState<MattersArising[]>([]);
+  const [matterGroups, setMatterGroups] = useState<MatterGroup[]>([]);
   const [downloadingDocx, setDownloadingDocx] = useState(false);
 
   const parsed = useMemo(() => buildSectionResults(transcript), [transcript]);
@@ -254,12 +300,11 @@ export default function MinutesFormatterPage() {
     const actionCandidateTexts = actionCandidates.map(c => c.description);
     const parsedActs = actionCandidateTexts.map(text => parseAction(text, 'Minutes Formatter'));
     setParsedActions(parsedActs);
-    
-    // Parse and merge Matters Arising & AOB
-    const { matters, aob } = getMattersAndAobSections(parsed.sections);
-    const mattersItems = parseMatterItems(matters, aob);
-    setMattersArising(mattersItems);
-    
+
+    // Merge Matters Arising, AOB, and unmatched into grouped subjects
+    const { matters, aob, unmatched: unmatchedItems } = getExtraSections(parsed.sections, parsed.unmatched);
+    setMatterGroups(parseMatterItems(matters, aob, unmatchedItems));
+
     setGenerated(true);
     showNotice('success', 'Minutes formatted with improved action and matters parsing.');
   };
@@ -273,18 +318,7 @@ export default function MinutesFormatterPage() {
     }
   };
 
-  const downloadMinutes = () => {
-    const blob = new Blob([editableMinutes || minutesText], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${meetingTitle || 'minutes'}-${meetingDate || 'draft'}.txt`.replace(/\s+/g, '-');
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
-    showNotice('success', 'Minutes text file downloaded.');
-  };
+
 
   const downloadAsDocx = () => {
     setDownloadingDocx(true);
@@ -294,7 +328,7 @@ export default function MinutesFormatterPage() {
         meetingDate,
         parsed.sections,
         parsedActions,
-        mattersArising
+        matterGroups
       );
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
@@ -313,26 +347,28 @@ export default function MinutesFormatterPage() {
   };
 
   const saveDraftToMinutesLibrary = async () => {
-    const content = (editableMinutes || minutesText).trim();
-    if (!content) {
-      showNotice('error', 'No minutes content to save.');
-      return;
-    }
-
     setSavingMinutesDoc(true);
 
     try {
-      const fileName = `${meetingTitle || 'minutes'}-${meetingDate || new Date().toISOString().slice(0, 10)}.txt`
+      const fileName = `${meetingTitle || 'minutes'}-${meetingDate || new Date().toISOString().slice(0, 10)}.docx`
         .replace(/\s+/g, '-')
         .replace(/[^a-zA-Z0-9._-]/g, '')
         .toLowerCase();
 
       const filePath = `minutes-generated/${Date.now()}-${fileName}`;
-      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      
+      // Generate DOCX blob
+      const blob = createDocxBlob(
+        meetingTitle,
+        meetingDate,
+        parsed.sections,
+        parsedActions,
+        matterGroups
+      );
 
       const { error: uploadError } = await supabase.storage
         .from('minutes')
-        .upload(filePath, blob, { contentType: 'text/plain', upsert: false });
+        .upload(filePath, blob, { contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', upsert: false });
 
       if (uploadError) {
         showNotice('error', `Failed to upload minutes document: ${uploadError.message}`);
@@ -354,8 +390,9 @@ export default function MinutesFormatterPage() {
       }
 
       showNotice('success', 'Minutes document saved and linked.');
-    } catch {
+    } catch (error) {
       showNotice('error', 'Failed to save minutes document.');
+      console.error(error);
     }
 
     setSavingMinutesDoc(false);
@@ -369,7 +406,7 @@ export default function MinutesFormatterPage() {
     setActionMeetingId(null);
     setSaveMeetingId(null);
     setParsedActions([]);
-    setMattersArising([]);
+    setMatterGroups([]);
     setNotice(null);
   };
 
@@ -426,7 +463,7 @@ export default function MinutesFormatterPage() {
           </Link>
           <h1 className="text-3xl font-extrabold text-zinc-900">Minutes Formatter</h1>
           <p className="mt-1 text-zinc-600">
-            Paste Otter transcript content and generate agenda-formatted minutes with fallback notes for empty sections.
+            Paste Otter transcript content and generate professional Word documents with structured action items, merged matters arising, and category suggestions.
           </p>
         </header>
 
@@ -476,23 +513,15 @@ export default function MinutesFormatterPage() {
                 disabled={!generated}
                 className="rounded-md bg-zinc-900 px-4 py-2 font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
               >
-                Copy Formatted Minutes
-              </button>
-              <button
-                type="button"
-                onClick={downloadMinutes}
-                disabled={!generated}
-                className="rounded-md bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-              >
-                Download .txt
+                Copy to Clipboard
               </button>
               <button
                 type="button"
                 onClick={downloadAsDocx}
                 disabled={!generated || downloadingDocx}
-                className="rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                className="rounded-md bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
               >
-                {downloadingDocx ? 'Generating...' : 'Download .docx'}
+                {downloadingDocx ? 'Generating...' : 'Download Minutes'}
               </button>
               <button
                 type="button"
@@ -560,32 +589,33 @@ export default function MinutesFormatterPage() {
               <div className="border-b border-zinc-200 px-6 py-4">
                 <h2 className="text-xl font-semibold">Matters Arising & Other Business</h2>
               </div>
-              <div className="space-y-4 px-6 py-6">
-                {mattersArising.length === 0 ? (
+              <div className="space-y-6 px-6 py-6">
+                {matterGroups.length === 0 ? (
                   <p className="text-sm text-zinc-500">No matters or AOB items detected.</p>
                 ) : (
-                  <div className="space-y-3">
-                    {mattersArising.map((matter) => (
-                      <div
-                        key={matter.id}
-                        className={`rounded-md border p-4 ${
-                          matter.isAction
-                            ? 'border-amber-200 bg-amber-50'
-                            : 'border-zinc-200 bg-zinc-50'
-                        }`}
-                      >
-                        <div className="mb-2 flex items-start justify-between gap-2">
-                          <p className="font-semibold text-zinc-900">{matter.title}</p>
-                          {matter.isAction && (
-                            <span className="rounded bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800">
-                              ACTION
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm text-zinc-700">{matter.summary}</p>
-                      </div>
-                    ))}
-                  </div>
+                  matterGroups.map((group) => (
+                    <div key={group.heading}>
+                      <h3 className="mb-2 text-base font-semibold text-zinc-900">{group.heading}</h3>
+                      <ul className="space-y-1">
+                        {group.items.map((item) => (
+                          <li
+                            key={item.id}
+                            className={`flex items-start gap-2 rounded-md px-3 py-2 text-sm ${
+                              item.isAction ? 'bg-amber-50 text-amber-900' : 'bg-zinc-50 text-zinc-700'
+                            }`}
+                          >
+                            <span className="mt-0.5 text-zinc-400">•</span>
+                            <span>{item.text}</span>
+                            {item.isAction && (
+                              <span className="ml-auto whitespace-nowrap rounded bg-amber-200 px-1.5 py-0.5 text-xs font-semibold text-amber-900">
+                                ACTION
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))
                 )}
               </div>
             </section>
@@ -658,8 +688,8 @@ export default function MinutesFormatterPage() {
               />
 
               <div className="rounded-lg border border-zinc-200 bg-white p-4">
-                <h3 className="text-base font-semibold text-zinc-900">Save as minutes document</h3>
-                <p className="mt-1 text-sm text-zinc-600">Create and upload a .txt minutes document, with optional meeting link.</p>
+                <h3 className="text-base font-semibold text-zinc-900">Save to Minutes Library</h3>
+                <p className="mt-1 text-sm text-zinc-600">Upload the generated minutes document to your library with optional meeting link.</p>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <select
                     value={saveMeetingId ?? ''}
