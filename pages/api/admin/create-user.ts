@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
+import { randomBytes } from 'crypto';
 
 type DashboardRole = 'admin' | 'management' | 'president' | 'safeguarding' | 'commercial' | null;
 
@@ -30,6 +31,18 @@ const getBearerToken = (req: NextApiRequest) => {
     : '';
 };
 
+const createTemporaryPassword = (length = 16) => {
+  const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%*';
+  const bytes = randomBytes(length);
+  let password = '';
+
+  for (let i = 0; i < length; i += 1) {
+    password += charset[bytes[i] % charset.length];
+  }
+
+  return password;
+};
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
@@ -50,23 +63,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const role = normalizeRole(roleInput);
+  const temporaryPassword = createTemporaryPassword();
 
-  // Create user with a random password — they must use "forgot password" to set their own
+  // Create user with a random temporary password so they can log in immediately.
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
     email,
+    password: temporaryPassword,
     email_confirm: true,
     app_metadata: role ? { role, roles: [role] } : {},
   });
 
   if (error) return res.status(500).json({ ok: false, error: error.message });
 
-  // Send them a password reset email so they can log in
-  await supabaseAdmin.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || ''}/auth/reset-password`,
-  });
-
   return res.status(200).json({
     ok: true,
+    temporaryPassword,
     user: {
       id: data.user.id,
       email: data.user.email || '',
