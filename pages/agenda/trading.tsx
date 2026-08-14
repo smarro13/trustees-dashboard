@@ -185,7 +185,7 @@ export default function TradingPage() {
       console.log('Final turnover notes:', finalTurnoverNotes);
     }
 
-    const { data: report } = await supabase
+    const { data: report, error } = await supabase
       .from('trading_reports')
       .insert({
         reporting_period: period,
@@ -198,9 +198,11 @@ export default function TradingPage() {
       .select()
       .single();
 
-    if (report) {
-      // Trading reports don't use separate items table
-      // All data is in the summary and turnover_notes fields
+    setLoading(false);
+
+    if (error || !report) {
+      showNotice('error', error?.message || 'Failed to save trading report.');
+      return;
     }
 
     setPeriod('');
@@ -209,8 +211,9 @@ export default function TradingPage() {
     setTurnoverNotes(''); // reset turnover
     setIncludeTillAnalysis(false); // reset till checkbox
     setTillSummaryText(''); // reset till summary text
+    setTillFile(null); // reset till PDF upload
+    setTillSummary(null); // reset till PDF summary
     setItems([{ dateRange: '', moneyIn: '', moneyOut: '' }]);
-    setLoading(false);
 
     loadData();
     showNotice('success', 'Trading report saved successfully.');
