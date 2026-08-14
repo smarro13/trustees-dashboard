@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@supabase/supabase-js';
+import { requireUser, supabaseAdmin } from '../../../lib/serverAuth';
 
 type JobStatus = 'Not Started' | 'Ongoing' | 'Completed';
 type JobPriority = 'High' | 'Medium' | 'Low';
@@ -26,38 +26,8 @@ type TogglePayload = {
 
 const JOB_META_PREFIX = 'JOB_META:';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
-
 const VALID_STATUSES: JobStatus[] = ['Not Started', 'Ongoing', 'Completed'];
 const VALID_PRIORITIES: JobPriority[] = ['High', 'Medium', 'Low'];
-
-const getBearerToken = (authHeader: string | undefined) => {
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return '';
-  return authHeader.slice('Bearer '.length).trim();
-};
-
-const ensureAuthorized = async (req: NextApiRequest, res: NextApiResponse) => {
-  const token = getBearerToken(req.headers.authorization);
-  if (!token) {
-    res.status(401).json({ ok: false, error: 'Unauthorized' });
-    return null;
-  }
-
-  const {
-    data: { user },
-    error,
-  } = await supabaseAdmin.auth.getUser(token);
-
-  if (error || !user) {
-    res.status(401).json({ ok: false, error: 'Unauthorized' });
-    return null;
-  }
-
-  return user;
-};
 
 const parseJobMeta = (description: string | null): ParsedJobMeta | null => {
   if (!description) return null;
@@ -110,7 +80,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
   }
 
-  const user = await ensureAuthorized(req, res);
+  const user = await requireUser(req, res);
   if (!user) return;
 
   if (req.method === 'PATCH') {

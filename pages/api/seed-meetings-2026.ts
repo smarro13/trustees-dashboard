@@ -32,13 +32,17 @@ export default async function handler(
 
   const year = 2026;
 
-  // Optional lightweight guard via query token (set ?token=your_value when calling)
+  // Guard via query token (set ?token=your_value when calling). Fails closed: this
+  // is a database-writing endpoint, so it must not run unauthenticated just because
+  // SEED_API_TOKEN wasn't configured.
   const requiredToken = process.env.SEED_API_TOKEN;
-  if (requiredToken) {
-    const provided = (req.query.token as string) || req.headers['x-seed-token'];
-    if (provided !== requiredToken) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+  if (!requiredToken) {
+    return res.status(500).json({ error: 'SEED_API_TOKEN is not configured.' });
+  }
+
+  const provided = (req.query.token as string) || req.headers['x-seed-token'];
+  if (provided !== requiredToken) {
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   const desiredDates: string[] = Array.from({ length: 12 }, (_, m) =>

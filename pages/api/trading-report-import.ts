@@ -8,6 +8,7 @@ import {
   dedupeMonthlyEntries,
   type ImportedTradingReport,
 } from '../../lib/pdf/tradingReportImportParser';
+import { requireUser } from '../../lib/serverAuth';
 
 type UploadedFile = {
   filename?: string;
@@ -67,6 +68,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed. Use POST.' });
   }
+
+  const user = await requireUser(req, res);
+  if (!user) return;
 
   const body = req.body as ReqBody;
   const uploads: UploadedFile[] =

@@ -1,35 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@supabase/supabase-js';
 import { randomBytes } from 'crypto';
-
-type DashboardRole = 'admin' | 'management' | 'president' | 'safeguarding' | 'commercial' | null;
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
-
-const normalizeRole = (rawRole: unknown): DashboardRole => {
-  if (typeof rawRole !== 'string') return null;
-  const value = rawRole.trim().toLowerCase();
-  if (value === 'admin') return 'admin';
-  if (value === 'management' || value === 'mangement') return 'management';
-  if (value === 'president') return 'president';
-  if (value === 'safeguarding') return 'safeguarding';
-  if (value === 'commercial' || value === 'commerical') return 'commercial';
-  return null;
-};
-
-const resolveRole = (user: any): DashboardRole => {
-  return normalizeRole(user?.app_metadata?.role) || normalizeRole(user?.user_metadata?.role);
-};
-
-const getBearerToken = (req: NextApiRequest) => {
-  const authHeader = req.headers.authorization;
-  return typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
-    ? authHeader.slice('Bearer '.length).trim()
-    : '';
-};
+import { requireAdmin, supabaseAdmin } from '../../../lib/serverAuth';
+import { normalizeRole, resolveRole } from '../../../lib/roles';
 
 const createTemporaryPassword = (length = 16) => {
   const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%*';
@@ -48,12 +20,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
   }
 
-  const token = getBearerToken(req);
-  if (!token) return res.status(401).json({ ok: false, error: 'Unauthorized' });
-
-  const { data: { user: requestingUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
-  if (authError || !requestingUser) return res.status(401).json({ ok: false, error: 'Unauthorized' });
-  if (resolveRole(requestingUser) !== 'admin') return res.status(403).json({ ok: false, error: 'Forbidden' });
+  const requestingUser = await requireAdmin(req, res);
+  if (!requestingUser) return;
 
   const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
   const roleInput = typeof req.body?.role === 'string' ? req.body.role.trim().toLowerCase() : 'none';

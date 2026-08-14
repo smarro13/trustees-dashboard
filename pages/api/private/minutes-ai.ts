@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@supabase/supabase-js';
+import { requireUser } from '../../../lib/serverAuth';
 
 type Mode = 'generate' | 'improve';
 
@@ -20,11 +20,6 @@ type MinutesAiResponse = {
   error?: string;
 };
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
-
 const MODEL = process.env.OPENAI_MODEL || 'openai/gpt-oss-20b';
 const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
 
@@ -37,13 +32,6 @@ const scrubPII = (input: string) => {
   output = output.replace(/\b([A-Z][a-z]+\s+[A-Z][a-z]+)\b/g, '[redacted-name]');
 
   return output;
-};
-
-const getBearerToken = (req: NextApiRequest) => {
-  const authHeader = req.headers.authorization;
-  return typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
-    ? authHeader.slice('Bearer '.length).trim()
-    : '';
 };
 
 const getPrompt = (payload: Required<MinutesAiRequest>, sanitizedTranscript: string) => {
@@ -130,19 +118,8 @@ export default async function handler(
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
   }
 
-  const token = getBearerToken(req);
-  if (!token) {
-    return res.status(401).json({ ok: false, error: 'Unauthorized' });
-  }
-
-  const {
-    data: { user },
-    error: userError,
-  } = await supabaseAdmin.auth.getUser(token);
-
-  if (userError || !user) {
-    return res.status(401).json({ ok: false, error: 'Unauthorized' });
-  }
+  const user = await requireUser(req, res);
+  if (!user) return;
 
   const body = (req.body || {}) as MinutesAiRequest;
   const mode: Mode = body.mode === 'improve' ? 'improve' : 'generate';

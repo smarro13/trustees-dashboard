@@ -58,7 +58,7 @@ function isSkippableLine(line: string): boolean {
 export async function parseTradingCompanyPDF(
   pdfBytes: Buffer
 ): Promise<ParsedResult> {
-  console.log('Starting PDF parse, buffer size: - tradingCompanyParser.ts:61', pdfBytes.length);
+  console.log('Starting PDF parse, buffer size:', pdfBytes.length);
   
   let textContent = '';
   try {
@@ -124,9 +124,9 @@ export async function parseTradingCompanyPDF(
     });
 
     textContent = await parsePromise;
-    console.log('PDF parsed successfully, text length: - tradingCompanyParser.ts:127', textContent.length);
+    console.log('PDF parsed successfully, text length:', textContent.length);
   } catch (err) {
-    console.error('PDF parse error: - tradingCompanyParser.ts:129', err);
+    console.error('PDF parse error:', err);
     throw new Error(`Failed to parse PDF: ${err instanceof Error ? err.message : 'Unknown error'}`);
   }
 
@@ -135,7 +135,7 @@ export async function parseTradingCompanyPDF(
     .map((l) => l.trim())
     .filter(Boolean);
 
-  console.log('Extracted - tradingCompanyParser.ts:138', lines.length, 'lines from PDF');
+  console.log('Extracted', lines.length, 'lines from PDF');
 
   const items: ParsedItem[] = [];
 

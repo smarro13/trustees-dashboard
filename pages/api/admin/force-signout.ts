@@ -1,50 +1,13 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@supabase/supabase-js';
-
-type DashboardRole = 'admin' | 'management' | 'president' | 'safeguarding' | 'commercial' | null;
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
-
-const normalizeRole = (rawRole: unknown): DashboardRole => {
-  if (typeof rawRole !== 'string') return null;
-  const value = rawRole.trim().toLowerCase();
-  if (value === 'admin') return 'admin';
-  if (value === 'management' || value === 'mangement') return 'management';
-  if (value === 'president') return 'president';
-  if (value === 'safeguarding') return 'safeguarding';
-  if (value === 'commercial' || value === 'commerical') return 'commercial';
-  return null;
-};
-
-const resolveRole = (user: any): DashboardRole => {
-  const fromAppMeta = normalizeRole(user?.app_metadata?.role);
-  if (fromAppMeta) return fromAppMeta;
-  const fromUserMeta = normalizeRole(user?.user_metadata?.role);
-  if (fromUserMeta) return fromUserMeta;
-  return null;
-};
-
-const getBearerToken = (req: NextApiRequest) => {
-  const authHeader = req.headers.authorization;
-  return typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
-    ? authHeader.slice('Bearer '.length).trim()
-    : '';
-};
+import { requireAdmin, supabaseAdmin } from '../../../lib/serverAuth';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
   }
 
-  const token = getBearerToken(req);
-  if (!token) return res.status(401).json({ ok: false, error: 'Unauthorized' });
-
-  const { data: { user: requestingUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
-  if (authError || !requestingUser) return res.status(401).json({ ok: false, error: 'Unauthorized' });
-  if (resolveRole(requestingUser) !== 'admin') return res.status(403).json({ ok: false, error: 'Forbidden' });
+  const requestingUser = await requireAdmin(req, res);
+  if (!requestingUser) return;
 
   const userId = typeof req.body?.userId === 'string' ? req.body.userId.trim() : '';
   if (!userId) return res.status(400).json({ ok: false, error: 'userId is required' });

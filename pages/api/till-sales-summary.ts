@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { parseTradingCompanyPDF } from "../../lib/pdf/tradingCompanyParser";
+import { requireUser } from "../../lib/serverAuth";
 
 type ReqBody = {
   filename?: string;
@@ -12,6 +13,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method !== "POST") {
       return res.status(405).json({ error: "Method not allowed. Use POST." });
     }
+
+    const user = await requireUser(req, res);
+    if (!user) return;
 
     const body = req.body as ReqBody;
 
@@ -40,25 +44,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
 
-      console.log('PDF size: - till-sales-summary.ts:43', pdfBytes.length, 'bytes');
+      console.log('PDF size:', pdfBytes.length, 'bytes');
       
       // Parse the PDF
       let parsed;
       try {
         parsed = await parseTradingCompanyPDF(pdfBytes);
       } catch (parseError) {
-        console.error('PDF parsing error: - till-sales-summary.ts:50', parseError);
+        console.error('PDF parsing error:', parseError);
         return res.status(500).json({
           error: 'Could not read PDF file - file may be corrupted or encrypted',
           details: parseError instanceof Error ? parseError.message : 'Unknown parsing error'
         });
       }
 
-      console.log('Parsed items count: - till-sales-summary.ts:57', parsed.items.length);
+      console.log('Parsed items count:', parsed.items.length);
 
       // Check if we got any items
       if (parsed.items.length === 0) {
-        console.warn('No items found in PDF - till-sales-summary.ts:61');
+        console.warn('No items found in PDF');
         return res.status(200).json({
           error: 'No sales data found in PDF. Expected table with: Item Name, Avg Cost, Line Cost, Quantity, Value, Profit, GP%, Sales Ratio%',
           highestProfitItem: null,
@@ -92,7 +96,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       const mergedItems = Array.from(itemMap.values());
-      console.log('Merged items count: - till-sales-summary.ts:95', mergedItems.length, 'from', parsed.items.length);
+      console.log('Merged items count:', mergedItems.length, 'from', parsed.items.length);
 
       // Get top 10 items by sales ratio
       const topTenItems = [...mergedItems]
@@ -119,7 +123,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         };
       }
 
-      console.log('Success  highest profit: - till-sales-summary.ts:122', highestProfitItem, '- popular items:', mostPopularItems.length);
+      console.log('Success  highest profit:', highestProfitItem, '- popular items:', mostPopularItems.length);
 
       // Build summary text for saving
       let summaryText = '';
@@ -133,7 +137,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       return res.status(200).json({ highestProfitItem, mostPopularItems, summaryText });
     } catch (e: any) {
-      console.error('Unexpected error parsing PDF: - till-sales-summary.ts:136', e);
+      console.error('Unexpected error parsing PDF:', e);
       return res.status(500).json({ 
         error: 'Unexpected error processing PDF',
         details: e?.message ?? "Unknown error",
@@ -142,7 +146,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   } catch (outerError: any) {
     // Catch any errors that occur before we can send a proper JSON response
-    console.error('Critical error in API handler: - till-sales-summary.ts:145', outerError);
+    console.error('Critical error in API handler:', outerError);
     try {
       return res.status(500).json({
         error: 'Server error - API handler failed',

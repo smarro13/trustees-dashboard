@@ -67,7 +67,7 @@ export default function ForgotPasswordPage() {
             <div>
               <p className="text-sm font-semibold text-yellow-900 mb-1">Limited Email Service</p>
               <p className="text-sm text-yellow-800">
-                We can only send <strong>2 password reset emails per hour</strong>. Please ensure your email address is correct before submitting. If you don't receive an email, check your spam folder or contact the Management Team.
+                We can only send <strong>2 password reset emails per hour</strong>. Please ensure your email address is correct before submitting. If you don&apos;t receive an email, check your spam folder or contact the Management Team.
               </p>
             </div>
           </div>
@@ -81,7 +81,7 @@ export default function ForgotPasswordPage() {
                 <div>
                   <p className="text-sm font-medium text-green-800 mb-1">Check your email!</p>
                   <p className="text-sm text-green-700">
-                    We've sent a password reset link to <strong>{email}</strong>
+                    We&apos;ve sent a password reset link to <strong>{email}</strong>
                   </p>
                 </div>
               </div>

@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { extractTextFromPdfBuffer, parseTreasuryReportText } from '../../lib/pdf/treasuryReportImportParser';
+import { requireUser } from '../../lib/serverAuth';
 
 type ReqBody = {
   filename?: string;
@@ -10,6 +11,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed. Use POST.' });
   }
+
+  const user = await requireUser(req, res);
+  if (!user) return;
 
   const body = req.body as ReqBody;
   const filename = (body?.filename || '').toLowerCase();

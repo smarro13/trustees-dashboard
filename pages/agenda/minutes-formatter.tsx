@@ -706,7 +706,7 @@ export default function MinutesFormatterPage() {
               <div className="rounded-lg border border-zinc-200 bg-white p-4">
                 <h3 className="text-base font-semibold text-zinc-900">Refine with AI</h3>
                 <p className="mt-1 text-sm text-zinc-600">
-                  Describe the changes you'd like — e.g. "Expand the treasury section", "Make the language more formal", "Add a stronger closing statement".
+                  Describe the changes you&apos;d like — e.g. &ldquo;Expand the treasury section&rdquo;, &ldquo;Make the language more formal&rdquo;, &ldquo;Add a stronger closing statement&rdquo;.
                 </p>
                 <textarea
                   value={editRequest}

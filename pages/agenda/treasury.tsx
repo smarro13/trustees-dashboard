@@ -31,6 +31,47 @@ type MoneyOwed = {
   amount: string;
 };
 
+const DEFAULT_REGULAR_PAYMENTS: RegularPayment[] = [
+  { id: 1, description: 'Gas', frequency: 'Monthly', amount: '300', notes: 'Monthly Readings' },
+  { id: 2, description: 'Water', frequency: 'Monthly', amount: '580', notes: 'Catch Up Payments' },
+  { id: 3, description: 'BT Group (Phone)', frequency: 'Monthly TC', amount: '99', notes: '' },
+  { id: 4, description: 'BT Group (Broadband)', frequency: 'Monthly TC', amount: '246', notes: '' },
+  { id: 5, description: '3 Mobile', frequency: 'Monthly TC', amount: '30', notes: 'Steward Mobile' },
+  { id: 6, description: 'Bottom Line', frequency: 'Monthly', amount: '85', notes: 'On Average' },
+  { id: 7, description: 'Sky TV', frequency: 'Monthly TC', amount: '450', notes: '' },
+  { id: 8, description: 'Coaching Staff', frequency: 'Monthly', amount: '1353', notes: '' },
+  { id: 9, description: 'Laundry', frequency: 'Monthly', amount: '650', notes: 'Average over the year' },
+  { id: 10, description: 'DK Services', frequency: 'Monthly TC', amount: '104', notes: 'Pot Washers' },
+  { id: 11, description: 'FDMS', frequency: 'Monthly TC', amount: '520', notes: 'Varies on the amount taken' },
+  { id: 12, description: 'Mark Bates', frequency: 'Monthly', amount: '140', notes: 'Average' },
+  { id: 13, description: 'Physio', frequency: 'Monthly', amount: '320', notes: '' },
+  { id: 14, description: 'Concept Hygiene', frequency: 'Monthly', amount: '270', notes: '' },
+  { id: 15, description: 'Aldermore Bank PLC', frequency: 'Monthly TC', amount: '255.60', notes: 'Club Control' },
+  { id: 16, description: 'Biffa Waste', frequency: 'Monthly TC', amount: '557', notes: '' },
+  { id: 17, description: 'HMRC', frequency: 'Monthly', amount: '355', notes: 'PAYE for RM (Increased)' },
+  { id: 18, description: 'Club Insure', frequency: 'Monthly', amount: '858.33', notes: '' },
+  { id: 19, description: 'Coporate Asset Sols', frequency: 'Monthly TC', amount: '400.80', notes: '' },
+];
+
+const DEFAULT_REGULAR_INCOMES: RegularIncome[] = [
+  { description: 'Road Riders', frequency: 'Monthly', amount: '450', notes: '' },
+  { description: 'LoveAdmin', frequency: 'Monthly', amount: '4800', notes: '' },
+  { description: 'BottomLine', frequency: 'Monthly', amount: '800', notes: '' },
+  { description: 'Aldwinians TC', frequency: 'Monthly', amount: '1000', notes: '' },
+];
+
+const DEFAULT_MONIES_OWED: MoneyOwed[] = [
+  { name: 'TGL Solutions', amount: '2500' },
+  { name: 'Smirfit Sponsorship', amount: '1000' },
+  { name: '6 Nations Tickets', amount: '2280' },
+];
+
+// Fresh copies each call: state update handlers mutate row objects in place before
+// setState, so reusing the same object instances here would corrupt the defaults.
+const cloneDefaultRegularPayments = () => DEFAULT_REGULAR_PAYMENTS.map((item) => ({ ...item }));
+const cloneDefaultRegularIncomes = () => DEFAULT_REGULAR_INCOMES.map((item) => ({ ...item }));
+const cloneDefaultMoniesOwed = () => DEFAULT_MONIES_OWED.map((item) => ({ ...item }));
+
 export default function TreasuryPage() {
   const [reports, setReports] = useState<any[]>([]);
   const [meetings, setMeetings] = useState<any[]>([]);
@@ -41,38 +82,9 @@ export default function TreasuryPage() {
   const [items, setItems] = useState<Item[]>([
     { dateRange: '', moneyIn: '', moneyOut: '' },
   ]);
-  const [regularPayments, setRegularPayments] = useState<RegularPayment[]>([
-    { id: 1, description: 'Gas', frequency: 'Monthly', amount: '300', notes: 'Monthly Readings' },
-    { id: 2, description: 'Water', frequency: 'Monthly', amount: '580', notes: 'Catch Up Payments' },
-    { id: 3, description: 'BT Group (Phone)', frequency: 'Monthly TC', amount: '99', notes: '' },
-    { id: 4, description: 'BT Group (Broadband)', frequency: 'Monthly TC', amount: '246', notes: '' },
-    { id: 5, description: '3 Mobile', frequency: 'Monthly TC', amount: '30', notes: 'Steward Mobile' },
-    { id: 6, description: 'Bottom Line', frequency: 'Monthly', amount: '85', notes: 'On Average' },
-    { id: 7, description: 'Sky TV', frequency: 'Monthly TC', amount: '450', notes: '' },
-    { id: 8, description: 'Coaching Staff', frequency: 'Monthly', amount: '1353', notes: '' },
-    { id: 9, description: 'Laundry', frequency: 'Monthly', amount: '650', notes: 'Average over the year' },
-    { id: 10, description: 'DK Services', frequency: 'Monthly TC', amount: '104', notes: 'Pot Washers' },
-    { id: 11, description: 'FDMS', frequency: 'Monthly TC', amount: '520', notes: 'Varies on the amount taken' },
-    { id: 12, description: 'Mark Bates', frequency: 'Monthly', amount: '140', notes: 'Average' },
-    { id: 13, description: 'Physio', frequency: 'Monthly', amount: '320', notes: '' },
-    { id: 14, description: 'Concept Hygiene', frequency: 'Monthly', amount: '270', notes: '' },
-    { id: 15, description: 'Aldermore Bank PLC', frequency: 'Monthly TC', amount: '255.60', notes: 'Club Control' },
-    { id: 16, description: 'Biffa Waste', frequency: 'Monthly TC', amount: '557', notes: '' },
-    { id: 17, description: 'HMRC', frequency: 'Monthly', amount: '355', notes: 'PAYE for RM (Increased)' },
-    { id: 18, description: 'Club Insure', frequency: 'Monthly', amount: '858.33', notes: '' },
-    { id: 19, description: 'Coporate Asset Sols', frequency: 'Monthly TC', amount: '400.80', notes: '' },
-  ]);
-  const [regularIncomes, setRegularIncomes] = useState<RegularIncome[]>([
-    { description: 'Road Riders', frequency: 'Monthly', amount: '450', notes: '' },
-    { description: 'LoveAdmin', frequency: 'Monthly', amount: '4800', notes: '' },
-    { description: 'BottomLine', frequency: 'Monthly', amount: '800', notes: '' },
-    { description: 'Aldwinians TC', frequency: 'Monthly', amount: '1000', notes: '' },
-  ]);
-  const [moniesOwed, setMoniesOwed] = useState<MoneyOwed[]>([
-    { name: 'TGL Solutions', amount: '2500' },
-    { name: 'Smirfit Sponsorship', amount: '1000' },
-    { name: '6 Nations Tickets', amount: '2280' },
-  ]);
+  const [regularPayments, setRegularPayments] = useState<RegularPayment[]>(cloneDefaultRegularPayments);
+  const [regularIncomes, setRegularIncomes] = useState<RegularIncome[]>(cloneDefaultRegularIncomes);
+  const [moniesOwed, setMoniesOwed] = useState<MoneyOwed[]>(cloneDefaultMoniesOwed);
   const [loading, setLoading] = useState(false);
   const [importingReport, setImportingReport] = useState(false);
   const [importedFileName, setImportedFileName] = useState<string | null>(null);
@@ -400,38 +412,9 @@ export default function TreasuryPage() {
       setMeetingId(null);
       setNotes('');
       setItems([{ dateRange: '', moneyIn: '', moneyOut: '' }]);
-      setRegularPayments([
-        { id: 1, description: 'Gas', frequency: 'Monthly', amount: '300', notes: 'Monthly Readings' },
-        { id: 2, description: 'Water', frequency: 'Monthly', amount: '580', notes: 'Catch Up Payments' },
-        { id: 3, description: 'BT Group (Phone)', frequency: 'Monthly TC', amount: '99', notes: '' },
-        { id: 4, description: 'BT Group (Broadband)', frequency: 'Monthly TC', amount: '246', notes: '' },
-        { id: 5, description: '3 Mobile', frequency: 'Monthly TC', amount: '30', notes: 'Steward Mobile' },
-        { id: 6, description: 'Bottom Line', frequency: 'Monthly', amount: '85', notes: 'On Average' },
-        { id: 7, description: 'Sky TV', frequency: 'Monthly TC', amount: '450', notes: '' },
-        { id: 8, description: 'Coaching Staff', frequency: 'Monthly', amount: '1353', notes: '' },
-        { id: 9, description: 'Laundry', frequency: 'Monthly', amount: '650', notes: 'Average over the year' },
-        { id: 10, description: 'DK Services', frequency: 'Monthly TC', amount: '104', notes: 'Pot Washers' },
-        { id: 11, description: 'FDMS', frequency: 'Monthly TC', amount: '520', notes: 'Varies on the amount taken' },
-        { id: 12, description: 'Mark Bates', frequency: 'Monthly', amount: '140', notes: 'Average' },
-        { id: 13, description: 'Physio', frequency: 'Monthly', amount: '320', notes: '' },
-        { id: 14, description: 'Concept Hygiene', frequency: 'Monthly', amount: '270', notes: '' },
-        { id: 15, description: 'Aldermore Bank PLC', frequency: 'Monthly TC', amount: '255.60', notes: 'Club Control' },
-        { id: 16, description: 'Biffa Waste', frequency: 'Monthly TC', amount: '557', notes: '' },
-        { id: 17, description: 'HMRC', frequency: 'Monthly', amount: '355', notes: 'PAYE for RM (Increased)' },
-        { id: 18, description: 'Club Insure', frequency: 'Monthly', amount: '858.33', notes: '' },
-        { id: 19, description: 'Coporate Asset Sols', frequency: 'Monthly TC', amount: '400.80', notes: '' },
-      ]);
-      setRegularIncomes([
-        { description: 'Road Riders', frequency: 'Monthly', amount: '450', notes: '' },
-        { description: 'LoveAdmin', frequency: 'Monthly', amount: '4800', notes: '' },
-        { description: 'BottomLine', frequency: 'Monthly', amount: '800', notes: '' },
-        { description: 'Aldwinians TC', frequency: 'Monthly', amount: '1000', notes: '' },
-      ]);
-      setMoniesOwed([
-        { name: 'TGL Solutions', amount: '2500' },
-        { name: 'Smirfit Sponsorship', amount: '1000' },
-        { name: '6 Nations Tickets', amount: '2280' },
-      ]);
+      setRegularPayments(cloneDefaultRegularPayments());
+      setRegularIncomes(cloneDefaultRegularIncomes());
+      setMoniesOwed(cloneDefaultMoniesOwed());
 
       showNotice('success', 'Report saved successfully.');
       await loadData();
@@ -457,9 +440,12 @@ export default function TreasuryPage() {
       const arrayBuffer = await file.arrayBuffer();
       const contentBase64 = Buffer.from(arrayBuffer).toString('base64');
 
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
       const response = await fetch('/api/treasury-report-import', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           filename: file.name,
           contentBase64,
