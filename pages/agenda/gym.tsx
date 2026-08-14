@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabaseClient';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
+import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
 
 type UploadedAsset = {
   name: string;
@@ -80,6 +81,7 @@ export default function GymUpdatesPage() {
   const [linkingReportId, setLinkingReportId] = useState<string | null>(null);
   const [meetingSelectionByReport, setMeetingSelectionByReport] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<InlineNotice | null>(null);
+  const [canEdit, setCanEdit] = useState(true);
 
   const showNotice = (type: InlineNotice['type'], message: string) => {
     setNotice({ type, message });
@@ -140,6 +142,15 @@ export default function GymUpdatesPage() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
+  useEffect(() => {
+    const loadCanEdit = async () => {
+      const allowed = await canCurrentUserEditThisAgendaPage();
+      setCanEdit(allowed);
+    };
+
+    void loadCanEdit();
+  }, []);
+
   const toggleJobIdea = (id: string) => {
     setSelectedJobClubIdeas((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
@@ -169,6 +180,11 @@ export default function GymUpdatesPage() {
   };
 
   const saveReport = async () => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     if (!period.trim()) {
       showNotice('error', 'Please enter a reporting period.');
       return;
@@ -226,6 +242,11 @@ export default function GymUpdatesPage() {
   };
 
   const addReportToMeeting = async (reportId: string) => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     const selectedMeetingId = meetingSelectionByReport[reportId];
     if (!selectedMeetingId) {
       showNotice('error', 'Please select a meeting first.');
@@ -268,12 +289,19 @@ export default function GymUpdatesPage() {
 
         <InlineNoticeBanner notice={notice} className="mb-6" />
 
+        {!canEdit && (
+          <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {PRESIDENT_EDIT_BLOCK_MESSAGE}
+          </div>
+        )}
+
         <section className="mb-10 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="border-b border-zinc-200 px-6 py-4">
             <h2 className="text-xl font-semibold">Add update</h2>
           </div>
 
           <div className="space-y-5 px-6 py-6">
+            <fieldset disabled={!canEdit} className="space-y-5 disabled:opacity-70">
             <div className="grid gap-4 sm:grid-cols-2">
               <input
                 type="text"
@@ -403,12 +431,13 @@ export default function GymUpdatesPage() {
               <button
                 type="button"
                 onClick={saveReport}
-                disabled={saving}
+                disabled={saving || !canEdit}
                 className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
                 {saving ? 'Saving...' : 'Save Update'}
               </button>
             </div>
+            </fieldset>
           </div>
         </section>
 
@@ -457,7 +486,7 @@ export default function GymUpdatesPage() {
                         <button
                           type="button"
                           onClick={() => addReportToMeeting(report.id)}
-                          disabled={linkingReportId === report.id}
+                          disabled={linkingReportId === report.id || !canEdit}
                           className="rounded-md bg-zinc-900 px-3 py-2 text-xs font-semibold text-white hover:bg-zinc-800 disabled:opacity-60"
                         >
                           {linkingReportId === report.id ? 'Adding...' : 'Add to meeting'}

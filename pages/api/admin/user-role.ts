@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 
-type DashboardRole = 'admin' | 'management' | 'safeguarding' | 'commercial' | null;
+type DashboardRole = 'admin' | 'management' | 'president' | 'safeguarding' | 'commercial' | null;
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -11,6 +11,7 @@ const supabaseAdmin = createClient(
 const ROLE_RANK: Record<Exclude<DashboardRole, null>, number> = {
   admin: 4,
   management: 3,
+  president: 2,
   safeguarding: 2,
   commercial: 1,
 };
@@ -23,6 +24,7 @@ const normalizeRole = (rawRole: unknown): DashboardRole => {
 
   if (value === 'admin') return 'admin';
   if (value === 'management' || value === 'mangement') return 'management';
+  if (value === 'president') return 'president';
   if (value === 'safeguarding') return 'safeguarding';
   if (value === 'commercial' || value === 'commerical') return 'commercial';
 
@@ -61,7 +63,7 @@ const getBearerToken = (req: NextApiRequest) => {
     : '';
 };
 
-const allowedRoles = new Set(['admin', 'management', 'safeguarding', 'commercial', 'none']);
+const allowedRoles = new Set(['admin', 'management', 'president', 'safeguarding', 'commercial', 'none']);
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {

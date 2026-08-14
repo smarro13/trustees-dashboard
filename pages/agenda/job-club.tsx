@@ -5,6 +5,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabaseClient';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
 
 type JobStatus = 'Not Started' | 'Ongoing' | 'Completed';
 type JobPriority = 'High' | 'Medium' | 'Low';
@@ -145,6 +146,7 @@ export default function JobClubManagementPage() {
   const [notice, setNotice] = useState<InlineNotice | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [canEdit, setCanEdit] = useState(true);
 
   const showNotice = (type: InlineNotice['type'], message: string) => {
     setNotice({ type, message });
@@ -228,6 +230,15 @@ export default function JobClubManagementPage() {
     const timeout = window.setTimeout(() => setNotice(null), 4500);
     return () => window.clearTimeout(timeout);
   }, [notice]);
+
+  useEffect(() => {
+    const loadCanEdit = async () => {
+      const allowed = await canCurrentUserEditThisAgendaPage();
+      setCanEdit(allowed);
+    };
+
+    void loadCanEdit();
+  }, []);
 
   useEffect(() => {
     const assignments = notes
@@ -318,6 +329,11 @@ export default function JobClubManagementPage() {
   };
 
   const saveEdit = async (post: JobClubPost) => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     const existingMeta = parseJobMeta(post.description);
     if (!existingMeta) return;
 
@@ -361,6 +377,11 @@ export default function JobClubManagementPage() {
   };
 
   const toggleActive = async (post: JobClubPost) => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     const nextIsActive = !post.is_active;
     const accessToken = await getAccessToken();
     if (!accessToken) {
@@ -388,6 +409,11 @@ export default function JobClubManagementPage() {
   };
 
   const deletePost = async () => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     if (!deleteTargetId) return;
     setDeleting(true);
 
@@ -461,6 +487,7 @@ export default function JobClubManagementPage() {
               <button
                 type="button"
                 onClick={() => startEdit(post)}
+                disabled={!canEdit}
                 className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
               >
                 Edit
@@ -469,6 +496,7 @@ export default function JobClubManagementPage() {
             <button
               type="button"
               onClick={() => toggleActive(post)}
+              disabled={!canEdit}
               className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
             >
               {post.is_active ? 'Close' : 'Open'}
@@ -476,6 +504,7 @@ export default function JobClubManagementPage() {
             <button
               type="button"
               onClick={() => setDeleteTargetId(post.id)}
+              disabled={!canEdit}
               className="rounded-md border border-rose-200 bg-white px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-50"
             >
               Delete
@@ -492,6 +521,7 @@ export default function JobClubManagementPage() {
                   className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
                   value={editValues.area ?? meta.area}
                   onChange={(e) => setEditValues((prev) => ({ ...prev, area: e.target.value }))}
+                  disabled={!canEdit}
                 />
               </div>
               <div>
@@ -500,6 +530,7 @@ export default function JobClubManagementPage() {
                   className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
                   value={editValues.job ?? meta.job}
                   onChange={(e) => setEditValues((prev) => ({ ...prev, job: e.target.value }))}
+                  disabled={!canEdit}
                 />
               </div>
               <div>
@@ -508,6 +539,7 @@ export default function JobClubManagementPage() {
                   className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
                   value={editValues.status ?? meta.status}
                   onChange={(e) => setEditValues((prev) => ({ ...prev, status: e.target.value as JobStatus }))}
+                  disabled={!canEdit}
                 >
                   {VALID_STATUSES.map((status) => <option key={status}>{status}</option>)}
                 </select>
@@ -518,6 +550,7 @@ export default function JobClubManagementPage() {
                   className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
                   value={editValues.priority ?? meta.priority}
                   onChange={(e) => setEditValues((prev) => ({ ...prev, priority: e.target.value as JobPriority }))}
+                  disabled={!canEdit}
                 >
                   {VALID_PRIORITIES.map((priority) => <option key={priority}>{priority}</option>)}
                 </select>
@@ -530,13 +563,14 @@ export default function JobClubManagementPage() {
                 className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
                 value={editValues.materials ?? meta.materials}
                 onChange={(e) => setEditValues((prev) => ({ ...prev, materials: e.target.value }))}
+                disabled={!canEdit}
               />
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => saveEdit(post)}
-                disabled={isSaving}
+                disabled={isSaving || !canEdit}
                 className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
                 {isSaving ? 'Saving…' : 'Save changes'}
@@ -544,6 +578,7 @@ export default function JobClubManagementPage() {
               <button
                 type="button"
                 onClick={cancelEdit}
+                disabled={!canEdit}
                 className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
               >
                 Cancel
@@ -651,6 +686,12 @@ export default function JobClubManagementPage() {
         </header>
 
         <InlineNoticeBanner notice={notice} className="mb-6" />
+
+        {!canEdit && (
+          <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {PRESIDENT_EDIT_BLOCK_MESSAGE}
+          </div>
+        )}
 
         {/* Stats */}
         <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3">

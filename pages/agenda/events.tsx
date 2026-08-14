@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
+import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
 
 export default function EventsPlanningPage() {
   const [events, setEvents] = useState<any[]>([]);
@@ -16,6 +17,7 @@ export default function EventsPlanningPage() {
   const [discussionPoints, setDiscussionPoints] = useState('');
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [canEdit, setCanEdit] = useState(true);
 
   // calendar state
   const today = new Date();
@@ -47,7 +49,21 @@ export default function EventsPlanningPage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    const loadCanEdit = async () => {
+      const allowed = await canCurrentUserEditThisAgendaPage();
+      setCanEdit(allowed);
+    };
+
+    void loadCanEdit();
+  }, []);
+
   const addEvent = async () => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      window.alert(PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     if (!title.trim()) return;
 
     setLoading(true);
@@ -309,6 +325,12 @@ export default function EventsPlanningPage() {
           </p>
         </header>
 
+        {!canEdit && (
+          <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {PRESIDENT_EDIT_BLOCK_MESSAGE}
+          </div>
+        )}
+
         {/* Add new event form */}
         <section className="mb-6 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="border-b border-zinc-200 px-4 py-3 sm:px-6 lg:px-8">
@@ -328,6 +350,7 @@ export default function EventsPlanningPage() {
                   onChange={(e) => setTitle(e.target.value)}
                   className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
                   placeholder="e.g. Summer BBQ"
+                  disabled={!canEdit}
                 />
               </div>
 
@@ -340,6 +363,7 @@ export default function EventsPlanningPage() {
                   value={eventMonth}
                   onChange={(e) => setEventMonth(e.target.value)}
                   className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
+                  disabled={!canEdit}
                 />
               </div>
 
@@ -352,6 +376,7 @@ export default function EventsPlanningPage() {
                   value={suggestedDate}
                   onChange={(e) => setSuggestedDate(e.target.value)}
                   className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
+                  disabled={!canEdit}
                 />
               </div>
 
@@ -365,6 +390,7 @@ export default function EventsPlanningPage() {
                   onChange={(e) => setLead(e.target.value)}
                   className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
                   placeholder="Person responsible"
+                  disabled={!canEdit}
                 />
               </div>
 
@@ -376,6 +402,7 @@ export default function EventsPlanningPage() {
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
                   className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
+                  disabled={!canEdit}
                 >
                   <option value="Idea">Idea</option>
                   <option value="Planning">Planning</option>
@@ -393,6 +420,7 @@ export default function EventsPlanningPage() {
                   value={meetingId || ''}
                   onChange={(e) => setMeetingId(e.target.value || null)}
                   className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
+                  disabled={!canEdit}
                 >
                   <option value="">None</option>
                   {meetings.map((m) => (
@@ -413,6 +441,7 @@ export default function EventsPlanningPage() {
                   rows={2}
                   className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
                   placeholder="Additional notes..."
+                  disabled={!canEdit}
                 />
               </div>
 
@@ -426,6 +455,7 @@ export default function EventsPlanningPage() {
                   rows={4}
                   className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
                   placeholder="Add discussion points to raise at the trustees meeting..."
+                  disabled={!canEdit}
                 />
               </div>
             </div>
@@ -433,7 +463,7 @@ export default function EventsPlanningPage() {
             <div className="mt-4">
               <button
                 onClick={addEvent}
-                disabled={loading || !title.trim()}
+                disabled={loading || !title.trim() || !canEdit}
                 className="min-h-[44px] w-full sm:w-auto rounded-md bg-blue-600 px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
               >
                 {loading ? 'Adding...' : 'Add event'}

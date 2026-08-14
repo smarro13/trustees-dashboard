@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
+import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
 
 export default function RugbyReportPage() {
   const [reports, setReports] = useState<any[]>([]);
@@ -17,6 +18,7 @@ export default function RugbyReportPage() {
 
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
+  const [canEdit, setCanEdit] = useState(true);
 
   const showNotice = (type: InlineNotice['type'], message: string) => {
     setNotice({ type, message });
@@ -52,7 +54,21 @@ export default function RugbyReportPage() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
+  useEffect(() => {
+    const loadCanEdit = async () => {
+      const allowed = await canCurrentUserEditThisAgendaPage();
+      setCanEdit(allowed);
+    };
+
+    void loadCanEdit();
+  }, []);
+
   const saveReport = async (section: 'mini' | 'junior' | 'senior') => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
     if (userError) {
       console.error('Error fetching user:', userError);
@@ -129,6 +145,12 @@ export default function RugbyReportPage() {
 
         <InlineNoticeBanner notice={notice} className="mb-6" />
 
+        {!canEdit && (
+          <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {PRESIDENT_EDIT_BLOCK_MESSAGE}
+          </div>
+        )}
+
         {/* New report */}
         <section className="mb-10 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="border-b border-zinc-200 px-6 py-4">
@@ -136,6 +158,7 @@ export default function RugbyReportPage() {
           </div>
 
           <div className="space-y-8 px-6 py-6">
+            <fieldset disabled={!canEdit} className="space-y-8 disabled:opacity-70">
             {/* Meeting */}
             <select
               value={meetingId ?? ''}
@@ -178,7 +201,7 @@ export default function RugbyReportPage() {
               <div className="mt-3 flex justify-end">
                 <button
                   onClick={() => saveReport('mini')}
-                  disabled={loading}
+                  disabled={loading || !canEdit}
                   className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
                 >
                   {loading ? 'Saving…' : 'Submit mini report'}
@@ -214,7 +237,7 @@ export default function RugbyReportPage() {
               <div className="mt-3 flex justify-end">
                 <button
                   onClick={() => saveReport('junior')}
-                  disabled={loading}
+                  disabled={loading || !canEdit}
                   className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
                 >
                   {loading ? 'Saving…' : 'Submit junior report'}
@@ -250,13 +273,15 @@ export default function RugbyReportPage() {
               <div className="mt-3 flex justify-end">
                 <button
                   onClick={() => saveReport('senior')}
-                  disabled={loading}
+                  disabled={loading || !canEdit}
                   className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
                 >
                   {loading ? 'Saving…' : 'Submit senior report'}
                 </button>
               </div>
             </div>
+
+            </fieldset>
 
           </div>
         </section>

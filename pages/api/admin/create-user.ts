@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 
-type DashboardRole = 'admin' | 'management' | 'safeguarding' | 'commercial' | null;
+type DashboardRole = 'admin' | 'management' | 'president' | 'safeguarding' | 'commercial' | null;
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,6 +13,7 @@ const normalizeRole = (rawRole: unknown): DashboardRole => {
   const value = rawRole.trim().toLowerCase();
   if (value === 'admin') return 'admin';
   if (value === 'management' || value === 'mangement') return 'management';
+  if (value === 'president') return 'president';
   if (value === 'safeguarding') return 'safeguarding';
   if (value === 'commercial' || value === 'commerical') return 'commercial';
   return null;

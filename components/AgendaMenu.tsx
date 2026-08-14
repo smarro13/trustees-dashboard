@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
 
-type DashboardRole = 'admin' | 'management' | 'safeguarding' | 'commercial' | null;
+type DashboardRole = 'admin' | 'management' | 'president' | 'safeguarding' | 'commercial' | null;
 
 const normalizeRole = (rawRole: unknown): DashboardRole => {
   if (typeof rawRole !== 'string') return null;
@@ -12,6 +12,7 @@ const normalizeRole = (rawRole: unknown): DashboardRole => {
 
   if (value === 'admin') return 'admin';
   if (value === 'management' || value === 'mangement') return 'management';
+  if (value === 'president') return 'president';
   if (value === 'safeguarding') return 'safeguarding';
   if (value === 'commercial' || value === 'commerical') return 'commercial';
 
@@ -68,12 +69,21 @@ export default function AgendaMenu() {
       return true;
     }
 
+    if (userRole === 'president') {
+      return item.href !== '/agenda/safeguarding';
+    }
+
     if (userRole === 'safeguarding') {
       return item.href === '/agenda/safeguarding';
     }
 
     if (userRole === 'commercial') {
-      return item.href === '/agenda/commercial-transformation';
+      return (
+        item.href === '/agenda/commercial-transformation' ||
+        item.href === '/agenda/actions' ||
+        item.href === '/agenda/matters-arising' ||
+        item.href === '/agenda/aob'
+      );
     }
 
     return false;

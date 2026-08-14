@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
-type DashboardRole = 'admin' | 'management' | 'safeguarding' | 'commercial' | null;
+type DashboardRole = 'admin' | 'management' | 'president' | 'safeguarding' | 'commercial' | null;
 
 const ROLE_RANK: Record<Exclude<DashboardRole, null>, number> = {
   admin: 4,
   management: 3,
+  president: 2,
   safeguarding: 2,
   commercial: 1,
 };
@@ -19,6 +20,7 @@ const normalizeRole = (rawRole: unknown): DashboardRole => {
 
   if (value === 'admin') return 'admin';
   if (value === 'management' || value === 'mangement') return 'management';
+  if (value === 'president') return 'president';
   if (value === 'safeguarding') return 'safeguarding';
   if (value === 'commercial' || value === 'commerical') return 'commercial';
 
@@ -52,8 +54,16 @@ const getRequiredRoleForPath = (pathname: string): DashboardRole => {
     return 'commercial';
   }
 
+  if (
+    pathname === '/agenda/actions' ||
+    pathname === '/agenda/matters-arising' ||
+    pathname === '/agenda/aob'
+  ) {
+    return 'commercial';
+  }
+
   if (pathname.startsWith('/agenda/')) {
-    return 'management';
+    return 'president';
   }
 
   return null;
@@ -66,6 +76,10 @@ const hasRequiredRole = (actual: DashboardRole, required: DashboardRole) => {
   // Admin and management can access all protected agenda sections.
   if (actual === 'admin' || actual === 'management') {
     return true;
+  }
+
+  if (actual === 'president') {
+    return required === 'president' || required === 'commercial';
   }
 
   if (actual === 'safeguarding') {

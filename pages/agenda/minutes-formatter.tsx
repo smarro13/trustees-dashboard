@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 import { supabase } from '../../lib/supabaseClient';
+import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
 import {
   parseAction,
   parseMatterItems,
@@ -267,6 +268,7 @@ export default function MinutesFormatterPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [editRequest, setEditRequest] = useState('');
+  const [canEdit, setCanEdit] = useState(true);
 
   const parsed = useMemo(() => buildSectionResults(transcript), [transcript]);
   const minutesText = useMemo(
@@ -287,6 +289,15 @@ export default function MinutesFormatterPage() {
       setMeetings(meetingsResult.data || []);
     };
     loadMeta();
+  }, []);
+
+  useEffect(() => {
+    const loadCanEdit = async () => {
+      const allowed = await canCurrentUserEditThisAgendaPage();
+      setCanEdit(allowed);
+    };
+
+    void loadCanEdit();
   }, []);
 
   const showNotice = (type: InlineNotice['type'], message: string) => {
@@ -412,6 +423,11 @@ export default function MinutesFormatterPage() {
   };
 
   const saveDraftToMinutesLibrary = async () => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     setSavingMinutesDoc(true);
 
     try {
@@ -491,6 +507,11 @@ export default function MinutesFormatterPage() {
   };
 
   const addSelectedToActionTracker = async () => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     const selectedActions = actionCandidates.filter((item) => selectedActionIds.has(item.id));
     if (!selectedActions.length) {
       showNotice('error', 'Select at least one action to add.');
@@ -536,6 +557,12 @@ export default function MinutesFormatterPage() {
         </header>
 
         <InlineNoticeBanner notice={notice} className="mb-6" />
+
+        {!canEdit && (
+          <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {PRESIDENT_EDIT_BLOCK_MESSAGE}
+          </div>
+        )}
 
         <section className="mb-8 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="border-b border-zinc-200 px-6 py-4">
@@ -618,6 +645,7 @@ export default function MinutesFormatterPage() {
                     value={actionMeetingId ?? ''}
                     onChange={(e) => setActionMeetingId(e.target.value || null)}
                     className="w-full rounded-md border border-zinc-300 px-3 py-2"
+                    disabled={!canEdit}
                   >
                     <option value="">Link to meeting (optional)</option>
                     {meetings.map((m) => (
@@ -643,6 +671,7 @@ export default function MinutesFormatterPage() {
                           checked={selectedActionIds.has(candidate.id)}
                           onChange={() => toggleActionSelection(candidate.id)}
                           className="mt-1"
+                          disabled={!canEdit}
                         />
                         <span className="whitespace-pre-wrap">{candidate.description}</span>
                       </label>
@@ -654,7 +683,7 @@ export default function MinutesFormatterPage() {
                   <button
                     type="button"
                     onClick={addSelectedToActionTracker}
-                    disabled={addingActions || actionCandidates.length === 0}
+                    disabled={addingActions || actionCandidates.length === 0 || !canEdit}
                     className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
                   >
                     {addingActions ? 'Adding...' : 'Add selected to Action Tracker'}
@@ -670,6 +699,7 @@ export default function MinutesFormatterPage() {
                 onChange={(e) => setEditableMinutes(e.target.value)}
                 rows={28}
                 className="w-full rounded-lg border border-zinc-200 bg-white p-4 font-mono text-sm text-zinc-800"
+                disabled={!canEdit}
               />
 
               {/* AI Refine panel */}
@@ -684,12 +714,13 @@ export default function MinutesFormatterPage() {
                   rows={3}
                   className="mt-3 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
                   placeholder="Describe your changes..."
+                  disabled={!canEdit}
                 />
                 <div className="mt-3 flex justify-end">
                   <button
                     type="button"
                     onClick={() => void improveWithAI()}
-                    disabled={aiLoading || !editableMinutes.trim()}
+                    disabled={aiLoading || !editableMinutes.trim() || !canEdit}
                     className="rounded-md bg-violet-600 px-4 py-2 font-medium text-white hover:bg-violet-700 disabled:opacity-50"
                   >
                     {aiLoading ? 'Refining...' : 'Refine with AI'}
@@ -717,6 +748,7 @@ export default function MinutesFormatterPage() {
                     value={saveMeetingId ?? ''}
                     onChange={(e) => setSaveMeetingId(e.target.value || null)}
                     className="w-full rounded-md border border-zinc-300 px-3 py-2"
+                    disabled={!canEdit}
                   >
                     <option value="">Link to meeting (optional)</option>
                     {meetings.map((m) => (
@@ -733,7 +765,7 @@ export default function MinutesFormatterPage() {
                   <button
                     type="button"
                     onClick={() => void saveDraftToMinutesLibrary()}
-                    disabled={savingMinutesDoc}
+                    disabled={savingMinutesDoc || !canEdit}
                     className="rounded-md bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
                   >
                     {savingMinutesDoc ? 'Saving...' : 'Save & Upload Minutes'}

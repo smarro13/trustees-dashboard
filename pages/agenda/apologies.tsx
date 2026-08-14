@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'next/router';
+import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
 
 export default function ApologiesPage() {
   const [apologies, setApologies] = useState<any[]>([]);
@@ -10,6 +11,7 @@ export default function ApologiesPage() {
   const [loading, setLoading] = useState(false);
   const [meetings, setMeetings] = useState<any[]>([]);
   const [meetingId, setMeetingId] = useState<string | null>(null);
+  const [canEdit, setCanEdit] = useState(true);
   const router = useRouter();
 
   const loadApologies = async (filterId?: string | null) => {
@@ -48,7 +50,21 @@ export default function ApologiesPage() {
     loadApologies(meetingId);
   }, [meetingId]);
 
+  useEffect(() => {
+    const loadCanEdit = async () => {
+      const allowed = await canCurrentUserEditThisAgendaPage();
+      setCanEdit(allowed);
+    };
+
+    void loadCanEdit();
+  }, []);
+
   const addApology = async () => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      window.alert(PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     if (!name.trim()) return;
 
     setLoading(true);
@@ -85,6 +101,12 @@ export default function ApologiesPage() {
           </p>
         </header>
 
+        {!canEdit && (
+          <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {PRESIDENT_EDIT_BLOCK_MESSAGE}
+          </div>
+        )}
+
         {/* Add apology – full-width, lightly styled section */}
         <section className="mb-8 w-full rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="border-b border-zinc-200 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
@@ -101,6 +123,7 @@ export default function ApologiesPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full rounded-md border border-zinc-300 px-3 py-2"
+              disabled={!canEdit}
             />
 
             <textarea
@@ -109,6 +132,7 @@ export default function ApologiesPage() {
               onChange={(e) => setNote(e.target.value)}
               className="w-full rounded-md border border-zinc-300 px-3 py-2"
               rows={3}
+              disabled={!canEdit}
             />
 
             {(() => {
@@ -129,6 +153,7 @@ export default function ApologiesPage() {
               value={meetingId ?? ''}
               onChange={(e) => setMeetingId(e.target.value || null)}
               className="w-full rounded-md border border-zinc-300 px-3 py-2"
+              disabled={!canEdit}
             >
               <option value="">Link to meeting (optional)</option>
               {meetings.map((m) => (
@@ -145,7 +170,7 @@ export default function ApologiesPage() {
             <div className="flex justify-end">
               <button
                 onClick={addApology}
-                disabled={loading}
+                disabled={loading || !canEdit}
                 className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
                 {loading ? 'Adding…' : 'Add apology'}
