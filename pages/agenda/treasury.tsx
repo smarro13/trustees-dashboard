@@ -469,12 +469,14 @@ export default function TreasuryPage() {
       const payload = await response.json();
 
       if (!response.ok) {
-        showNotice('error', payload?.error || 'Failed to import treasury report.');
+        const message = payload?.hint ? `${payload?.error || 'Failed to import treasury report.'} ${payload.hint}` : (payload?.error || 'Failed to import treasury report.');
+        showNotice('error', message);
         return;
       }
 
       if (payload?.error) {
-        showNotice('error', payload.error);
+        const message = payload?.hint ? `${payload.error} ${payload.hint}` : payload.error;
+        showNotice('error', message);
         return;
       }
 

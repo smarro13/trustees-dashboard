@@ -42,8 +42,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       parsed.moniesOwed.length;
 
     if (!parsed.reportingPeriod && !parsed.notes && populatedCount === 0) {
+      const previewLines = extractedText
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .slice(0, 8);
+
       return res.status(200).json({
-        error: 'Could not find recognizable treasury sections in that file.',
+        error: 'Could not find recognised fields in that file.',
+        hint: 'Expected lines like "Month Year: In £x | Out £y", "Regular: ...", "Regular income: ...", or "Monies owed: ...".',
+        previewLines,
         parsed,
       });
     }
