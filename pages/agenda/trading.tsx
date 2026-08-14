@@ -36,6 +36,8 @@ export default function TradingPage() {
   const [loading, setLoading] = useState(false);
   const [turnoverNotes, setTurnoverNotes] = useState('');
   const [user, setUser] = useState<User | null>(null); // new turnover section
+  const [importingReport, setImportingReport] = useState(false);
+  const [importedFileName, setImportedFileName] = useState<string | null>(null);
 
   const [tillFile, setTillFile] = useState<File | null>(null);
   const [tillSummary, setTillSummary] = useState<TillSummary | null>(null);
@@ -216,6 +218,91 @@ export default function TradingPage() {
     showNotice('success', 'Trading report saved successfully.');
   };
 
+  const importTradingReport = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
+    setImportingReport(true);
+
+    try {
+      const fileList = Array.from(files);
+      const uploads = await Promise.all(
+        fileList.map(async (file) => {
+          const arrayBuffer = await file.arrayBuffer();
+          return {
+            filename: file.name,
+            contentBase64: Buffer.from(arrayBuffer).toString('base64'),
+          };
+        })
+      );
+
+      const response = await fetch('/api/trading-report-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: uploads }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        const message = payload?.hint ? `${payload?.error || 'Failed to import trading report.'} ${payload.hint}` : (payload?.error || 'Failed to import trading report.');
+        showNotice('error', message);
+        return;
+      }
+
+      if (payload?.error) {
+        const message = payload?.hint ? `${payload.error} ${payload.hint}` : payload.error;
+        showNotice('error', message);
+        return;
+      }
+
+      const parsed = payload?.parsed;
+      if (!parsed) {
+        showNotice('error', 'The uploaded file(s) did not return parsed data.');
+        return;
+      }
+
+      if (parsed.reportingPeriod) {
+        setPeriod(parsed.reportingPeriod);
+      }
+
+      if (Array.isArray(parsed.monthlyEntries) && parsed.monthlyEntries.length > 0) {
+        setItems(
+          parsed.monthlyEntries.map((entry: { dateRange?: string; moneyIn?: string; moneyOut?: string }) => ({
+            dateRange: entry.dateRange || '',
+            moneyIn: entry.moneyIn || '',
+            moneyOut: entry.moneyOut || '',
+          }))
+        );
+      }
+
+      if (parsed.turnoverNotes) {
+        setTurnoverNotes(parsed.turnoverNotes);
+      }
+
+      if (parsed.notes) {
+        setNotes(parsed.notes);
+      }
+
+      setImportedFileName(fileList.map((f) => f.name).join(', '));
+
+      const importedRows =
+        (parsed.monthlyEntries?.length || 0) +
+        (parsed.turnoverNotes ? 1 : 0) +
+        (parsed.notes ? 1 : 0);
+
+      showNotice('success', `Imported ${importedRows} item(s) from ${fileList.map((f) => f.name).join(', ')}.`);
+    } catch (error: any) {
+      showNotice('error', error?.message || 'Failed to import trading report.');
+    } finally {
+      setImportingReport(false);
+    }
+  };
+
   const handleTillPdfChange = async (file: File | null) => {
     setTillFile(file);
     setTillSummary(null);
@@ -351,6 +438,32 @@ export default function TradingPage() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-blue-900">Import previous trading report</h3>
+                  <p className="text-xs text-blue-800">Upload the bank balance workbook (.xlsx) and/or updates document (.docx) to auto-fill this form. You can select both at once.</p>
+                </div>
+                <label className="inline-flex cursor-pointer items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700">
+                  {importingReport ? 'Importing...' : 'Upload report'}
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.xlsx,.xlsm,.txt,.csv,.md"
+                    multiple
+                    className="hidden"
+                    disabled={importingReport || !canEdit}
+                    onChange={(e) => {
+                      void importTradingReport(e.target.files);
+                      e.currentTarget.value = '';
+                    }}
+                  />
+                </label>
+              </div>
+              {importedFileName && (
+                <p className="mt-2 text-xs text-blue-900">Last imported: {importedFileName}</p>
+              )}
             </div>
 
             {/* Setmore functions booking box */}
