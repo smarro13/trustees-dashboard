@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
+import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
 
 export default function CorrespondencePage() {
   const [items, setItems] = useState<any[]>([]);
@@ -13,6 +14,7 @@ export default function CorrespondencePage() {
   const [meetingId, setMeetingId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
+  const [canEdit, setCanEdit] = useState(true);
 
   const loadData = async () => {
     const { data } = await supabase
@@ -37,7 +39,21 @@ export default function CorrespondencePage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    const loadCanEdit = async () => {
+      const allowed = await canCurrentUserEditThisAgendaPage();
+      setCanEdit(allowed);
+    };
+
+    void loadCanEdit();
+  }, []);
+
   const addCorrespondence = async () => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      window.alert(PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     if (!subject.trim() || !summary.trim()) return;
 
     setLoading(true);
@@ -80,6 +96,12 @@ export default function CorrespondencePage() {
           </p>
         </header>
 
+        {!canEdit && (
+          <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {PRESIDENT_EDIT_BLOCK_MESSAGE}
+          </div>
+        )}
+
         {/* Add correspondence */}
         <section className="player-card mb-10">
           <h2 className="pc-name mb-4">Record correspondence</h2>
@@ -91,6 +113,7 @@ export default function CorrespondencePage() {
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               className="w-full rounded-md border border-zinc-300 px-3 py-2"
+              disabled={!canEdit}
             />
 
             <input
@@ -99,6 +122,7 @@ export default function CorrespondencePage() {
               value={sender}
               onChange={(e) => setSender(e.target.value)}
               className="w-full rounded-md border border-zinc-300 px-3 py-2"
+              disabled={!canEdit}
             />
 
             <input
@@ -106,6 +130,7 @@ export default function CorrespondencePage() {
               value={receivedDate}
               onChange={(e) => setReceivedDate(e.target.value)}
               className="w-full rounded-md border border-zinc-300 px-3 py-2"
+              disabled={!canEdit}
             />
 
             <textarea
@@ -114,12 +139,14 @@ export default function CorrespondencePage() {
               onChange={(e) => setSummary(e.target.value)}
               className="w-full rounded-md border border-zinc-300 px-3 py-2"
               rows={4}
+              disabled={!canEdit}
             />
 
             <select
               value={meetingId ?? ''}
               onChange={(e) => setMeetingId(e.target.value || null)}
               className="w-full rounded-md border border-zinc-300 px-3 py-2"
+              disabled={!canEdit}
             >
               <option value="">Link to meeting (optional)</option>
               {meetings.map((m) => (
@@ -131,7 +158,7 @@ export default function CorrespondencePage() {
 
             <button
               onClick={addCorrespondence}
-              disabled={loading}
+              disabled={loading || !canEdit}
               className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
             >
               {loading ? 'Saving…' : 'Save correspondence'}

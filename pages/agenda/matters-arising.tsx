@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
+import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
 
 export default function MattersArisingPage() {
   const [matters, setMatters] = useState<any[]>([]);
@@ -13,6 +14,7 @@ export default function MattersArisingPage() {
   const [nextMeetingId, setNextMeetingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
+  const [canEdit, setCanEdit] = useState(true);
 
   const showNotice = (type: InlineNotice['type'], message: string) => {
     setNotice({ type, message });
@@ -65,7 +67,21 @@ export default function MattersArisingPage() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
+  useEffect(() => {
+    const loadCanEdit = async () => {
+      const allowed = await canCurrentUserEditThisAgendaPage();
+      setCanEdit(allowed);
+    };
+
+    void loadCanEdit();
+  }, []);
+
   const saveMatter = async () => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     if (!title.trim()) return;
 
     setLoading(true);
@@ -126,6 +142,12 @@ export default function MattersArisingPage() {
 
         <InlineNoticeBanner notice={notice} className="mt-4" />
 
+        {!canEdit && (
+          <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {PRESIDENT_EDIT_BLOCK_MESSAGE}
+          </div>
+        )}
+
         <section className="mt-8 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200 p-6 space-y-4">
           <input
             type="text"
@@ -133,6 +155,7 @@ export default function MattersArisingPage() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="w-full rounded-md border px-3 py-2"
+            disabled={!canEdit}
           />
 
           <textarea
@@ -141,6 +164,7 @@ export default function MattersArisingPage() {
             onChange={(e) => setDetails(e.target.value)}
             rows={4}
             className="w-full rounded-md border px-3 py-2"
+            disabled={!canEdit}
           />
 
           <input
@@ -149,6 +173,7 @@ export default function MattersArisingPage() {
             value={raisedBy}
             onChange={(e) => setRaisedBy(e.target.value)}
             className="w-full rounded-md border px-3 py-2"
+            disabled={!canEdit}
           />
 
           <label className="flex items-center gap-2 text-sm">
@@ -156,6 +181,7 @@ export default function MattersArisingPage() {
               type="checkbox"
               checked={addToActions}
               onChange={(e) => setAddToActions(e.target.checked)}
+              disabled={!canEdit}
             />
             Add to Action Tracker
           </label>
@@ -163,7 +189,7 @@ export default function MattersArisingPage() {
           <div className="flex justify-end">
             <button
               onClick={saveMatter}
-              disabled={loading}
+              disabled={loading || !canEdit}
               className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
             >
               {loading ? 'Saving…' : 'Save matter'}

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabaseClient';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
+import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
 
 type AGMQuestion = {
   text: string;
@@ -161,6 +162,7 @@ export default function AGMQuestionsPage() {
   const [loading, setLoading] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
+  const [canEdit, setCanEdit] = useState(true);
 
   const showNotice = (type: InlineNotice['type'], message: string) => {
     setNotice({ type, message });
@@ -273,6 +275,15 @@ export default function AGMQuestionsPage() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
+  useEffect(() => {
+    const loadCanEdit = async () => {
+      const allowed = await canCurrentUserEditThisAgendaPage();
+      setCanEdit(allowed);
+    };
+
+    void loadCanEdit();
+  }, []);
+
   const toggleUpdateEditor = (questionText: string) => {
     setOpenUpdateEditors((prev) => ({
       ...prev,
@@ -292,6 +303,11 @@ export default function AGMQuestionsPage() {
   const canArchive = questionCount > 0 && completedQuestionCount === questionCount;
 
   const addToActionTracker = async (sectionTitle: string, questionText: string) => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     setSavingQuestion(questionText);
 
     const updateText = updates[questionText]?.trim();
@@ -323,6 +339,11 @@ export default function AGMQuestionsPage() {
   };
 
   const saveQuestion = async (sectionTitle: string, questionText: string) => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     setSavingQuestion(questionText);
 
     const updateText = updates[questionText]?.trim() || null;
@@ -389,6 +410,12 @@ export default function AGMQuestionsPage() {
 
         <InlineNoticeBanner notice={notice} className="mb-6" />
 
+        {!canEdit && (
+          <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {PRESIDENT_EDIT_BLOCK_MESSAGE}
+          </div>
+        )}
+
         <section className="mb-8 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -402,7 +429,7 @@ export default function AGMQuestionsPage() {
                 type="checkbox"
                 checked={isArchived}
                 onChange={toggleArchive}
-                disabled={!canArchive}
+                disabled={!canArchive || !canEdit}
                 className="h-4 w-4 rounded border-zinc-300"
               />
               Archive this page
@@ -487,7 +514,7 @@ export default function AGMQuestionsPage() {
                                   type="checkbox"
                                   checked={isComplete}
                                   onChange={() => toggleDealtWith(question.text)}
-                                  disabled={actionAdded}
+                                  disabled={actionAdded || !canEdit}
                                   className="h-4 w-4 rounded border-zinc-300"
                                 />
                                 {actionAdded ? 'Action added' : 'Dealt with'}
@@ -501,13 +528,14 @@ export default function AGMQuestionsPage() {
                                   <button
                                     type="button"
                                     onClick={() => toggleUpdateEditor(question.text)}
+                                    disabled={!canEdit}
                                     className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
                                   >
                                     {openUpdateEditors[question.text] ? 'Hide update' : 'Add update'}
                                   </button>
                                   <button
                                     onClick={() => saveQuestion(section.title, question.text)}
-                                    disabled={savingQuestion === question.text}
+                                    disabled={savingQuestion === question.text || !canEdit}
                                     className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
                                   >
                                     {savingQuestion === question.text
@@ -518,7 +546,7 @@ export default function AGMQuestionsPage() {
                                   </button>
                                   <button
                                     onClick={() => addToActionTracker(section.title, question.text)}
-                                    disabled={savingQuestion === question.text}
+                                    disabled={savingQuestion === question.text || !canEdit}
                                     className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
                                   >
                                     {savingQuestion === question.text ? 'Adding…' : '🏛️ Add to Action Tracker'}

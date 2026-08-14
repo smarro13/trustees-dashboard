@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
+import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
 
 const STATUS_OPTIONS = ['Open', 'In Progress', 'Completed'];
 const PUBLIC_ACTION_MARKER = '[Public]';
@@ -62,6 +63,7 @@ export default function ActionTrackerPage() {
 
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
+  const [canEdit, setCanEdit] = useState(true);
 
   const showNotice = (type: InlineNotice['type'], message: string) => {
     setNotice({ type, message });
@@ -144,7 +146,21 @@ export default function ActionTrackerPage() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
+  useEffect(() => {
+    const loadCanEdit = async () => {
+      const allowed = await canCurrentUserEditThisAgendaPage();
+      setCanEdit(allowed);
+    };
+
+    void loadCanEdit();
+  }, []);
+
   const addAction = async () => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     if (!title.trim()) return;
 
     setLoading(true);
@@ -192,6 +208,11 @@ export default function ActionTrackerPage() {
   };
 
   const confirmStatusChange = async () => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     if (!statusChangeModal) return;
 
     const { actionId, newStatus } = statusChangeModal;
@@ -253,6 +274,11 @@ export default function ActionTrackerPage() {
   };
 
   const confirmEditAction = async () => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     if (!editActionModal || !editTitle.trim()) return;
 
     const { actionId } = editActionModal;
@@ -332,6 +358,12 @@ export default function ActionTrackerPage() {
 
         <InlineNoticeBanner notice={notice} className="mb-6" />
 
+        {!canEdit && (
+          <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {PRESIDENT_EDIT_BLOCK_MESSAGE}
+          </div>
+        )}
+
         {/* Add action */}
         <section className="mb-10 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="border-b border-zinc-200 px-4 sm:px-6 py-3 sm:py-4">
@@ -346,6 +378,7 @@ export default function ActionTrackerPage() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Enter action title"
+                disabled={!canEdit}
               />
             </div>
 
@@ -357,6 +390,7 @@ export default function ActionTrackerPage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Add description"
+                disabled={!canEdit}
               />
             </div>
 
@@ -368,6 +402,7 @@ export default function ActionTrackerPage() {
                   value={owner}
                   onChange={(e) => setOwner(e.target.value)}
                   placeholder="Assign owner"
+                  disabled={!canEdit}
                 />
               </div>
 
@@ -378,6 +413,7 @@ export default function ActionTrackerPage() {
                   className="w-full rounded-md border px-3 py-3 text-base"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
+                  disabled={!canEdit}
                 />
               </div>
 
@@ -387,6 +423,7 @@ export default function ActionTrackerPage() {
                   className="w-full rounded-md border px-3 py-3 text-base"
                   value={meetingId ?? ''}
                   onChange={(e) => setMeetingId(e.target.value || null)}
+                  disabled={!canEdit}
                 >
                   <option value="">Link to meeting</option>
                   {meetings.map((m) => (
@@ -405,6 +442,7 @@ export default function ActionTrackerPage() {
                 value={createdBy}
                 onChange={(e) => setCreatedBy(e.target.value)}
                 placeholder="Your name"
+                disabled={!canEdit}
               />
             </div>
 
@@ -413,6 +451,7 @@ export default function ActionTrackerPage() {
                 type="checkbox"
                 checked={isPublicAction}
                 onChange={(e) => setIsPublicAction(e.target.checked)}
+                disabled={!canEdit}
               />
               Make this action public
             </label>
@@ -420,7 +459,7 @@ export default function ActionTrackerPage() {
             <div className="flex justify-end pt-2">
               <button
                 onClick={addAction}
-                disabled={loading}
+                disabled={loading || !canEdit}
                 className="min-h-[44px] rounded-md bg-red-600 px-6 py-3 text-base font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
                 {loading ? 'Adding...' : 'Add action'}
@@ -482,6 +521,7 @@ export default function ActionTrackerPage() {
                           value={a.status}
                           onChange={(e) => initiateStatusChange(a.id, a.status, e.target.value, a.title)}
                           className="flex-1 min-h-[44px] rounded-md border px-3 py-2 text-sm"
+                          disabled={!canEdit}
                         >
                           {STATUS_OPTIONS.map((s) => (
                             <option key={s} value={s}>
@@ -491,6 +531,7 @@ export default function ActionTrackerPage() {
                         </select>
                         <button
                           onClick={() => initiateEditAction(a)}
+                          disabled={!canEdit}
                           className="min-h-[44px] rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
                           title="Edit action details"
                         >
@@ -618,6 +659,7 @@ export default function ActionTrackerPage() {
                             value={a.status}
                             onChange={(e) => initiateStatusChange(a.id, a.status, e.target.value, a.title)}
                             className="rounded-md border px-2 py-1 text-xs"
+                            disabled={!canEdit}
                           >
                             {STATUS_OPTIONS.map((s) => (
                               <option key={s} value={s}>
@@ -629,6 +671,7 @@ export default function ActionTrackerPage() {
                         <td className="px-3 py-2">
                           <button
                             onClick={() => initiateEditAction(a)}
+                            disabled={!canEdit}
                             className="inline-flex items-center justify-center rounded bg-blue-600 p-1.5 text-white hover:bg-blue-700"
                             title="Edit action details"
                           >
@@ -707,6 +750,7 @@ export default function ActionTrackerPage() {
                           value={a.status}
                           onChange={(e) => initiateStatusChange(a.id, a.status, e.target.value, a.title)}
                           className="w-full mb-3 min-h-[44px] rounded-md border px-3 py-2 text-sm"
+                          disabled={!canEdit}
                         >
                           {STATUS_OPTIONS.map((s) => (
                             <option key={s} value={s}>
@@ -835,6 +879,7 @@ export default function ActionTrackerPage() {
                               value={a.status}
                               onChange={(e) => initiateStatusChange(a.id, a.status, e.target.value, a.title)}
                               className="rounded-md border px-2 py-1 text-xs"
+                              disabled={!canEdit}
                             >
                               {STATUS_OPTIONS.map((s) => (
                                 <option key={s} value={s}>
@@ -846,6 +891,7 @@ export default function ActionTrackerPage() {
                           <td className="px-3 py-2">
                             <button
                               onClick={() => initiateEditAction(a)}
+                              disabled={!canEdit}
                               className="inline-flex items-center justify-center rounded bg-blue-600 p-1.5 text-white hover:bg-blue-700"
                               title="Edit action details"
                             >
@@ -916,14 +962,14 @@ export default function ActionTrackerPage() {
               <div className="flex justify-end gap-3 border-t border-zinc-200 px-6 py-4">
                 <button
                   onClick={cancelStatusChange}
-                  disabled={loading}
+                  disabled={loading || !canEdit}
                   className="min-h-[44px] rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={confirmStatusChange}
-                  disabled={loading}
+                  disabled={loading || !canEdit}
                   className="min-h-[44px] rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
                 >
                   {loading ? 'Updating...' : 'Confirm Update'}
@@ -950,6 +996,7 @@ export default function ActionTrackerPage() {
                     onChange={(e) => setEditTitle(e.target.value)}
                     placeholder="Enter action title"
                     className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    disabled={!canEdit}
                   />
                 </div>
 
@@ -961,6 +1008,7 @@ export default function ActionTrackerPage() {
                     placeholder="Add description"
                     rows={3}
                     className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    disabled={!canEdit}
                   />
                 </div>
 
@@ -973,6 +1021,7 @@ export default function ActionTrackerPage() {
                       onChange={(e) => setEditOwner(e.target.value)}
                       placeholder="Assign owner"
                       className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      disabled={!canEdit}
                     />
                   </div>
 
@@ -983,6 +1032,7 @@ export default function ActionTrackerPage() {
                       value={editDueDate}
                       onChange={(e) => setEditDueDate(e.target.value)}
                       className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      disabled={!canEdit}
                     />
                   </div>
                 </div>
@@ -994,6 +1044,7 @@ export default function ActionTrackerPage() {
                       value={editMeetingId ?? ''}
                       onChange={(e) => setEditMeetingId(e.target.value || null)}
                       className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      disabled={!canEdit}
                     >
                       <option value="">No meeting linked</option>
                       {meetings.map((m) => (
@@ -1012,6 +1063,7 @@ export default function ActionTrackerPage() {
                       onChange={(e) => setEditCreatedBy(e.target.value)}
                       placeholder="Creator name"
                       className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      disabled={!canEdit}
                     />
                   </div>
                 </div>
@@ -1024,6 +1076,7 @@ export default function ActionTrackerPage() {
                     onChange={(e) => setEditSource(e.target.value)}
                     placeholder="e.g., Manual, AOB, Treasury"
                     className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    disabled={!canEdit}
                   />
                 </div>
 
@@ -1032,6 +1085,7 @@ export default function ActionTrackerPage() {
                     type="checkbox"
                     checked={editIsPublic}
                     onChange={(e) => setEditIsPublic(e.target.checked)}
+                    disabled={!canEdit}
                   />
                   Make this action public
                 </label>
@@ -1040,14 +1094,14 @@ export default function ActionTrackerPage() {
               <div className="flex justify-end gap-3 border-t border-zinc-200 px-6 py-4 sticky bottom-0 bg-white">
                 <button
                   onClick={cancelEditAction}
-                  disabled={loading}
+                  disabled={loading || !canEdit}
                   className="min-h-[44px] rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={confirmEditAction}
-                  disabled={loading || !editTitle.trim()}
+                  disabled={loading || !editTitle.trim() || !canEdit}
                   className="min-h-[44px] rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                 >
                   {loading ? 'Updating...' : 'Update Action'}

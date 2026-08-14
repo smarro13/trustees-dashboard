@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import ConfirmDialog from '../../components/ConfirmDialog';
 
-type DashboardRole = 'admin' | 'management' | 'safeguarding' | 'commercial' | null;
+type DashboardRole = 'admin' | 'management' | 'president' | 'safeguarding' | 'commercial' | null;
 
 type AdminUser = {
   id: string;
@@ -13,9 +13,10 @@ type AdminUser = {
   last_sign_in_at?: string | null;
 };
 
-const roleOptions: Array<{ value: 'admin' | 'management' | 'safeguarding' | 'commercial' | 'none'; label: string }> = [
+const roleOptions: Array<{ value: 'admin' | 'management' | 'president' | 'safeguarding' | 'commercial' | 'none'; label: string }> = [
   { value: 'admin', label: 'Admin' },
   { value: 'management', label: 'Management' },
+  { value: 'president', label: 'President' },
   { value: 'safeguarding', label: 'Safeguarding' },
   { value: 'commercial', label: 'Commercial' },
   { value: 'none', label: 'No role' },
@@ -24,6 +25,7 @@ const roleOptions: Array<{ value: 'admin' | 'management' | 'safeguarding' | 'com
 const roleBadgeClass = (role: DashboardRole) => {
   if (role === 'admin') return 'bg-purple-100 text-purple-800';
   if (role === 'management') return 'bg-blue-100 text-blue-800';
+  if (role === 'president') return 'bg-rose-100 text-rose-800';
   if (role === 'safeguarding') return 'bg-emerald-100 text-emerald-800';
   if (role === 'commercial') return 'bg-amber-100 text-amber-800';
   return 'bg-zinc-100 text-zinc-700';
@@ -47,7 +49,7 @@ export default function AdminRolesPage() {
   const [deleting, setDeleting] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [newEmail, setNewEmail] = useState('');
-  const [newRole, setNewRole] = useState<'admin' | 'management' | 'safeguarding' | 'commercial' | 'none'>('management');
+  const [newRole, setNewRole] = useState<'admin' | 'management' | 'president' | 'safeguarding' | 'commercial' | 'none'>('management');
   const [addingUser, setAddingUser] = useState(false);
 
   const loadUsers = async () => {

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { User } from '@supabase/supabase-js';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
+import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
 
 type Item = {
   dateRange?: string; // now a single month (e.g. "March 2025")
@@ -74,6 +75,7 @@ export default function TreasuryPage() {
   ]);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
+  const [canEdit, setCanEdit] = useState(true);
 
   const showNotice = (type: InlineNotice['type'], message: string) => {
     setNotice({ type, message });
@@ -140,6 +142,15 @@ export default function TreasuryPage() {
     const timeout = window.setTimeout(() => setNotice(null), 4500);
     return () => window.clearTimeout(timeout);
   }, [notice]);
+
+  useEffect(() => {
+    const loadCanEdit = async () => {
+      const allowed = await canCurrentUserEditThisAgendaPage();
+      setCanEdit(allowed);
+    };
+
+    void loadCanEdit();
+  }, []);
 
   const addRow = () =>
     setItems([
@@ -220,6 +231,11 @@ export default function TreasuryPage() {
   };
 
   const saveReport = async () => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     if (!period.trim()) {
       showNotice('error', 'Please enter a reporting period.');
       return;
@@ -468,6 +484,14 @@ export default function TreasuryPage() {
         </header>
 
         <InlineNoticeBanner notice={notice} className="mb-6" />
+
+        {!canEdit && (
+          <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {PRESIDENT_EDIT_BLOCK_MESSAGE}
+          </div>
+        )}
+
+        <fieldset disabled={!canEdit} className="disabled:opacity-70">
 
         {/* New report – flat, full-width section */}
         <section className="mb-10 w-full rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
@@ -976,7 +1000,7 @@ export default function TreasuryPage() {
             <div className="flex justify-end">
               <button
                 onClick={saveReport}
-                disabled={loading}
+                disabled={loading || !canEdit}
                 className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
                 {loading ? 'Saving…' : 'Save report'}
@@ -984,6 +1008,8 @@ export default function TreasuryPage() {
             </div>
           </div>
         </section>
+
+        </fieldset>
 
         {/* Reports */}
         <section className="space-y-6">

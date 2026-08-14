@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
+import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
 
 export default function ConflictsPage() {
   const [conflicts, setConflicts] = useState<any[]>([]);
@@ -13,6 +14,7 @@ export default function ConflictsPage() {
   const [actionTaken, setActionTaken] = useState('');
 
   const [loading, setLoading] = useState(false);
+  const [canEdit, setCanEdit] = useState(true);
 
   const loadData = async () => {
     const { data } = await supabase
@@ -37,7 +39,21 @@ export default function ConflictsPage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    const loadCanEdit = async () => {
+      const allowed = await canCurrentUserEditThisAgendaPage();
+      setCanEdit(allowed);
+    };
+
+    void loadCanEdit();
+  }, []);
+
   const addConflict = async () => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      window.alert(PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     if (!trusteeName.trim() || !description.trim()) return;
 
     setLoading(true);
@@ -81,6 +97,12 @@ export default function ConflictsPage() {
           </p>
         </header>
 
+        {!canEdit && (
+          <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {PRESIDENT_EDIT_BLOCK_MESSAGE}
+          </div>
+        )}
+
         {/* Add conflict – full-width, lightly styled section */}
         <section className="mb-10 w-full rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="border-b border-zinc-200 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
@@ -98,6 +120,7 @@ export default function ConflictsPage() {
               value={trusteeName}
               onChange={(e) => setTrusteeName(e.target.value)}
               className="w-full rounded-md border border-zinc-300 px-3 py-2"
+              disabled={!canEdit}
             />
 
             <textarea
@@ -106,6 +129,7 @@ export default function ConflictsPage() {
               onChange={(e) => setDescription(e.target.value)}
               className="w-full rounded-md border border-zinc-300 px-3 py-2"
               rows={3}
+              disabled={!canEdit}
             />
 
             <label className="flex items-center gap-2 text-sm">
@@ -113,6 +137,7 @@ export default function ConflictsPage() {
                 type="checkbox"
                 checked={standing}
                 onChange={(e) => setStanding(e.target.checked)}
+                disabled={!canEdit}
               />
               Standing interest (ongoing)
             </label>
@@ -122,6 +147,7 @@ export default function ConflictsPage() {
                 value={meetingId ?? ''}
                 onChange={(e) => setMeetingId(e.target.value || null)}
                 className="w-full rounded-md border border-zinc-300 px-3 py-2"
+                disabled={!canEdit}
               >
                 <option value="">Link to meeting</option>
                 {meetings.map((m) => (
@@ -142,12 +168,13 @@ export default function ConflictsPage() {
               value={actionTaken}
               onChange={(e) => setActionTaken(e.target.value)}
               className="w-full rounded-md border border-zinc-300 px-3 py-2"
+              disabled={!canEdit}
             />
 
             <div className="flex justify-end">
               <button
                 onClick={addConflict}
-                disabled={loading}
+                disabled={loading || !canEdit}
                 className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
                 {loading ? 'Saving…' : 'Record conflict'}

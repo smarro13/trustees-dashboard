@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { User } from '@supabase/supabase-js';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
+import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
 
 type UploadedAsset = {
 	name: string;
@@ -116,6 +117,7 @@ export default function CommercialTransformationPage() {
 	const [linkingReportId, setLinkingReportId] = useState<string | null>(null);
 	const [meetingSelectionByReport, setMeetingSelectionByReport] = useState<Record<string, string>>({});
 	const [notice, setNotice] = useState<InlineNotice | null>(null);
+	const [canEdit, setCanEdit] = useState(true);
 
 	const showNotice = (type: InlineNotice['type'], message: string) => {
 		setNotice({ type, message });
@@ -222,6 +224,15 @@ export default function CommercialTransformationPage() {
 		return () => window.clearTimeout(timeout);
 	}, [notice]);
 
+	useEffect(() => {
+		const loadCanEdit = async () => {
+			const allowed = await canCurrentUserEditThisAgendaPage();
+			setCanEdit(allowed);
+		};
+
+		void loadCanEdit();
+	}, []);
+
 	const toggleJobIdea = (id: string) => {
 		setSelectedJobClubIdeas((current) =>
 			current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
@@ -251,6 +262,11 @@ export default function CommercialTransformationPage() {
 	};
 
 	const saveReport = async () => {
+		if (!(await canCurrentUserEditThisAgendaPage())) {
+			showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+			return;
+		}
+
 		if (!period.trim()) {
 			showNotice('error', 'Please enter a reporting period.');
 			return;
@@ -326,6 +342,11 @@ export default function CommercialTransformationPage() {
 	};
 
 	const addReportToMeeting = async (reportId: string) => {
+		if (!(await canCurrentUserEditThisAgendaPage())) {
+			showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+			return;
+		}
+
 		const selectedMeetingId = meetingSelectionByReport[reportId];
 		if (!selectedMeetingId) {
 			showNotice('error', 'Please select a meeting first.');
@@ -350,6 +371,11 @@ export default function CommercialTransformationPage() {
 	};
 
 	const setPadelPublicShare = async (reportId: string, nextValue: boolean) => {
+		if (!(await canCurrentUserEditThisAgendaPage())) {
+			showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+			return;
+		}
+
 		setShareUpdatingReportId(reportId);
 		const { error } = await supabase
 			.from('commercial_transformation_updates')
@@ -368,6 +394,11 @@ export default function CommercialTransformationPage() {
 	};
 
 	const savePadelSupportingEvidence = async () => {
+		if (!(await canCurrentUserEditThisAgendaPage())) {
+			showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+			return;
+		}
+
 		const accessToken = ((await supabase.auth.getSession()) as any)?.data?.session?.access_token as string | undefined;
 		if (!accessToken) {
 			showNotice('error', 'You must be logged in to update supporting evidence links.');
@@ -419,6 +450,12 @@ export default function CommercialTransformationPage() {
 
 				<InlineNoticeBanner notice={notice} className="mb-6" />
 
+				{!canEdit && (
+					<div className="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+						{PRESIDENT_EDIT_BLOCK_MESSAGE}
+					</div>
+				)}
+
 				<section className="mb-6 rounded-lg border border-zinc-200 bg-zinc-50 p-2">
 					<div className="grid gap-2 sm:grid-cols-3">
 						<button
@@ -454,6 +491,7 @@ export default function CommercialTransformationPage() {
 					</div>
 
 					<div className="space-y-5 px-6 py-6">
+						<fieldset disabled={!canEdit} className="space-y-5 disabled:opacity-70">
 						<div className="grid gap-4 sm:grid-cols-2">
 							<input
 								type="text"
@@ -586,12 +624,13 @@ export default function CommercialTransformationPage() {
 							<button
 								type="button"
 								onClick={saveReport}
-								disabled={saving}
+								disabled={saving || !canEdit}
 								className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
 							>
 								{saving ? 'Saving...' : 'Save Update'}
 							</button>
 						</div>
+						</fieldset>
 					</div>
 				</section>
 
@@ -642,7 +681,7 @@ export default function CommercialTransformationPage() {
 												<button
 													type="button"
 													onClick={() => addReportToMeeting(report.id)}
-													disabled={linkingReportId === report.id}
+													disabled={linkingReportId === report.id || !canEdit}
 													className="rounded-md bg-zinc-900 px-3 py-2 text-xs font-semibold text-white hover:bg-zinc-800 disabled:opacity-60"
 												>
 													{linkingReportId === report.id ? 'Adding...' : 'Add to meeting'}
@@ -667,7 +706,7 @@ export default function CommercialTransformationPage() {
 												<button
 													type="button"
 													onClick={() => setPadelPublicShare(report.id, !report.share_padel_to_public)}
-													disabled={shareUpdatingReportId === report.id}
+													disabled={shareUpdatingReportId === report.id || !canEdit}
 													className="rounded-md bg-zinc-900 px-3 py-2 text-xs font-semibold text-white hover:bg-zinc-800 disabled:opacity-60"
 												>
 													{shareUpdatingReportId === report.id
@@ -728,12 +767,13 @@ export default function CommercialTransformationPage() {
 							rows={4}
 							placeholder="One PDF URL per line"
 							className="w-full rounded-md border border-zinc-300 px-3 py-2"
+							disabled={!canEdit}
 						/>
 						<div className="flex justify-end">
 							<button
 								type="button"
 								onClick={savePadelSupportingEvidence}
-								disabled={savingPadelEvidence}
+								disabled={savingPadelEvidence || !canEdit}
 								className="rounded-md bg-zinc-900 px-4 py-2 font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
 							>
 								{savingPadelEvidence ? 'Saving...' : 'Save Supporting Evidence Links'}

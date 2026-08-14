@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
+import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
 
 const AGM_MINUTES_PREFIX = 'AGM - ';
 
@@ -13,6 +14,7 @@ export default function AGMMinutesPage() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
+  const [canEdit, setCanEdit] = useState(true);
 
   const showNotice = (type: InlineNotice['type'], message: string) => {
     setNotice({ type, message });
@@ -48,6 +50,15 @@ export default function AGMMinutesPage() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
+  useEffect(() => {
+    const loadCanEdit = async () => {
+      const allowed = await canCurrentUserEditThisAgendaPage();
+      setCanEdit(allowed);
+    };
+
+    void loadCanEdit();
+  }, []);
+
   const buildTitle = () => {
     const trimmed = title.trim();
     if (!trimmed) {
@@ -60,6 +71,11 @@ export default function AGMMinutesPage() {
   };
 
   const uploadMinutes = async () => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     if (!title.trim()) {
       showNotice('error', 'Please enter a title for the AGM minutes.');
       return;
@@ -133,6 +149,12 @@ export default function AGMMinutesPage() {
 
         <InlineNoticeBanner notice={notice} className="mb-6" />
 
+        {!canEdit && (
+          <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {PRESIDENT_EDIT_BLOCK_MESSAGE}
+          </div>
+        )}
+
         <section className="mb-10 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="border-b border-zinc-200 px-6 py-4">
             <h2 className="text-xl font-semibold text-zinc-900">Upload AGM minutes</h2>
@@ -145,12 +167,14 @@ export default function AGMMinutesPage() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="w-full rounded-md border border-zinc-300 px-3 py-2"
+              disabled={!canEdit}
             />
 
             <select
               value={meetingId ?? ''}
               onChange={(e) => setMeetingId(e.target.value || null)}
               className="w-full rounded-md border border-zinc-300 px-3 py-2"
+              disabled={!canEdit}
             >
               <option value="">Link to meeting (optional)</option>
               {meetings.map((meeting) => (
@@ -175,6 +199,7 @@ export default function AGMMinutesPage() {
                 id="agm-file-upload"
                 type="file"
                 accept=".pdf,.doc,.docx"
+                disabled={!canEdit}
                 onChange={(e) => {
                   const selectedFile = e.target.files?.[0] ?? null;
                   setFile(selectedFile);
@@ -199,7 +224,7 @@ export default function AGMMinutesPage() {
             <div className="flex justify-end">
               <button
                 onClick={uploadMinutes}
-                disabled={loading}
+                disabled={loading || !canEdit}
                 className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
                 {loading ? 'Uploading…' : 'Upload AGM minutes'}

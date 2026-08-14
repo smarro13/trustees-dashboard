@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { User } from '@supabase/supabase-js';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
+import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
 
 export default function MembershipReportPage() {
   const [reports, setReports] = useState<any[]>([]);
@@ -13,6 +14,7 @@ export default function MembershipReportPage() {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
+  const [canEdit, setCanEdit] = useState(true);
   const [loveAdminNewSignups, setLoveAdminNewSignups] = useState<string>('');
   const [loveAdminOutstandingTotal, setLoveAdminOutstandingTotal] = useState<string>('');
   const [loveAdminCancellations, setLoveAdminCancellations] = useState<string>('');
@@ -105,7 +107,21 @@ export default function MembershipReportPage() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
+  useEffect(() => {
+    const loadCanEdit = async () => {
+      const allowed = await canCurrentUserEditThisAgendaPage();
+      setCanEdit(allowed);
+    };
+
+    void loadCanEdit();
+  }, []);
+
   const saveReport = async () => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     if (!user) {
       showNotice('error', 'You must be logged in to save.');
       return;
@@ -234,6 +250,14 @@ export default function MembershipReportPage() {
         </header>
 
         <InlineNoticeBanner notice={notice} className="mb-6" />
+
+        {!canEdit && (
+          <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {PRESIDENT_EDIT_BLOCK_MESSAGE}
+          </div>
+        )}
+
+        <fieldset disabled={!canEdit} className="disabled:opacity-70">
 
         {/* Bottom line section */}
         <section className="mb-10 w-full rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
@@ -402,11 +426,14 @@ export default function MembershipReportPage() {
         <section className="mt-6 flex justify-end">
           <button
             onClick={saveReport}
+            disabled={!canEdit}
             className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700"
           >
             Save membership report
           </button>
         </section>
+
+        </fieldset>
 
         {/* Reports list */}
         <section className="mt-10 space-y-4">

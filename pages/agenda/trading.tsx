@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { User } from '@supabase/supabase-js';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
+import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
 
 type Item = {
   dateRange?: string; // now a single month (e.g. "March 2025")
@@ -43,6 +44,7 @@ export default function TradingPage() {
   const [includeTillAnalysis, setIncludeTillAnalysis] = useState(false);
   const [tillSummaryText, setTillSummaryText] = useState<string>('');
   const [notice, setNotice] = useState<InlineNotice | null>(null);
+  const [canEdit, setCanEdit] = useState(true);
 
   const showNotice = (type: InlineNotice['type'], message: string) => {
     setNotice({ type, message });
@@ -104,6 +106,15 @@ export default function TradingPage() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
+  useEffect(() => {
+    const loadCanEdit = async () => {
+      const allowed = await canCurrentUserEditThisAgendaPage();
+      setCanEdit(allowed);
+    };
+
+    void loadCanEdit();
+  }, []);
+
   const addRow = () =>
     setItems([
       ...items,
@@ -125,6 +136,11 @@ export default function TradingPage() {
   };
 
   const saveReport = async () => {
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
     if (!period.trim()) return;
 
     if (!user) {
@@ -292,6 +308,12 @@ export default function TradingPage() {
         </header>
         <InlineNoticeBanner notice={notice} className="mb-6" />
 
+        {!canEdit && (
+          <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {PRESIDENT_EDIT_BLOCK_MESSAGE}
+          </div>
+        )}
+
         {/* New report – flat, full-width section */}
         <section className="mb-10 w-full rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="border-b border-zinc-200 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
@@ -302,6 +324,7 @@ export default function TradingPage() {
 
           {/* Any new inputs/tables/buttons should be added inside this padded block */}
           <div className="w-full px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6 space-y-6">
+            <fieldset disabled={!canEdit} className="space-y-6 disabled:opacity-70">
             {/* Period + meeting row */}
             <div className="grid gap-4 lg:grid-cols-2">
               <input
@@ -505,6 +528,7 @@ export default function TradingPage() {
                   accept="application/pdf"
                   onChange={(e) => handleTillPdfChange(e.target.files?.[0] ?? null)}
                   className="hidden"
+                  disabled={!canEdit}
                 />
               </label>
               {tillFile && (
@@ -559,6 +583,7 @@ export default function TradingPage() {
                       checked={includeTillAnalysis}
                       onChange={(e) => setIncludeTillAnalysis(e.target.checked)}
                       className="rounded"
+                      disabled={!canEdit}
                     />
                     <label htmlFor="includeTill" className="text-xs font-medium cursor-pointer">
                       Include this till analysis in the report
@@ -580,12 +605,13 @@ export default function TradingPage() {
             <div className="flex justify-end">
               <button
                 onClick={saveReport}
-                disabled={loading}
+                disabled={loading || !canEdit}
                 className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
                 {loading ? 'Saving…' : 'Save report'}
               </button>
             </div>
+            </fieldset>
           </div>
         </section>
 

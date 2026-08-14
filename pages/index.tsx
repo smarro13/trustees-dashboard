@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import AgendaMenu from '../components/AgendaMenu';
 
-type DashboardRole = 'admin' | 'management' | 'safeguarding' | 'commercial' | null;
+type DashboardRole = 'admin' | 'management' | 'president' | 'safeguarding' | 'commercial' | null;
 
 const ROLE_RANK: Record<Exclude<DashboardRole, null>, number> = {
   admin: 4,
   management: 3,
+  president: 2,
   safeguarding: 2,
   commercial: 1,
 };
@@ -22,6 +23,7 @@ const normalizeRole = (rawRole: unknown): DashboardRole => {
 
   if (value === 'admin') return 'admin';
   if (value === 'management' || value === 'mangement') return 'management';
+  if (value === 'president') return 'president';
   if (value === 'safeguarding') return 'safeguarding';
   if (value === 'commercial' || value === 'commerical') return 'commercial';
 
@@ -61,6 +63,7 @@ const roleLabel = (role: DashboardRole) => {
 const roleBadgeClass = (role: DashboardRole) => {
   if (role === 'admin') return 'bg-purple-100 text-purple-800';
   if (role === 'management') return 'bg-blue-100 text-blue-800';
+  if (role === 'president') return 'bg-rose-100 text-rose-800';
   if (role === 'safeguarding') return 'bg-emerald-100 text-emerald-800';
   if (role === 'commercial') return 'bg-amber-100 text-amber-800';
   return 'bg-zinc-100 text-zinc-700';
