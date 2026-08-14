@@ -46,6 +46,9 @@ export default function TradingPage() {
   const [notice, setNotice] = useState<InlineNotice | null>(null);
   const [canEdit, setCanEdit] = useState(true);
 
+  const [importingUpdate, setImportingUpdate] = useState(false);
+  const [importedFileName, setImportedFileName] = useState<string | null>(null);
+
   const showNotice = (type: InlineNotice['type'], message: string) => {
     setNotice({ type, message });
   };
@@ -289,6 +292,75 @@ export default function TradingPage() {
     }
   };
 
+  const importTradingUpdate = async (file: File | null) => {
+    if (!file) return;
+
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
+    setImportingUpdate(true);
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const contentBase64 = Buffer.from(arrayBuffer).toString('base64');
+
+      const response = await fetch('/api/trading-update-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
+          contentBase64,
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok || payload?.error) {
+        const message = payload?.hint ? `${payload?.error || 'Failed to import trading update.'} ${payload.hint}` : (payload?.error || 'Failed to import trading update.');
+        showNotice('error', message);
+        return;
+      }
+
+      const parsed = payload?.parsed;
+      if (!parsed) {
+        showNotice('error', 'The uploaded file did not return parsed data.');
+        return;
+      }
+
+      if (Array.isArray(parsed.monthlyEntries) && parsed.monthlyEntries.length > 0) {
+        setItems(
+          parsed.monthlyEntries.map((entry: { dateRange?: string; moneyIn?: string; moneyOut?: string }) => ({
+            dateRange: entry.dateRange || '',
+            moneyIn: entry.moneyIn || '',
+            moneyOut: entry.moneyOut || '',
+          }))
+        );
+        if (parsed.reportingPeriod && !period.trim()) {
+          setPeriod(parsed.reportingPeriod);
+        }
+      }
+
+      if (parsed.notes) {
+        setNotes((prev) => (prev ? `${prev}\n\n${parsed.notes}` : parsed.notes));
+      }
+
+      setImportedFileName(file.name);
+
+      const importedRows = parsed.monthlyEntries?.length || 0;
+      const summaryBits = [
+        importedRows > 0 ? `${importedRows} monthly balance${importedRows === 1 ? '' : 's'}` : null,
+        parsed.notes ? 'update notes' : null,
+      ].filter(Boolean);
+      showNotice('success', `Imported ${summaryBits.join(' and ') || 'file'} from ${file.name}.`);
+    } catch (error: any) {
+      showNotice('error', error?.message || 'Failed to import trading update.');
+    } finally {
+      setImportingUpdate(false);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-zinc-50">
       {/* widen content area more to reduce cramping */}
@@ -374,6 +446,34 @@ export default function TradingPage() {
               >
                 View bookings
               </a>
+            </div>
+
+            {/* Import trading company update */}
+            <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-blue-900">Import trading company update</h3>
+                  <p className="text-xs text-blue-800">
+                    Upload the bank balances spreadsheet (.xlsx) to fill the monthly table below, or the update document (.docx) to fill the notes.
+                  </p>
+                  {importedFileName && (
+                    <p className="mt-1 text-xs text-blue-700">Last imported: {importedFileName}</p>
+                  )}
+                </div>
+                <label className="inline-flex cursor-pointer items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700">
+                  {importingUpdate ? 'Importing…' : 'Upload update'}
+                  <input
+                    type="file"
+                    accept=".xlsx,.docx"
+                    className="hidden"
+                    disabled={importingUpdate || !canEdit}
+                    onChange={(e) => {
+                      void importTradingUpdate(e.target.files?.[0] ?? null);
+                      e.currentTarget.value = '';
+                    }}
+                  />
+                </label>
+              </div>
             </div>
 
             {/* Month / Money table */}
