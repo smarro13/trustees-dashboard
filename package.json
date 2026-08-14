@@ -13,6 +13,8 @@
         "@supabase/ssr": "^0.8.0",
         "@supabase/supabase-js": "^2.88.0",
         "autoprefixer": "^10.4.23",
+        "exceljs": "^4.4.0",
+        "mammoth": "^1.12.1",
         "next": "^16.0.10",
         "pdf2json": "^4.0.2",
         "postcss": "^8.5.6",
