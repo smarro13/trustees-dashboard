@@ -74,6 +74,8 @@ export default function TreasuryPage() {
     { name: '6 Nations Tickets', amount: '2280' },
   ]);
   const [loading, setLoading] = useState(false);
+  const [importingReport, setImportingReport] = useState(false);
+  const [importedFileName, setImportedFileName] = useState<string | null>(null);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
   const [canEdit, setCanEdit] = useState(true);
 
@@ -441,6 +443,118 @@ export default function TreasuryPage() {
     }
   };
 
+  const importTreasuryReport = async (file: File | null) => {
+    if (!file) return;
+
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+
+    setImportingReport(true);
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const contentBase64 = Buffer.from(arrayBuffer).toString('base64');
+
+      const response = await fetch('/api/treasury-report-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
+          contentBase64,
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        showNotice('error', payload?.error || 'Failed to import treasury report.');
+        return;
+      }
+
+      if (payload?.error) {
+        showNotice('error', payload.error);
+        return;
+      }
+
+      const parsed = payload?.parsed;
+      if (!parsed) {
+        showNotice('error', 'The uploaded file did not return parsed data.');
+        return;
+      }
+
+      if (parsed.reportingPeriod) {
+        setPeriod(parsed.reportingPeriod);
+      }
+
+      if (Array.isArray(parsed.monthlyEntries) && parsed.monthlyEntries.length > 0) {
+        setItems(
+          parsed.monthlyEntries.map((entry: { dateRange?: string; moneyIn?: string; moneyOut?: string }) => ({
+            dateRange: entry.dateRange || '',
+            moneyIn: entry.moneyIn || '',
+            moneyOut: entry.moneyOut || '',
+          }))
+        );
+      }
+
+      if (Array.isArray(parsed.regularPayments) && parsed.regularPayments.length > 0) {
+        setRegularPayments(
+          parsed.regularPayments.map(
+            (
+              row: { description?: string; frequency?: string; amount?: string; notes?: string },
+              idx: number,
+            ) => ({
+              id: Date.now() + idx,
+              description: row.description || '',
+              frequency: row.frequency || '',
+              amount: row.amount || '',
+              notes: row.notes || '',
+            })
+          )
+        );
+      }
+
+      if (Array.isArray(parsed.regularIncomes) && parsed.regularIncomes.length > 0) {
+        setRegularIncomes(
+          parsed.regularIncomes.map((row: { description?: string; frequency?: string; amount?: string; notes?: string }) => ({
+            description: row.description || '',
+            frequency: row.frequency || '',
+            amount: row.amount || '',
+            notes: row.notes || '',
+          }))
+        );
+      }
+
+      if (Array.isArray(parsed.moniesOwed) && parsed.moniesOwed.length > 0) {
+        setMoniesOwed(
+          parsed.moniesOwed.map((row: { name?: string; amount?: string }) => ({
+            name: row.name || '',
+            amount: row.amount || '',
+          }))
+        );
+      }
+
+      if (parsed.notes) {
+        setNotes(parsed.notes);
+      }
+
+      setImportedFileName(file.name);
+
+      const importedRows =
+        (parsed.monthlyEntries?.length || 0) +
+        (parsed.regularPayments?.length || 0) +
+        (parsed.regularIncomes?.length || 0) +
+        (parsed.moniesOwed?.length || 0);
+
+      showNotice('success', `Imported ${importedRows} rows from ${file.name}.`);
+    } catch (error: any) {
+      showNotice('error', error?.message || 'Failed to import treasury report.');
+    } finally {
+      setImportingReport(false);
+    }
+  };
+
   // helper to sort for UX without mutating state
   const getSortedRegularPayments = () => {
     return [...regularPayments].sort((a, b) => {
@@ -529,6 +643,31 @@ export default function TreasuryPage() {
                   </option> 
                 ))}
               </select>
+            </div>
+
+            <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-blue-900">Import previous treasury report</h3>
+                  <p className="text-xs text-blue-800">Upload PDF, TXT, CSV, or Markdown report to auto-fill this form.</p>
+                </div>
+                <label className="inline-flex cursor-pointer items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700">
+                  {importingReport ? 'Importing...' : 'Upload report'}
+                  <input
+                    type="file"
+                    accept=".pdf,.txt,.csv,.md"
+                    className="hidden"
+                    disabled={importingReport || !canEdit}
+                    onChange={(e) => {
+                      void importTreasuryReport(e.target.files?.[0] ?? null);
+                      e.currentTarget.value = '';
+                    }}
+                  />
+                </label>
+              </div>
+              {importedFileName && (
+                <p className="mt-2 text-xs text-blue-900">Last imported: {importedFileName}</p>
+              )}
             </div>
 
             {/* Month / Money table */}
@@ -1000,7 +1139,7 @@ export default function TreasuryPage() {
             <div className="flex justify-end">
               <button
                 onClick={saveReport}
-                disabled={loading || !canEdit}
+                disabled={loading || importingReport || !canEdit}
                 className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
                 {loading ? 'Saving…' : 'Save report'}
