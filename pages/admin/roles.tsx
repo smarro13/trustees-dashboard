@@ -13,6 +13,11 @@ type AdminUser = {
   last_sign_in_at?: string | null;
 };
 
+type CreatedCredentials = {
+  email: string;
+  temporaryPassword: string;
+};
+
 const roleOptions: Array<{ value: 'admin' | 'management' | 'president' | 'safeguarding' | 'commercial' | 'none'; label: string }> = [
   { value: 'admin', label: 'Admin' },
   { value: 'management', label: 'Management' },
@@ -51,6 +56,7 @@ export default function AdminRolesPage() {
   const [newEmail, setNewEmail] = useState('');
   const [newRole, setNewRole] = useState<'admin' | 'management' | 'president' | 'safeguarding' | 'commercial' | 'none'>('management');
   const [addingUser, setAddingUser] = useState(false);
+  const [createdCredentials, setCreatedCredentials] = useState<CreatedCredentials | null>(null);
 
   const loadUsers = async () => {
     setLoading(true);
@@ -220,9 +226,18 @@ export default function AdminRolesPage() {
     const created = payload.user as AdminUser;
     setUsers((current) => [created, ...current]);
     setDraftRoles((current) => ({ ...current, [created.id]: created.role || 'none' }));
+    const temporaryPassword = typeof payload.temporaryPassword === 'string' ? payload.temporaryPassword : '';
+    setCreatedCredentials(
+      temporaryPassword
+        ? {
+            email: created.email,
+            temporaryPassword,
+          }
+        : null,
+    );
     setNewEmail('');
     setNewRole('management');
-    setStatus(`User ${created.email} created. A password reset email has been sent.`);
+    setStatus(`User ${created.email} created with a temporary password.`);
   };
 
   return (
@@ -246,6 +261,37 @@ export default function AdminRolesPage() {
           </section>
         )}
 
+        {createdCredentials && (
+          <section className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="font-semibold">Temporary login details</p>
+            <p className="mt-1">Email: {createdCredentials.email}</p>
+            <p className="mt-1 break-all">Temporary password: {createdCredentials.temporaryPassword}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(createdCredentials.temporaryPassword);
+                    setStatus('Temporary password copied to clipboard.');
+                  } catch {
+                    setStatus('Could not copy password automatically.');
+                  }
+                }}
+                className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+              >
+                Copy password
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreatedCredentials(null)}
+                className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+              >
+                Hide details
+              </button>
+            </div>
+          </section>
+        )}
+
         {error ? (
           <section className="mb-4 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
             {error}
@@ -256,7 +302,7 @@ export default function AdminRolesPage() {
         <section className="mb-6 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="border-b border-zinc-200 px-6 py-4">
             <h2 className="text-xl font-semibold">Add new user</h2>
-            <p className="mt-0.5 text-sm text-zinc-500">Creates the account and sends them a password-reset email so they can log in.</p>
+            <p className="mt-0.5 text-sm text-zinc-500">Creates the account with an auto-generated temporary password for immediate login.</p>
           </div>
           <form onSubmit={createUser} className="flex flex-wrap items-end gap-3 px-6 py-5">
             <div className="flex-1 min-w-[220px]">
