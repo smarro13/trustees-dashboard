@@ -51,7 +51,6 @@ export default function AgendaMenu() {
     { label: '📝 Previous Minutes', href: '/agenda/minutes' },
     { label: '✅ Action Tracker', href: '/agenda/actions' },
     { label: '✉️ Correspondence', href: '/agenda/correspondence' },
-    { label: '🛡️ Safeguarding', href: '/agenda/safeguarding' },
     { label: '⚖️ Conflicts of Interest', href: '/agenda/conflicts' },
     { label: '💰 Treasury Report', href: '/agenda/treasury' },
     { label: '🏢 Trading Company Report', href: '/agenda/trading' },
@@ -60,6 +59,7 @@ export default function AgendaMenu() {
     { label: '👥 Membership Report', href: '/agenda/membership' },
     { label: '🏉 Rugby Report', href: '/agenda/rugby' },
     { label: '🎰 Presidents Lotto', href: '/agenda/presidents-lotto' },
+    { label: '🛡️ Safeguarding', href: '/agenda/safeguarding' },
     { label: '📌 Matters Arising', href: '/agenda/matters-arising' },
     { label: '💬 AOB', href: '/agenda/aob' },
   ];
