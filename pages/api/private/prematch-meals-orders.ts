@@ -45,6 +45,11 @@ type SquarespaceLineItem = {
   unitPricePaid: SquarespaceMoney;
 };
 type SquarespaceAddress = { firstName?: string; lastName?: string };
+type SquarespaceDiscountLine = {
+  promoCode?: string;
+  name?: string;
+  amount?: SquarespaceMoney;
+};
 type SquarespaceOrder = {
   id: string;
   orderNumber: string;
@@ -59,6 +64,7 @@ type SquarespaceOrder = {
   subtotal?: SquarespaceMoney;
   discountTotal?: SquarespaceMoney;
   refundedTotal?: SquarespaceMoney;
+  discountLines?: SquarespaceDiscountLine[];
 };
 
 // A line item's unitPricePaid is always the pre-discount list price — a
@@ -199,6 +205,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       fulfillmentStatus: string;
       paymentState: string;
     }> = [];
+    const discountUsage: Array<{
+      orderId: string;
+      orderNumber: string;
+      createdOn: string;
+      customerName: string;
+      customerEmail: string;
+      promoCode: string;
+      discountName: string;
+      amount: number;
+    }> = [];
 
     for (const order of orders) {
       // Skip cancelled orders and orders that were never actually paid for.
@@ -252,10 +268,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
 
-      if (matchedThisOrder) matchedOrderCount += 1;
+      if (matchedThisOrder) {
+        matchedOrderCount += 1;
+
+        // Record who used a discount code on this order — order-level, not
+        // per line item, so this is recorded once per order, not once per item.
+        for (const discountLine of order.discountLines || []) {
+          const amount = parseFloat(discountLine.amount?.value || '0');
+          if (amount <= 0) continue;
+
+          discountUsage.push({
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            createdOn: order.createdOn,
+            customerName: getCustomerName(order),
+            customerEmail: order.customerEmail || '',
+            promoCode: discountLine.promoCode || '(no code)',
+            discountName: discountLine.name || '',
+            amount: Math.round(amount * 100) / 100,
+          });
+        }
+      }
     }
 
     lineItemDetails.sort((a, b) => new Date(b.createdOn).getTime() - new Date(a.createdOn).getTime());
+    discountUsage.sort((a, b) => new Date(b.createdOn).getTime() - new Date(a.createdOn).getTime());
 
     return res.status(200).json({
       ok: true,
@@ -281,6 +318,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .map(([key, stats]) => ({ key, name: stats.name, eventCount: stats.products.size, totalQuantity: stats.quantity }))
         .filter((r) => r.eventCount >= 2)
         .sort((a, b) => b.eventCount - a.eventCount || b.totalQuantity - a.totalQuantity),
+      discountUsage,
       orders: lineItemDetails,
       generatedAt: new Date().toISOString(),
     });
