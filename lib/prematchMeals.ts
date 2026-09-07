@@ -32,11 +32,13 @@ export type DiscountUsage = {
   orderId: string;
   orderNumber: string;
   createdOn: string;
+  customerKey: string;
   customerName: string;
   customerEmail: string;
   promoCode: string;
   discountName: string;
   amount: number;
+  productNames: string[];
 };
 
 export type AnalyticsResponse = {
@@ -141,4 +143,21 @@ export const buyersForProduct = (orders: OrderLineItem[], productName: string) =
     byCustomer.set(order.customerKey, existing);
   }
   return [...byCustomer.values()].sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name));
+};
+
+export const discountsForProduct = (discountUsage: DiscountUsage[], productName: string) =>
+  discountUsage
+    .filter((usage) => usage.productNames.includes(productName))
+    .sort((a, b) => new Date(b.createdOn).getTime() - new Date(a.createdOn).getTime());
+
+// Maps customerKey -> the promo code(s) they used for this specific meal, so
+// the buyer list can flag "this order was discounted" per person.
+export const discountCodesByCustomerForProduct = (discountUsage: DiscountUsage[], productName: string) => {
+  const map = new Map<string, string[]>();
+  for (const usage of discountsForProduct(discountUsage, productName)) {
+    const codes = map.get(usage.customerKey) || [];
+    codes.push(usage.promoCode);
+    map.set(usage.customerKey, codes);
+  }
+  return map;
 };
