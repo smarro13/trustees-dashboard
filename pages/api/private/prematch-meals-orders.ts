@@ -46,7 +46,9 @@ type SquarespaceLineItem = {
 };
 type SquarespaceOrder = {
   id: string;
+  orderNumber: string;
   createdOn: string;
+  customerEmail: string;
   fulfillmentStatus: string;
   paymentState: string;
   lineItems: SquarespaceLineItem[];
@@ -135,6 +137,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let currency = 'GBP';
     let matchedOrderCount = 0;
     const byProduct = new Map<string, { quantity: number; revenue: number }>();
+    const lineItemDetails: Array<{
+      orderId: string;
+      orderNumber: string;
+      createdOn: string;
+      customerEmail: string;
+      productName: string;
+      quantity: number;
+      unitPrice: number;
+      lineRevenue: number;
+      fulfillmentStatus: string;
+      paymentState: string;
+    }> = [];
 
     for (const order of orders) {
       // Skip cancelled orders and orders that were never actually paid for.
@@ -159,10 +173,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         existing.quantity += qty;
         existing.revenue += lineRevenue;
         byProduct.set(item.productName, existing);
+
+        lineItemDetails.push({
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          createdOn: order.createdOn,
+          customerEmail: order.customerEmail || '',
+          productName: item.productName,
+          quantity: qty,
+          unitPrice,
+          lineRevenue: Math.round(lineRevenue * 100) / 100,
+          fulfillmentStatus: order.fulfillmentStatus,
+          paymentState: order.paymentState,
+        });
       }
 
       if (matchedThisOrder) matchedOrderCount += 1;
     }
+
+    lineItemDetails.sort((a, b) => new Date(b.createdOn).getTime() - new Date(a.createdOn).getTime());
 
     return res.status(200).json({
       ok: true,
@@ -180,6 +209,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           revenue: Math.round(stats.revenue * 100) / 100,
         }))
         .sort((a, b) => b.revenue - a.revenue),
+      orders: lineItemDetails,
       generatedAt: new Date().toISOString(),
     });
   } catch (err: any) {
