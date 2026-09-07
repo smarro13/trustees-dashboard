@@ -20,17 +20,25 @@ export type OrderLineItem = {
   paymentState: string;
 };
 
+export type RegularAttendee = {
+  name: string;
+  orderCount: number;
+  totalQuantity: number;
+};
+
 export type AnalyticsResponse = {
   ok: boolean;
   error?: string;
   dateRange?: { from: string; to: string };
   productFilter?: string;
+  excludeUnitPrice?: number | null;
   totalOrdersScanned?: number;
   matchedOrderCount?: number;
   totalQuantity?: number;
   totalRevenue?: number;
   currency?: string;
   byProduct?: ProductStat[];
+  regularAttendees?: RegularAttendee[];
   orders?: OrderLineItem[];
   generatedAt?: string;
 };
@@ -53,6 +61,7 @@ export const formatCurrency = (value: number, currency: string) => {
 export const fetchPrematchMealsAnalytics = async (
   days: number,
   productFilter: string,
+  excludeUnitPrice?: string,
 ): Promise<{ ok: boolean; payload?: AnalyticsResponse; error?: string }> => {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
@@ -62,6 +71,9 @@ export const fetchPrematchMealsAnalytics = async (
   }
 
   const params = new URLSearchParams({ days: String(days), productFilter });
+  if (excludeUnitPrice && excludeUnitPrice.trim()) {
+    params.set('excludeUnitPrice', excludeUnitPrice.trim());
+  }
 
   try {
     const response = await fetch(`/api/private/prematch-meals-orders?${params.toString()}`, {

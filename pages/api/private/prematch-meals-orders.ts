@@ -136,6 +136,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ? req.query.productFilter.trim().toLowerCase()
     : 'pre match';
 
+  // Lets the caller drop low-value add-on line items (e.g. a 50p extra) that
+  // aren't actual meal sales but would otherwise show up as a "product".
+  const excludeUnitPrice = typeof req.query.excludeUnitPrice === 'string' && req.query.excludeUnitPrice.trim()
+    ? parseFloat(req.query.excludeUnitPrice)
+    : null;
+
   const modifiedBefore = new Date().toISOString();
   const modifiedAfter = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
@@ -147,6 +153,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let currency = 'GBP';
     let matchedOrderCount = 0;
     const byProduct = new Map<string, { quantity: number; revenue: number }>();
+    const byCustomer = new Map<string, { orderIds: Set<string>; quantity: number }>();
     const lineItemDetails: Array<{
       orderId: string;
       orderNumber: string;
@@ -171,9 +178,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       for (const item of order.lineItems || []) {
         if (!item.productName || !item.productName.toLowerCase().includes(productFilter)) continue;
 
+        const unitPrice = parseFloat(item.unitPricePaid?.value || '0');
+        if (excludeUnitPrice !== null && Math.abs(unitPrice - excludeUnitPrice) < 0.001) continue;
+
         matchedThisOrder = true;
         const qty = item.quantity || 0;
-        const unitPrice = parseFloat(item.unitPricePaid?.value || '0');
         const lineRevenue = qty * unitPrice;
 
         totalQuantity += qty;
@@ -185,11 +194,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         existing.revenue += lineRevenue;
         byProduct.set(item.productName, existing);
 
+        const customerName = getCustomerName(order);
+        const customerEntry = byCustomer.get(customerName) || { orderIds: new Set<string>(), quantity: 0 };
+        customerEntry.orderIds.add(order.id);
+        customerEntry.quantity += qty;
+        byCustomer.set(customerName, customerEntry);
+
         lineItemDetails.push({
           orderId: order.id,
           orderNumber: order.orderNumber,
           createdOn: order.createdOn,
-          customerName: getCustomerName(order),
+          customerName,
           customerEmail: order.customerEmail || '',
           productName: item.productName,
           quantity: qty,
@@ -209,6 +224,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ok: true,
       dateRange: { from: modifiedAfter, to: modifiedBefore },
       productFilter,
+      excludeUnitPrice,
       totalOrdersScanned: orders.length,
       matchedOrderCount,
       totalQuantity,
@@ -221,6 +237,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           revenue: Math.round(stats.revenue * 100) / 100,
         }))
         .sort((a, b) => b.revenue - a.revenue),
+      // Buyers who've ordered across more than one order in this date range —
+      // i.e. the regulars, not one-off buyers.
+      regularAttendees: [...byCustomer.entries()]
+        .map(([name, stats]) => ({ name, orderCount: stats.orderIds.size, totalQuantity: stats.quantity }))
+        .filter((r) => r.orderCount >= 2)
+        .sort((a, b) => b.orderCount - a.orderCount || b.totalQuantity - a.totalQuantity),
       orders: lineItemDetails,
       generatedAt: new Date().toISOString(),
     });
