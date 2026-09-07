@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { supabase } from '../../lib/supabaseClient';
 import { AGENDA_SECTIONS } from '../../components/agenda/agendaConfig';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
+import { type DashboardRole, getCurrentUserRole, canRoleViewAgendaHref } from '../../lib/roles';
 
 type CommercialAttachment = { name?: string; url?: string };
 
@@ -65,6 +66,16 @@ export default function MeetingPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const [notice, setNotice] = useState<InlineNotice | null>(null);
+  const [userRole, setUserRole] = useState<DashboardRole>(null);
+
+  useEffect(() => {
+    const loadRole = async () => {
+      setUserRole(await getCurrentUserRole());
+    };
+    void loadRole();
+  }, []);
+
+  const visibleSections = AGENDA_SECTIONS.filter((s) => canRoleViewAgendaHref(userRole, s.href));
 
   useEffect(() => {
     if (!meetingId) return;
@@ -169,7 +180,7 @@ export default function MeetingPage() {
         // if no entries yet, seed defaults based on breakpoint
         if (Object.keys(prev).length === 0) {
           const seeded: Record<string, boolean> = {};
-          AGENDA_SECTIONS.forEach((s) => {
+          visibleSections.forEach((s) => {
             seeded[s.key] = !mobile; // collapsed on mobile, open on desktop
           });
           return seeded;
@@ -821,7 +832,7 @@ export default function MeetingPage() {
         </header>
 
         <section className="space-y-4 sm:space-y-6">
-          {AGENDA_SECTIONS.map((s) => (
+          {visibleSections.map((s) => (
             <div key={s.key} className="rounded-lg bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
               <button
                 onClick={() =>

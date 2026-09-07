@@ -4,70 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import AgendaMenu from '../components/AgendaMenu';
-
-type DashboardRole = 'admin' | 'management' | 'president' | 'safeguarding' | 'commercial' | null;
-
-const ROLE_RANK: Record<Exclude<DashboardRole, null>, number> = {
-  admin: 4,
-  management: 3,
-  president: 2,
-  safeguarding: 2,
-  commercial: 1,
-};
-
-const normalizeRole = (rawRole: unknown): DashboardRole => {
-  if (typeof rawRole !== 'string') return null;
-
-  const value = rawRole.trim().toLowerCase();
-  if (!value) return null;
-
-  if (value === 'admin') return 'admin';
-  if (value === 'management' || value === 'mangement') return 'management';
-  if (value === 'president') return 'president';
-  if (value === 'safeguarding') return 'safeguarding';
-  if (value === 'commercial' || value === 'commerical') return 'commercial';
-
-  return null;
-};
-
-const getHighestRoleFromList = (values: unknown[]): DashboardRole => {
-  let highest: DashboardRole = null;
-
-  for (const value of values) {
-    const normalized = normalizeRole(value);
-    if (!normalized) continue;
-    if (!highest || ROLE_RANK[normalized] > ROLE_RANK[highest]) {
-      highest = normalized;
-    }
-  }
-
-  return highest;
-};
-
-const resolveRole = (user: any): DashboardRole => {
-  const roleFromAppMeta = normalizeRole(user?.app_metadata?.role);
-  const roleFromUserMeta = normalizeRole(user?.user_metadata?.role);
-  const appMetaRoles = Array.isArray(user?.app_metadata?.roles) ? user.app_metadata.roles : [];
-  const userMetaRoles = Array.isArray(user?.user_metadata?.roles) ? user.user_metadata.roles : [];
-  const roleFromAppArray = getHighestRoleFromList(appMetaRoles);
-  const roleFromUserArray = getHighestRoleFromList(userMetaRoles);
-
-  return roleFromAppMeta || roleFromUserMeta || roleFromAppArray || roleFromUserArray;
-};
-
-const roleLabel = (role: DashboardRole) => {
-  if (!role) return 'No role';
-  return role.charAt(0).toUpperCase() + role.slice(1);
-};
-
-const roleBadgeClass = (role: DashboardRole) => {
-  if (role === 'admin') return 'bg-purple-100 text-purple-800';
-  if (role === 'management') return 'bg-blue-100 text-blue-800';
-  if (role === 'president') return 'bg-rose-100 text-rose-800';
-  if (role === 'safeguarding') return 'bg-emerald-100 text-emerald-800';
-  if (role === 'commercial') return 'bg-amber-100 text-amber-800';
-  return 'bg-zinc-100 text-zinc-700';
-};
+import { type DashboardRole, resolveRoleFromUser as resolveRole, roleLabel, roleBadgeClass } from '../lib/roles';
 
 const SHAREABLE_PAGES = [
   {

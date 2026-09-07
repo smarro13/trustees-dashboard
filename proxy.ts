@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
-type DashboardRole = 'admin' | 'management' | 'president' | 'safeguarding' | 'commercial' | null;
+type DashboardRole = 'admin' | 'trustee' | 'director' | 'president' | 'safeguarding' | 'commercial' | null;
 
 const ROLE_RANK: Record<Exclude<DashboardRole, null>, number> = {
-  admin: 4,
-  management: 3,
+  admin: 5,
+  trustee: 4,
+  director: 3,
   president: 2,
   safeguarding: 2,
   commercial: 1,
@@ -19,7 +20,10 @@ const normalizeRole = (rawRole: unknown): DashboardRole => {
   if (!value) return null;
 
   if (value === 'admin') return 'admin';
-  if (value === 'management' || value === 'mangement') return 'management';
+  if (value === 'trustee') return 'trustee';
+  // "management" is the legacy name for this role — keep accepting it so users
+  // already assigned it before the "director" rename still resolve correctly.
+  if (value === 'director' || value === 'directors' || value === 'management' || value === 'mangement') return 'director';
   if (value === 'president') return 'president';
   if (value === 'safeguarding') return 'safeguarding';
   if (value === 'commercial' || value === 'commerical') return 'commercial';
@@ -73,9 +77,19 @@ const hasRequiredRole = (actual: DashboardRole, required: DashboardRole) => {
   if (!required) return true;
   if (!actual) return false;
 
-  // Admin and management can access all protected agenda sections.
-  if (actual === 'admin' || actual === 'management') {
+  // Admin can access everything, including admin-only pages.
+  if (actual === 'admin') {
     return true;
+  }
+
+  // Trustees can view the whole agenda, including safeguarding, but not admin pages.
+  if (actual === 'trustee') {
+    return required !== 'admin';
+  }
+
+  // Directors can access the whole agenda except safeguarding and admin pages.
+  if (actual === 'director') {
+    return required !== 'admin' && required !== 'safeguarding';
   }
 
   if (actual === 'president') {

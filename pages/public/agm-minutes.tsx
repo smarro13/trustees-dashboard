@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import PublicSectionNav from '../../components/PublicSectionNav';
 import { supabase } from '../../lib/supabaseClient';
+import { sortMinutesByTitleDate } from '../../lib/minutesSort';
 
 const AGM_MINUTES_PREFIX = 'AGM - ';
 
@@ -25,10 +26,9 @@ export default function PublicAGMMinutesPage() {
           *,
           meetings ( meeting_date )
         `)
-        .ilike('title', `${AGM_MINUTES_PREFIX}%`)
-        .order('created_at', { ascending: false });
+        .ilike('title', `${AGM_MINUTES_PREFIX}%`);
 
-      setMinutes(data ?? []);
+      setMinutes(sortMinutesByTitleDate(data ?? []));
       setLoading(false);
     };
 

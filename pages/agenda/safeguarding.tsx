@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { User } from '@supabase/supabase-js';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import { type DashboardRole, getCurrentUserRole, canRoleViewAgendaHref } from '../../lib/roles';
 
 export default function SafeguardingPage() {
   const [updates, setUpdates] = useState<any[]>([]);
@@ -11,6 +12,8 @@ export default function SafeguardingPage() {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
+  const [userRole, setUserRole] = useState<DashboardRole>(null);
+  const [roleChecked, setRoleChecked] = useState(false);
 
   const [summary, setSummary] = useState('');
   const [status, setStatus] = useState('Information');
@@ -55,8 +58,20 @@ export default function SafeguardingPage() {
   };
 
   useEffect(() => {
-    loadData();
+    const checkAccess = async () => {
+      setUserRole(await getCurrentUserRole());
+      setRoleChecked(true);
+    };
+    void checkAccess();
   }, []);
+
+  const canView = canRoleViewAgendaHref(userRole, '/agenda/safeguarding');
+
+  useEffect(() => {
+    if (roleChecked && canView) {
+      loadData();
+    }
+  }, [roleChecked, canView]);
 
   useEffect(() => {
     if (!notice) return;
@@ -186,6 +201,24 @@ export default function SafeguardingPage() {
     'Seniors',
     'Other',
   ];
+
+  if (roleChecked && !canView) {
+    return (
+      <main className="min-h-screen">
+        <div className="mx-auto w-full max-w-2xl px-4 py-10">
+          <Link
+            href="/"
+            className="mb-3 inline-block text-sm font-medium text-blue-600 hover:underline"
+          >
+            ← Back to dashboard
+          </Link>
+          <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            You don't have permission to view Safeguarding for your current role.
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen">
