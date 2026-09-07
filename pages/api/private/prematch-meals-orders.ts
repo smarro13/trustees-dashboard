@@ -44,14 +44,24 @@ type SquarespaceLineItem = {
   quantity: number;
   unitPricePaid: SquarespaceMoney;
 };
+type SquarespaceAddress = { firstName?: string; lastName?: string };
 type SquarespaceOrder = {
   id: string;
   orderNumber: string;
   createdOn: string;
   customerEmail: string;
+  billingAddress?: SquarespaceAddress;
+  shippingAddress?: SquarespaceAddress;
   fulfillmentStatus: string;
   paymentState: string;
   lineItems: SquarespaceLineItem[];
+};
+
+const getCustomerName = (order: SquarespaceOrder): string => {
+  const name = (addr?: SquarespaceAddress) =>
+    addr && (addr.firstName || addr.lastName) ? `${addr.firstName || ''} ${addr.lastName || ''}`.trim() : '';
+
+  return name(order.billingAddress) || name(order.shippingAddress) || order.customerEmail || 'Unknown';
 };
 type SquarespaceOrdersResponse = {
   result: SquarespaceOrder[];
@@ -141,6 +151,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       orderId: string;
       orderNumber: string;
       createdOn: string;
+      customerName: string;
       customerEmail: string;
       productName: string;
       quantity: number;
@@ -178,6 +189,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           orderId: order.id,
           orderNumber: order.orderNumber,
           createdOn: order.createdOn,
+          customerName: getCustomerName(order),
           customerEmail: order.customerEmail || '',
           productName: item.productName,
           quantity: qty,

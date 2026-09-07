@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { supabase } from '../../lib/supabaseClient';
@@ -14,6 +14,7 @@ type OrderLineItem = {
   orderId: string;
   orderNumber: string;
   createdOn: string;
+  customerName: string;
   customerEmail: string;
   productName: string;
   quantity: number;
@@ -107,9 +108,17 @@ export default function PreMatchMealsPage() {
   }, []);
 
   const currency = data?.currency || 'GBP';
-  const selectedProductOrders = selectedProduct
-    ? (data?.orders || []).filter((o) => o.productName === selectedProduct)
-    : [];
+
+  const buyersByProduct = (productName: string) => {
+    const byName = new Map<string, number>();
+    for (const order of data?.orders || []) {
+      if (order.productName !== productName) continue;
+      byName.set(order.customerName, (byName.get(order.customerName) || 0) + order.quantity);
+    }
+    return [...byName.entries()]
+      .map(([name, quantity]) => ({ name, quantity }))
+      .sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name));
+  };
 
   return (
     <main className="min-h-screen">
@@ -229,21 +238,49 @@ export default function PreMatchMealsPage() {
                       <tbody className="divide-y divide-zinc-100">
                         {data.byProduct.map((p) => {
                           const isSelected = selectedProduct === p.productName;
+                          const buyers = isSelected ? buyersByProduct(p.productName) : [];
                           return (
-                            <tr
-                              key={p.productName}
-                              onClick={() => setSelectedProduct(isSelected ? null : p.productName)}
-                              className={`cursor-pointer transition-colors ${isSelected ? 'bg-red-50' : 'hover:bg-zinc-50'}`}
-                            >
-                              <td className="px-3 py-2 text-zinc-800">
-                                <span className={`mr-1 inline-block transition-transform ${isSelected ? 'rotate-90' : ''}`}>
-                                  ▸
-                                </span>
-                                {p.productName}
-                              </td>
-                              <td className="px-3 py-2 text-right text-zinc-800">{p.quantity}</td>
-                              <td className="px-3 py-2 text-right text-zinc-800">{formatCurrency(p.revenue, currency)}</td>
-                            </tr>
+                            <Fragment key={p.productName}>
+                              <tr
+                                onClick={() => setSelectedProduct(isSelected ? null : p.productName)}
+                                className={`cursor-pointer transition-colors ${isSelected ? 'bg-red-50' : 'hover:bg-zinc-50'}`}
+                              >
+                                <td className="px-3 py-2 text-zinc-800">
+                                  <span className={`mr-1 inline-block transition-transform ${isSelected ? 'rotate-90' : ''}`}>
+                                    ▸
+                                  </span>
+                                  {p.productName}
+                                </td>
+                                <td className="px-3 py-2 text-right text-zinc-800">{p.quantity}</td>
+                                <td className="px-3 py-2 text-right text-zinc-800">{formatCurrency(p.revenue, currency)}</td>
+                              </tr>
+                              {isSelected && (
+                                <tr className="bg-zinc-50">
+                                  <td colSpan={3} className="px-3 py-3">
+                                    {buyers.length === 0 ? (
+                                      <p className="text-sm text-zinc-500">No buyer detail available for this product.</p>
+                                    ) : (
+                                      <table className="w-full max-w-sm text-sm">
+                                        <thead>
+                                          <tr>
+                                            <th className="pb-1 text-left font-semibold text-zinc-600">Name</th>
+                                            <th className="pb-1 text-right font-semibold text-zinc-600">Quantity</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-zinc-200">
+                                          {buyers.map((buyer) => (
+                                            <tr key={buyer.name}>
+                                              <td className="py-1 text-zinc-800">{buyer.name}</td>
+                                              <td className="py-1 text-right text-zinc-800">{buyer.quantity}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    )}
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
                           );
                         })}
                       </tbody>
@@ -252,78 +289,6 @@ export default function PreMatchMealsPage() {
                 )}
               </div>
             </section>
-
-            {selectedProduct && (
-              <section className="mt-6 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
-                <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-6 py-4">
-                  <div>
-                    <h2 className="text-xl font-semibold text-zinc-900">{selectedProduct}</h2>
-                    <p className="mt-0.5 text-sm text-zinc-500">
-                      {selectedProductOrders.length} order{selectedProductOrders.length === 1 ? '' : 's'}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedProduct(null)}
-                    className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
-                  >
-                    Close
-                  </button>
-                </div>
-                <div className="px-6 py-5">
-                  {selectedProductOrders.length === 0 ? (
-                    <p className="text-sm text-zinc-500">No individual order detail available for this product.</p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-zinc-200 text-sm">
-                        <thead>
-                          <tr>
-                            <th className="px-3 py-2 text-left font-semibold text-zinc-700">Date</th>
-                            <th className="px-3 py-2 text-left font-semibold text-zinc-700">Order #</th>
-                            <th className="px-3 py-2 text-left font-semibold text-zinc-700">Customer</th>
-                            <th className="px-3 py-2 text-right font-semibold text-zinc-700">Quantity</th>
-                            <th className="px-3 py-2 text-right font-semibold text-zinc-700">Unit price</th>
-                            <th className="px-3 py-2 text-right font-semibold text-zinc-700">Revenue</th>
-                            <th className="px-3 py-2 text-left font-semibold text-zinc-700">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-100">
-                          {selectedProductOrders.map((order) => (
-                            <tr key={`${order.orderId}-${order.productName}`}>
-                              <td className="px-3 py-2 text-zinc-800">
-                                {new Date(order.createdOn).toLocaleDateString('en-GB', {
-                                  day: '2-digit',
-                                  month: '2-digit',
-                                  year: 'numeric',
-                                })}
-                              </td>
-                              <td className="px-3 py-2 text-zinc-800">{order.orderNumber}</td>
-                              <td className="px-3 py-2 text-zinc-800">{order.customerEmail || '—'}</td>
-                              <td className="px-3 py-2 text-right text-zinc-800">{order.quantity}</td>
-                              <td className="px-3 py-2 text-right text-zinc-800">{formatCurrency(order.unitPrice, currency)}</td>
-                              <td className="px-3 py-2 text-right text-zinc-800">{formatCurrency(order.lineRevenue, currency)}</td>
-                              <td className="px-3 py-2">
-                                <span
-                                  className={`rounded-full px-2 py-1 text-xs font-medium ${
-                                    order.fulfillmentStatus === 'FULFILLED'
-                                      ? 'bg-emerald-100 text-emerald-800'
-                                      : order.fulfillmentStatus === 'CANCELED'
-                                        ? 'bg-rose-100 text-rose-800'
-                                        : 'bg-amber-100 text-amber-800'
-                                  }`}
-                                >
-                                  {order.fulfillmentStatus}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </section>
-            )}
 
             {data.generatedAt && (
               <p className="mt-4 text-xs text-zinc-400">
