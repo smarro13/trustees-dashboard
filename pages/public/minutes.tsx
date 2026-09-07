@@ -3,6 +3,7 @@ import Link from 'next/link';
 import PublicSectionNav from '../../components/PublicSectionNav';
 import { supabase } from '../../lib/supabaseClient';
 import { sortMinutesByTitleDate } from '../../lib/minutesSort';
+import { getFileHref } from '../../lib/fileLinks';
 
 const AGM_MINUTES_PREFIX = 'AGM - ';
 
@@ -72,7 +73,7 @@ export default function PublicMinutesPage() {
                 )}
 
                 <a
-                  href={minute.file_url}
+                  href={getFileHref(minute.file_url)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-3 inline-block text-red-700 hover:underline"
