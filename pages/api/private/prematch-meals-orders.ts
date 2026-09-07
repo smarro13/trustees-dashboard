@@ -56,6 +56,25 @@ type SquarespaceOrder = {
   fulfillmentStatus: string;
   paymentState: string;
   lineItems: SquarespaceLineItem[];
+  subtotal?: SquarespaceMoney;
+  discountTotal?: SquarespaceMoney;
+  refundedTotal?: SquarespaceMoney;
+};
+
+// A line item's unitPricePaid is always the pre-discount list price — a
+// promo code (e.g. a comped ticket) shows up only in the order's
+// discountTotal/refundedTotal, not on the line item itself. Without this,
+// a 100%-off comp order would still be counted as full-price revenue.
+// This spreads the order's discount/refund proportionally across its lines.
+const getOrderPaidRatio = (order: SquarespaceOrder): number => {
+  const subtotal = parseFloat(order.subtotal?.value || '0');
+  if (subtotal <= 0) return 1;
+
+  const discount = parseFloat(order.discountTotal?.value || '0');
+  const refunded = parseFloat(order.refundedTotal?.value || '0');
+  const ratio = (subtotal - discount - refunded) / subtotal;
+
+  return Math.max(0, Math.min(1, ratio));
 };
 
 // Squarespace's stable per-customer ID — this is what buyers must be grouped
@@ -187,6 +206,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (order.paymentState && !['PAID', 'PARTIALLY_PAID', 'AUTHORIZED'].includes(order.paymentState)) continue;
 
       let matchedThisOrder = false;
+      const paidRatio = getOrderPaidRatio(order);
 
       for (const item of order.lineItems || []) {
         if (!item.productName || !item.productName.toLowerCase().includes(productFilter)) continue;
@@ -196,7 +216,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         matchedThisOrder = true;
         const qty = item.quantity || 0;
-        const lineRevenue = qty * unitPrice;
+        // unitPricePaid is always the pre-discount list price, so apply the
+        // order's discount/refund ratio to get what was actually collected.
+        const lineRevenue = qty * unitPrice * paidRatio;
 
         totalQuantity += qty;
         totalRevenue += lineRevenue;
