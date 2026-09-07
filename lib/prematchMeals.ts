@@ -28,6 +28,17 @@ export type RegularAttendee = {
   totalQuantity: number;
 };
 
+export type DiscountUsage = {
+  orderId: string;
+  orderNumber: string;
+  createdOn: string;
+  customerName: string;
+  customerEmail: string;
+  promoCode: string;
+  discountName: string;
+  amount: number;
+};
+
 export type AnalyticsResponse = {
   ok: boolean;
   error?: string;
@@ -41,6 +52,7 @@ export type AnalyticsResponse = {
   currency?: string;
   byProduct?: ProductStat[];
   regularAttendees?: RegularAttendee[];
+  discountUsage?: DiscountUsage[];
   orders?: OrderLineItem[];
   generatedAt?: string;
 };

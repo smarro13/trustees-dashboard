@@ -44,6 +44,7 @@ export default function PreMatchMealsPage() {
 
   const currency = data?.currency || 'GBP';
   const regularAttendees = data?.regularAttendees || [];
+  const discountUsage = data?.discountUsage || [];
 
   // Detail links deliberately drop `embedded` and use target="_top": clicking a
   // meal should break out of the Commercial & Transformation iframe into a
@@ -222,6 +223,55 @@ export default function PreMatchMealsPage() {
                       </li>
                     ))}
                   </ul>
+                )}
+              </div>
+            </section>
+
+            <section className="mt-6 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
+              <div className="border-b border-zinc-200 px-6 py-4">
+                <h2 className="text-xl font-semibold text-zinc-900">Discount codes used</h2>
+                <p className="mt-0.5 text-sm text-zinc-500">Who used a promo/comp code, and for how much.</p>
+              </div>
+              <div className="px-6 py-5">
+                {discountUsage.length === 0 ? (
+                  <p className="text-sm text-zinc-500">No discount codes used in this date range.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-zinc-200 text-sm">
+                      <thead>
+                        <tr>
+                          <th className="px-3 py-2 text-left font-semibold text-zinc-700">Buyer</th>
+                          <th className="px-3 py-2 text-left font-semibold text-zinc-700">Code</th>
+                          <th className="px-3 py-2 text-left font-semibold text-zinc-700">Order #</th>
+                          <th className="px-3 py-2 text-left font-semibold text-zinc-700">Date</th>
+                          <th className="px-3 py-2 text-right font-semibold text-zinc-700">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-100">
+                        {discountUsage.map((usage) => (
+                          <tr key={`${usage.orderId}-${usage.promoCode}`}>
+                            <td className="px-3 py-2 text-zinc-800">{usage.customerName}</td>
+                            <td className="px-3 py-2">
+                              <span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">
+                                {usage.promoCode}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-zinc-600">{usage.orderNumber}</td>
+                            <td className="px-3 py-2 text-zinc-600">
+                              {new Date(usage.createdOn).toLocaleDateString('en-GB', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                              })}
+                            </td>
+                            <td className="px-3 py-2 text-right font-medium text-zinc-800">
+                              {formatCurrency(usage.amount, currency)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             </section>
