@@ -155,7 +155,7 @@ export default function PreMatchMealsPage() {
               <div className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-zinc-200">
                 <p className="text-sm text-zinc-500">🔁 Regular attendees</p>
                 <p className="mt-1 text-3xl font-bold text-zinc-900">{regularAttendees.length}</p>
-                <p className="mt-1 text-xs text-zinc-400">bought more than once in this range</p>
+                <p className="mt-1 text-xs text-zinc-400">attended more than one event in this range</p>
               </div>
             </section>
 
@@ -196,11 +196,11 @@ export default function PreMatchMealsPage() {
             <section className="rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
               <div className="border-b border-zinc-200 px-6 py-4">
                 <h2 className="text-xl font-semibold text-zinc-900">Regular attendees</h2>
-                <p className="mt-0.5 text-sm text-zinc-500">Buyers with more than one order in this date range.</p>
+                <p className="mt-0.5 text-sm text-zinc-500">Buyers who've attended more than one event in this date range.</p>
               </div>
               <div className="px-2 py-2 sm:px-4">
                 {regularAttendees.length === 0 ? (
-                  <p className="px-4 py-6 text-sm text-zinc-500">No repeat buyers in this date range yet.</p>
+                  <p className="px-4 py-6 text-sm text-zinc-500">No buyers attending multiple events in this date range yet.</p>
                 ) : (
                   <ul className="divide-y divide-zinc-100">
                     {regularAttendees.map((attendee) => (
@@ -213,7 +213,7 @@ export default function PreMatchMealsPage() {
                         </div>
                         <div className="flex items-center gap-2 text-sm">
                           <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-700">
-                            {attendee.orderCount} orders
+                            {attendee.eventCount} events
                           </span>
                           <span className="rounded-full bg-red-50 px-2 py-1 text-xs font-medium text-red-700">
                             {attendee.totalQuantity} meals
