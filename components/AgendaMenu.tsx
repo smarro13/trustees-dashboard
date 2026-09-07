@@ -1,36 +1,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabaseClient';
-
-type DashboardRole = 'admin' | 'management' | 'president' | 'safeguarding' | 'commercial' | null;
-
-const normalizeRole = (rawRole: unknown): DashboardRole => {
-  if (typeof rawRole !== 'string') return null;
-
-  const value = rawRole.trim().toLowerCase();
-  if (!value) return null;
-
-  if (value === 'admin') return 'admin';
-  if (value === 'management' || value === 'mangement') return 'management';
-  if (value === 'president') return 'president';
-  if (value === 'safeguarding') return 'safeguarding';
-  if (value === 'commercial' || value === 'commerical') return 'commercial';
-
-  return null;
-};
-
-const getEffectiveRole = (user: any): DashboardRole => {
-  const appRole = normalizeRole(user?.app_metadata?.role);
-  if (appRole) return appRole;
-
-  const userRole = normalizeRole(user?.user_metadata?.role);
-  if (userRole) return userRole;
-
-  const appRoles = Array.isArray(user?.app_metadata?.roles) ? user.app_metadata.roles : [];
-  const userRoles = Array.isArray(user?.user_metadata?.roles) ? user.user_metadata.roles : [];
-
-  return normalizeRole(appRoles[0]) || normalizeRole(userRoles[0]);
-};
+import { type DashboardRole, resolveRoleFromUser, canRoleViewAgendaHref } from '../lib/roles';
 
 export default function AgendaMenu() {
   const [open, setOpen] = useState(true);
@@ -39,7 +10,7 @@ export default function AgendaMenu() {
   useEffect(() => {
     const loadRole = async () => {
       const { data } = await supabase.auth.getUser();
-      setUserRole(getEffectiveRole(data.user));
+      setUserRole(resolveRoleFromUser(data.user));
     };
 
     void loadRole();
@@ -64,30 +35,7 @@ export default function AgendaMenu() {
     { label: '💬 AOB', href: '/agenda/aob' },
   ];
 
-  const items = allItems.filter((item) => {
-    if (!userRole || userRole === 'admin' || userRole === 'management') {
-      return true;
-    }
-
-    if (userRole === 'president') {
-      return item.href !== '/agenda/safeguarding';
-    }
-
-    if (userRole === 'safeguarding') {
-      return item.href === '/agenda/safeguarding';
-    }
-
-    if (userRole === 'commercial') {
-      return (
-        item.href === '/agenda/commercial-transformation' ||
-        item.href === '/agenda/actions' ||
-        item.href === '/agenda/matters-arising' ||
-        item.href === '/agenda/aob'
-      );
-    }
-
-    return false;
-  });
+  const items = allItems.filter((item) => canRoleViewAgendaHref(userRole, item.href));
 
   if (userRole === 'admin') {
     items.splice(15, 0, { label: '🔐 Admin Roles', href: '/admin/roles' });

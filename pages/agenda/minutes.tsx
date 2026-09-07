@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
+import { sortMinutesByTitleDate } from '../../lib/minutesSort';
 
 export default function MinutesPage() {
   const [minutes, setMinutes] = useState<any[]>([]);
@@ -24,10 +25,9 @@ export default function MinutesPage() {
       .select(`
         *,
         meetings ( meeting_date )
-      `)
-      .order('created_at', { ascending: false });
+      `);
 
-    if (minutesData) setMinutes(minutesData);
+    if (minutesData) setMinutes(sortMinutesByTitleDate(minutesData));
 
     const { data: meetingsData } = await supabase
       .from('meetings')

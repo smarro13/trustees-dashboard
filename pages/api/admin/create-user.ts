@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { randomBytes } from 'crypto';
 
-type DashboardRole = 'admin' | 'management' | 'president' | 'safeguarding' | 'commercial' | null;
+type DashboardRole = 'admin' | 'trustee' | 'director' | 'president' | 'safeguarding' | 'commercial' | null;
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,7 +13,10 @@ const normalizeRole = (rawRole: unknown): DashboardRole => {
   if (typeof rawRole !== 'string') return null;
   const value = rawRole.trim().toLowerCase();
   if (value === 'admin') return 'admin';
-  if (value === 'management' || value === 'mangement') return 'management';
+  if (value === 'trustee') return 'trustee';
+  // "management" is the legacy name for this role — keep accepting it so users
+  // already assigned it before the "director" rename still resolve correctly.
+  if (value === 'director' || value === 'directors' || value === 'management' || value === 'mangement') return 'director';
   if (value === 'president') return 'president';
   if (value === 'safeguarding') return 'safeguarding';
   if (value === 'commercial' || value === 'commerical') return 'commercial';

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
+import { sortMinutesByTitleDate } from '../../lib/minutesSort';
 
 const AGM_MINUTES_PREFIX = 'AGM - ';
 
@@ -27,10 +28,9 @@ export default function AGMMinutesPage() {
         *,
         meetings ( meeting_date )
       `)
-      .ilike('title', `${AGM_MINUTES_PREFIX}%`)
-      .order('created_at', { ascending: false });
+      .ilike('title', `${AGM_MINUTES_PREFIX}%`);
 
-    if (minutesData) setMinutes(minutesData);
+    if (minutesData) setMinutes(sortMinutesByTitleDate(minutesData));
 
     const { data: meetingsData } = await supabase
       .from('meetings')

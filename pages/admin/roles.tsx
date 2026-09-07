@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import ConfirmDialog from '../../components/ConfirmDialog';
-
-type DashboardRole = 'admin' | 'management' | 'president' | 'safeguarding' | 'commercial' | null;
+import { type DashboardRole, roleBadgeClass, roleLabel } from '../../lib/roles';
 
 type AdminUser = {
   id: string;
@@ -18,28 +17,15 @@ type CreatedCredentials = {
   temporaryPassword: string;
 };
 
-const roleOptions: Array<{ value: 'admin' | 'management' | 'president' | 'safeguarding' | 'commercial' | 'none'; label: string }> = [
+const roleOptions: Array<{ value: 'admin' | 'trustee' | 'director' | 'president' | 'safeguarding' | 'commercial' | 'none'; label: string }> = [
   { value: 'admin', label: 'Admin' },
-  { value: 'management', label: 'Management' },
+  { value: 'trustee', label: 'Trustee' },
+  { value: 'director', label: 'Director' },
   { value: 'president', label: 'President' },
   { value: 'safeguarding', label: 'Safeguarding' },
   { value: 'commercial', label: 'Commercial' },
   { value: 'none', label: 'No role' },
 ];
-
-const roleBadgeClass = (role: DashboardRole) => {
-  if (role === 'admin') return 'bg-purple-100 text-purple-800';
-  if (role === 'management') return 'bg-blue-100 text-blue-800';
-  if (role === 'president') return 'bg-rose-100 text-rose-800';
-  if (role === 'safeguarding') return 'bg-emerald-100 text-emerald-800';
-  if (role === 'commercial') return 'bg-amber-100 text-amber-800';
-  return 'bg-zinc-100 text-zinc-700';
-};
-
-const roleLabel = (role: DashboardRole) => {
-  if (!role) return 'No role';
-  return role.charAt(0).toUpperCase() + role.slice(1);
-};
 
 export default function AdminRolesPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -54,7 +40,7 @@ export default function AdminRolesPage() {
   const [deleting, setDeleting] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [newEmail, setNewEmail] = useState('');
-  const [newRole, setNewRole] = useState<'admin' | 'management' | 'president' | 'safeguarding' | 'commercial' | 'none'>('management');
+  const [newRole, setNewRole] = useState<'admin' | 'trustee' | 'director' | 'president' | 'safeguarding' | 'commercial' | 'none'>('director');
   const [addingUser, setAddingUser] = useState(false);
   const [createdCredentials, setCreatedCredentials] = useState<CreatedCredentials | null>(null);
 
@@ -236,7 +222,7 @@ export default function AdminRolesPage() {
         : null,
     );
     setNewEmail('');
-    setNewRole('management');
+    setNewRole('director');
     setStatus(`User ${created.email} created with a temporary password.`);
   };
 
