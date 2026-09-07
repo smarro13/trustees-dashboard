@@ -88,6 +88,7 @@ export const roleBadgeClass = (role: DashboardRole) => {
 const SAFEGUARDING_HREF = '/agenda/safeguarding';
 const COMMERCIAL_VIEW_HREFS = new Set([
   '/agenda/commercial-transformation',
+  '/agenda/prematch-meals',
   '/agenda/actions',
   '/agenda/matters-arising',
   '/agenda/aob',
