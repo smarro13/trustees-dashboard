@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import PublicSectionNav from '../../components/PublicSectionNav';
 import { supabase } from '../../lib/supabaseClient';
+import { getFileHref } from '../../lib/fileLinks';
 
 type PublicAction = {
   id: string;
@@ -1160,7 +1161,7 @@ export default function PublicHomePage() {
                         </p>
                         <div className="mt-3 flex items-center justify-between gap-3 text-sm">
                           <a
-                            href={minute.file_url}
+                            href={getFileHref(minute.file_url)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="font-medium text-red-700 hover:underline"
@@ -1200,7 +1201,7 @@ export default function PublicHomePage() {
                         </p>
                         <div className="mt-3 flex items-center justify-between gap-3 text-sm">
                           <a
-                            href={minute.file_url}
+                            href={getFileHref(minute.file_url)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="font-medium text-red-700 hover:underline"

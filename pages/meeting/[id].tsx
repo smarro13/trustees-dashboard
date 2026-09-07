@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { AGENDA_SECTIONS } from '../../components/agenda/agendaConfig';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 import { type DashboardRole, getCurrentUserRole, canRoleViewAgendaHref } from '../../lib/roles';
+import { getFileHref } from '../../lib/fileLinks';
 
 type CommercialAttachment = { name?: string; url?: string };
 
@@ -477,7 +478,7 @@ export default function MeetingPage() {
 
                 {m.file_url ? (
                   <a
-                    href={m.file_url}
+                    href={getFileHref(m.file_url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-2 inline-flex items-center text-blue-600 hover:underline"

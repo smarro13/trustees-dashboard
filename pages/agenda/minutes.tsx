@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabaseClient';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
 import { sortMinutesByTitleDate } from '../../lib/minutesSort';
+import { getFileHref } from '../../lib/fileLinks';
 
 export default function MinutesPage() {
   const [minutes, setMinutes] = useState<any[]>([]);
@@ -257,7 +258,7 @@ export default function MinutesPage() {
                 )}
 
                 <a
-                  href={m.file_url}
+                  href={getFileHref(m.file_url)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-2 inline-block text-blue-600 hover:underline"
