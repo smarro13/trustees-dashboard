@@ -10,6 +10,7 @@ export type OrderLineItem = {
   orderId: string;
   orderNumber: string;
   createdOn: string;
+  customerKey: string;
   customerName: string;
   customerEmail: string;
   productName: string;
@@ -21,6 +22,7 @@ export type OrderLineItem = {
 };
 
 export type RegularAttendee = {
+  key: string;
   name: string;
   eventCount: number;
   totalQuantity: number;
@@ -119,12 +121,12 @@ export const getInitials = (name: string) => {
 };
 
 export const buyersForProduct = (orders: OrderLineItem[], productName: string) => {
-  const byName = new Map<string, number>();
+  const byCustomer = new Map<string, { key: string; name: string; quantity: number }>();
   for (const order of orders) {
     if (order.productName !== productName) continue;
-    byName.set(order.customerName, (byName.get(order.customerName) || 0) + order.quantity);
+    const existing = byCustomer.get(order.customerKey) || { key: order.customerKey, name: order.customerName, quantity: 0 };
+    existing.quantity += order.quantity;
+    byCustomer.set(order.customerKey, existing);
   }
-  return [...byName.entries()]
-    .map(([name, quantity]) => ({ name, quantity }))
-    .sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name));
+  return [...byCustomer.values()].sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name));
 };

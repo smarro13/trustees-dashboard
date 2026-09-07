@@ -204,7 +204,7 @@ export default function PreMatchMealsPage() {
                 ) : (
                   <ul className="divide-y divide-zinc-100">
                     {regularAttendees.map((attendee) => (
-                      <li key={attendee.name} className="flex items-center justify-between gap-3 px-2 py-3">
+                      <li key={attendee.key} className="flex items-center justify-between gap-3 px-2 py-3">
                         <div className="flex items-center gap-3">
                           <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${getAvatarClass(attendee.name)}`}>
                             {getInitials(attendee.name)}
