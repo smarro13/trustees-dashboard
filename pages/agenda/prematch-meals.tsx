@@ -10,6 +10,19 @@ type ProductStat = {
   revenue: number;
 };
 
+type OrderLineItem = {
+  orderId: string;
+  orderNumber: string;
+  createdOn: string;
+  customerEmail: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  lineRevenue: number;
+  fulfillmentStatus: string;
+  paymentState: string;
+};
+
 type AnalyticsResponse = {
   ok: boolean;
   error?: string;
@@ -21,6 +34,7 @@ type AnalyticsResponse = {
   totalRevenue?: number;
   currency?: string;
   byProduct?: ProductStat[];
+  orders?: OrderLineItem[];
   generatedAt?: string;
 };
 
@@ -47,6 +61,7 @@ export default function PreMatchMealsPage() {
   const [data, setData] = useState<AnalyticsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
 
   const loadAnalytics = async () => {
     setLoading(true);
@@ -77,6 +92,7 @@ export default function PreMatchMealsPage() {
       }
 
       setData(payload);
+      setSelectedProduct(null);
     } catch (err) {
       setNotice({ type: 'error', message: 'Failed to reach the analytics API.' });
       setData(null);
@@ -91,6 +107,9 @@ export default function PreMatchMealsPage() {
   }, []);
 
   const currency = data?.currency || 'GBP';
+  const selectedProductOrders = selectedProduct
+    ? (data?.orders || []).filter((o) => o.productName === selectedProduct)
+    : [];
 
   return (
     <main className="min-h-screen">
@@ -190,6 +209,7 @@ export default function PreMatchMealsPage() {
             <section className="rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
               <div className="border-b border-zinc-200 px-6 py-4">
                 <h2 className="text-xl font-semibold text-zinc-900">By product</h2>
+                <p className="mt-0.5 text-sm text-zinc-500">Click a meal to see the individual orders behind it.</p>
               </div>
               <div className="px-6 py-5">
                 {!data.byProduct || data.byProduct.length === 0 ? (
@@ -207,19 +227,103 @@ export default function PreMatchMealsPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-100">
-                        {data.byProduct.map((p) => (
-                          <tr key={p.productName}>
-                            <td className="px-3 py-2 text-zinc-800">{p.productName}</td>
-                            <td className="px-3 py-2 text-right text-zinc-800">{p.quantity}</td>
-                            <td className="px-3 py-2 text-right text-zinc-800">{formatCurrency(p.revenue, currency)}</td>
-                          </tr>
-                        ))}
+                        {data.byProduct.map((p) => {
+                          const isSelected = selectedProduct === p.productName;
+                          return (
+                            <tr
+                              key={p.productName}
+                              onClick={() => setSelectedProduct(isSelected ? null : p.productName)}
+                              className={`cursor-pointer transition-colors ${isSelected ? 'bg-red-50' : 'hover:bg-zinc-50'}`}
+                            >
+                              <td className="px-3 py-2 text-zinc-800">
+                                <span className={`mr-1 inline-block transition-transform ${isSelected ? 'rotate-90' : ''}`}>
+                                  ▸
+                                </span>
+                                {p.productName}
+                              </td>
+                              <td className="px-3 py-2 text-right text-zinc-800">{p.quantity}</td>
+                              <td className="px-3 py-2 text-right text-zinc-800">{formatCurrency(p.revenue, currency)}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
                 )}
               </div>
             </section>
+
+            {selectedProduct && (
+              <section className="mt-6 rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
+                <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-6 py-4">
+                  <div>
+                    <h2 className="text-xl font-semibold text-zinc-900">{selectedProduct}</h2>
+                    <p className="mt-0.5 text-sm text-zinc-500">
+                      {selectedProductOrders.length} order{selectedProductOrders.length === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedProduct(null)}
+                    className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="px-6 py-5">
+                  {selectedProductOrders.length === 0 ? (
+                    <p className="text-sm text-zinc-500">No individual order detail available for this product.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-zinc-200 text-sm">
+                        <thead>
+                          <tr>
+                            <th className="px-3 py-2 text-left font-semibold text-zinc-700">Date</th>
+                            <th className="px-3 py-2 text-left font-semibold text-zinc-700">Order #</th>
+                            <th className="px-3 py-2 text-left font-semibold text-zinc-700">Customer</th>
+                            <th className="px-3 py-2 text-right font-semibold text-zinc-700">Quantity</th>
+                            <th className="px-3 py-2 text-right font-semibold text-zinc-700">Unit price</th>
+                            <th className="px-3 py-2 text-right font-semibold text-zinc-700">Revenue</th>
+                            <th className="px-3 py-2 text-left font-semibold text-zinc-700">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100">
+                          {selectedProductOrders.map((order) => (
+                            <tr key={`${order.orderId}-${order.productName}`}>
+                              <td className="px-3 py-2 text-zinc-800">
+                                {new Date(order.createdOn).toLocaleDateString('en-GB', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric',
+                                })}
+                              </td>
+                              <td className="px-3 py-2 text-zinc-800">{order.orderNumber}</td>
+                              <td className="px-3 py-2 text-zinc-800">{order.customerEmail || '—'}</td>
+                              <td className="px-3 py-2 text-right text-zinc-800">{order.quantity}</td>
+                              <td className="px-3 py-2 text-right text-zinc-800">{formatCurrency(order.unitPrice, currency)}</td>
+                              <td className="px-3 py-2 text-right text-zinc-800">{formatCurrency(order.lineRevenue, currency)}</td>
+                              <td className="px-3 py-2">
+                                <span
+                                  className={`rounded-full px-2 py-1 text-xs font-medium ${
+                                    order.fulfillmentStatus === 'FULFILLED'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : order.fulfillmentStatus === 'CANCELED'
+                                        ? 'bg-rose-100 text-rose-800'
+                                        : 'bg-amber-100 text-amber-800'
+                                  }`}
+                                >
+                                  {order.fulfillmentStatus}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
 
             {data.generatedAt && (
               <p className="mt-4 text-xs text-zinc-400">
