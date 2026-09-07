@@ -1,8 +1,8 @@
 -- Row Level Security for public.safeguarding_updates
 --
--- Mirrors the app-level access rules in lib/roles.ts / proxy.ts:
+-- Mirrors the app-level access rules in lib/roles.ts / lib/presidentPermissions.ts:
 --   SELECT           : admin, trustee, safeguarding
---   INSERT/UPDATE/DEL: admin, safeguarding
+--   INSERT/UPDATE/DEL: admin, trustee, safeguarding
 --
 -- Everyone else (director, president, commercial, no role) gets zero rows
 -- back instead of an error, which matches what the client already hides.
@@ -51,22 +51,22 @@ create policy "safeguarding_updates_insert"
   on public.safeguarding_updates
   for insert
   to authenticated
-  with check (public.dashboard_role() in ('admin', 'safeguarding'));
+  with check (public.dashboard_role() in ('admin', 'trustee', 'safeguarding'));
 
 drop policy if exists "safeguarding_updates_update" on public.safeguarding_updates;
 create policy "safeguarding_updates_update"
   on public.safeguarding_updates
   for update
   to authenticated
-  using (public.dashboard_role() in ('admin', 'safeguarding'))
-  with check (public.dashboard_role() in ('admin', 'safeguarding'));
+  using (public.dashboard_role() in ('admin', 'trustee', 'safeguarding'))
+  with check (public.dashboard_role() in ('admin', 'trustee', 'safeguarding'));
 
 drop policy if exists "safeguarding_updates_delete" on public.safeguarding_updates;
 create policy "safeguarding_updates_delete"
   on public.safeguarding_updates
   for delete
   to authenticated
-  using (public.dashboard_role() in ('admin', 'safeguarding'));
+  using (public.dashboard_role() in ('admin', 'trustee', 'safeguarding'));
 
 -- Note: the /agenda/safeguarding upload form and pages/meeting/[id].tsx also
 -- read/write this table using the browser (anon-key) Supabase client, so
