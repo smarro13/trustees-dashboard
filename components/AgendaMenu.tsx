@@ -26,6 +26,7 @@ export default function AgendaMenu() {
     { label: '💰 Treasury Report', href: '/agenda/treasury' },
     { label: '🏢 Trading Company Report', href: '/agenda/trading' },
     { label: '📈 Commercial & Transformation', href: '/agenda/commercial-transformation' },
+    { label: '🍽️ Pre-Match Meals', href: '/agenda/prematch-meals' },
     { label: '🎉 Events Planning', href: '/agenda/events' },
     { label: '👥 Membership Report', href: '/agenda/membership' },
     { label: '🏉 Rugby Report', href: '/agenda/rugby' },
@@ -38,7 +39,8 @@ export default function AgendaMenu() {
   const items = allItems.filter((item) => canRoleViewAgendaHref(userRole, item.href));
 
   if (userRole === 'admin') {
-    items.splice(15, 0, { label: '🔐 Admin Roles', href: '/admin/roles' });
+    const aobIndex = items.findIndex((item) => item.href === '/agenda/aob');
+    items.splice(aobIndex === -1 ? items.length : aobIndex, 0, { label: '🔐 Admin Roles', href: '/admin/roles' });
   }
 
   return (
