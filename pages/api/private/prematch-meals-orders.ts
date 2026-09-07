@@ -153,7 +153,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let currency = 'GBP';
     let matchedOrderCount = 0;
     const byProduct = new Map<string, { quantity: number; revenue: number }>();
-    const byCustomer = new Map<string, { orderIds: Set<string>; quantity: number }>();
+    // Tracks distinct events (products) each customer has bought into — a
+    // "regular" is someone who's attended more than one event, not just
+    // someone with multiple orders for the same one.
+    const byCustomer = new Map<string, { products: Set<string>; quantity: number }>();
     const lineItemDetails: Array<{
       orderId: string;
       orderNumber: string;
@@ -195,8 +198,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         byProduct.set(item.productName, existing);
 
         const customerName = getCustomerName(order);
-        const customerEntry = byCustomer.get(customerName) || { orderIds: new Set<string>(), quantity: 0 };
-        customerEntry.orderIds.add(order.id);
+        const customerEntry = byCustomer.get(customerName) || { products: new Set<string>(), quantity: 0 };
+        customerEntry.products.add(item.productName);
         customerEntry.quantity += qty;
         byCustomer.set(customerName, customerEntry);
 
@@ -237,12 +240,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           revenue: Math.round(stats.revenue * 100) / 100,
         }))
         .sort((a, b) => b.revenue - a.revenue),
-      // Buyers who've ordered across more than one order in this date range —
-      // i.e. the regulars, not one-off buyers.
+      // Buyers who've bought into more than one distinct event (product) in
+      // this date range — i.e. actual regulars, not just repeat orders for
+      // the same one event.
       regularAttendees: [...byCustomer.entries()]
-        .map(([name, stats]) => ({ name, orderCount: stats.orderIds.size, totalQuantity: stats.quantity }))
-        .filter((r) => r.orderCount >= 2)
-        .sort((a, b) => b.orderCount - a.orderCount || b.totalQuantity - a.totalQuantity),
+        .map(([name, stats]) => ({ name, eventCount: stats.products.size, totalQuantity: stats.quantity }))
+        .filter((r) => r.eventCount >= 2)
+        .sort((a, b) => b.eventCount - a.eventCount || b.totalQuantity - a.totalQuantity),
       orders: lineItemDetails,
       generatedAt: new Date().toISOString(),
     });

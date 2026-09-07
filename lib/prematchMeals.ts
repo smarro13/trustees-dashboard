@@ -22,7 +22,7 @@ export type OrderLineItem = {
 
 export type RegularAttendee = {
   name: string;
-  orderCount: number;
+  eventCount: number;
   totalQuantity: number;
 };
 
