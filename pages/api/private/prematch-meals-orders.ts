@@ -49,6 +49,7 @@ type SquarespaceOrder = {
   id: string;
   orderNumber: string;
   createdOn: string;
+  customerId?: string;
   customerEmail: string;
   billingAddress?: SquarespaceAddress;
   shippingAddress?: SquarespaceAddress;
@@ -56,6 +57,13 @@ type SquarespaceOrder = {
   paymentState: string;
   lineItems: SquarespaceLineItem[];
 };
+
+// Squarespace's stable per-customer ID — this is what buyers must be grouped
+// by. Display name/email alone aren't safe keys: two different customers can
+// share a name, and the same customer's name can be entered slightly
+// differently across orders.
+const getCustomerKey = (order: SquarespaceOrder): string =>
+  order.customerId || order.customerEmail || `unknown:${order.id}`;
 
 const getCustomerName = (order: SquarespaceOrder): string => {
   const name = (addr?: SquarespaceAddress) =>
@@ -155,12 +163,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const byProduct = new Map<string, { quantity: number; revenue: number }>();
     // Tracks distinct events (products) each customer has bought into — a
     // "regular" is someone who's attended more than one event, not just
-    // someone with multiple orders for the same one.
-    const byCustomer = new Map<string, { products: Set<string>; quantity: number }>();
+    // someone with multiple orders for the same one. Keyed by Squarespace's
+    // stable customerId (see getCustomerKey), not display name.
+    const byCustomer = new Map<string, { name: string; products: Set<string>; quantity: number }>();
     const lineItemDetails: Array<{
       orderId: string;
       orderNumber: string;
       createdOn: string;
+      customerKey: string;
       customerName: string;
       customerEmail: string;
       productName: string;
@@ -198,15 +208,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         byProduct.set(item.productName, existing);
 
         const customerName = getCustomerName(order);
-        const customerEntry = byCustomer.get(customerName) || { products: new Set<string>(), quantity: 0 };
+        const customerKey = getCustomerKey(order);
+        const customerEntry = byCustomer.get(customerKey) || { name: customerName, products: new Set<string>(), quantity: 0 };
         customerEntry.products.add(item.productName);
         customerEntry.quantity += qty;
-        byCustomer.set(customerName, customerEntry);
+        byCustomer.set(customerKey, customerEntry);
 
         lineItemDetails.push({
           orderId: order.id,
           orderNumber: order.orderNumber,
           createdOn: order.createdOn,
+          customerKey,
           customerName,
           customerEmail: order.customerEmail || '',
           productName: item.productName,
@@ -244,7 +256,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // this date range — i.e. actual regulars, not just repeat orders for
       // the same one event.
       regularAttendees: [...byCustomer.entries()]
-        .map(([name, stats]) => ({ name, eventCount: stats.products.size, totalQuantity: stats.quantity }))
+        .map(([key, stats]) => ({ key, name: stats.name, eventCount: stats.products.size, totalQuantity: stats.quantity }))
         .filter((r) => r.eventCount >= 2)
         .sort((a, b) => b.eventCount - a.eventCount || b.totalQuantity - a.totalQuantity),
       orders: lineItemDetails,

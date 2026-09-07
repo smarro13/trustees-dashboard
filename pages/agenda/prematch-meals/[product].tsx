@@ -115,7 +115,7 @@ export default function PreMatchMealDetailPage() {
                 ) : (
                   <ul className="divide-y divide-zinc-100">
                     {buyers.map((buyer) => (
-                      <li key={buyer.name} className="flex items-center justify-between gap-3 px-2 py-3">
+                      <li key={buyer.key} className="flex items-center justify-between gap-3 px-2 py-3">
                         <div className="flex items-center gap-3">
                           <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${getAvatarClass(buyer.name)}`}>
                             {getInitials(buyer.name)}
