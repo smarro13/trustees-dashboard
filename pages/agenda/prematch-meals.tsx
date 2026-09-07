@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { supabase } from '../../lib/supabaseClient';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 
@@ -39,6 +40,8 @@ const formatCurrency = (value: number, currency: string) => {
 };
 
 export default function PreMatchMealsPage() {
+  const router = useRouter();
+  const embedded = router.query.embedded === '1';
   const [days, setDays] = useState(90);
   const [productFilter, setProductFilter] = useState('pre match');
   const [data, setData] = useState<AnalyticsResponse | null>(null);
@@ -91,11 +94,13 @@ export default function PreMatchMealsPage() {
 
   return (
     <main className="min-h-screen">
-      <div className="mx-auto w-full max-w-6xl px-4 py-10">
-        <header className="mb-8">
-          <Link href="/" className="mb-3 inline-block text-sm font-medium text-blue-600 hover:underline">
-            ← Back to dashboard
-          </Link>
+      <div className={embedded ? 'mx-auto w-full px-2 py-2' : 'mx-auto w-full max-w-6xl px-4 py-10'}>
+        <header className={embedded ? 'mb-4' : 'mb-8'}>
+          {!embedded && (
+            <Link href="/agenda/commercial-transformation" className="mb-3 inline-block text-sm font-medium text-blue-600 hover:underline">
+              ← Back to Commercial & Transformation
+            </Link>
+          )}
 
           <h1 className="text-3xl font-extrabold text-zinc-900">Pre-Match Meals</h1>
           <p className="mt-1 text-zinc-600">
