@@ -9,8 +9,6 @@ const COMMERCIAL_EDITABLE_PATHS = new Set([
   '/agenda/aob',
 ]);
 const SAFEGUARDING_EDITABLE_PATHS = new Set(['/agenda/safeguarding']);
-// Trustees are a read-only oversight role — no agenda page is editable by default.
-const TRUSTEE_EDITABLE_PATHS = new Set<string>();
 
 export const PRESIDENT_EDIT_BLOCK_MESSAGE =
   'You have read-only access on this page for your current role.';
@@ -24,11 +22,11 @@ export const canCurrentUserEditThisAgendaPage = async (): Promise<boolean> => {
   const { data } = await supabase.auth.getUser();
   const role = resolveRoleFromUser(data.user);
 
-  if (!role || role === 'admin' || role === 'director') return true;
+  // Trustees have full governance authority — same edit access as admin/director.
+  if (!role || role === 'admin' || role === 'director' || role === 'trustee') return true;
   if (role === 'president') return PRESIDENT_EDITABLE_PATHS.has(pathname);
   if (role === 'commercial') return COMMERCIAL_EDITABLE_PATHS.has(pathname);
   if (role === 'safeguarding') return SAFEGUARDING_EDITABLE_PATHS.has(pathname);
-  if (role === 'trustee') return TRUSTEE_EDITABLE_PATHS.has(pathname);
 
   return true;
 };
