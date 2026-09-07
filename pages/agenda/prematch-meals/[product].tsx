@@ -5,6 +5,7 @@ import InlineNoticeBanner, { type InlineNotice } from '../../../components/Inlin
 import {
   type AnalyticsResponse,
   buyersForProduct,
+  discountCodesByCustomerForProduct,
   fetchPrematchMealsAnalytics,
   formatCurrency,
   getAvatarClass,
@@ -55,6 +56,9 @@ export default function PreMatchMealDetailPage() {
   const currency = data?.currency || 'GBP';
   const stat = data?.byProduct?.find((p) => p.productName === productName);
   const buyers = data?.orders ? buyersForProduct(data.orders, productName) : [];
+  const discountCodesByCustomer = data?.discountUsage
+    ? discountCodesByCustomerForProduct(data.discountUsage, productName)
+    : new Map<string, string[]>();
 
   const backHref = (() => {
     const params = new URLSearchParams({ days: String(days), productFilter });
@@ -114,19 +118,29 @@ export default function PreMatchMealDetailPage() {
                   <p className="px-4 py-8 text-center text-sm text-zinc-500">No buyer detail available for this meal.</p>
                 ) : (
                   <ul className="divide-y divide-zinc-100">
-                    {buyers.map((buyer) => (
-                      <li key={buyer.key} className="flex items-center justify-between gap-3 px-2 py-3">
-                        <div className="flex items-center gap-3">
-                          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${getAvatarClass(buyer.name)}`}>
-                            {getInitials(buyer.name)}
+                    {buyers.map((buyer) => {
+                      const discountCodes = discountCodesByCustomer.get(buyer.key);
+                      return (
+                        <li key={buyer.key} className="flex items-center justify-between gap-3 px-2 py-3">
+                          <div className="flex items-center gap-3">
+                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${getAvatarClass(buyer.name)}`}>
+                              {getInitials(buyer.name)}
+                            </span>
+                            <div>
+                              <p className="font-medium text-zinc-800">{buyer.name}</p>
+                              {discountCodes && discountCodes.length > 0 && (
+                                <p className="mt-0.5 text-xs font-medium text-amber-700">
+                                  🏷️ Discount used ({discountCodes.join(', ')})
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <span className="rounded-full bg-red-50 px-3 py-1 text-sm font-semibold text-red-700">
+                            × {buyer.quantity}
                           </span>
-                          <span className="font-medium text-zinc-800">{buyer.name}</span>
-                        </div>
-                        <span className="rounded-full bg-red-50 px-3 py-1 text-sm font-semibold text-red-700">
-                          × {buyer.quantity}
-                        </span>
-                      </li>
-                    ))}
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>

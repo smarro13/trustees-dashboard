@@ -209,11 +209,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       orderId: string;
       orderNumber: string;
       createdOn: string;
+      customerKey: string;
       customerName: string;
       customerEmail: string;
       promoCode: string;
       discountName: string;
       amount: number;
+      productNames: string[];
     }> = [];
 
     for (const order of orders) {
@@ -222,6 +224,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (order.paymentState && !['PAID', 'PARTIALLY_PAID', 'AUTHORIZED'].includes(order.paymentState)) continue;
 
       let matchedThisOrder = false;
+      const matchedProductNames = new Set<string>();
       const paidRatio = getOrderPaidRatio(order);
 
       for (const item of order.lineItems || []) {
@@ -231,6 +234,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (excludeUnitPrice !== null && Math.abs(unitPrice - excludeUnitPrice) < 0.001) continue;
 
         matchedThisOrder = true;
+        matchedProductNames.add(item.productName);
         const qty = item.quantity || 0;
         // unitPricePaid is always the pre-discount list price, so apply the
         // order's discount/refund ratio to get what was actually collected.
@@ -281,11 +285,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             orderId: order.id,
             orderNumber: order.orderNumber,
             createdOn: order.createdOn,
+            customerKey: getCustomerKey(order),
             customerName: getCustomerName(order),
             customerEmail: order.customerEmail || '',
             promoCode: discountLine.promoCode || '(no code)',
             discountName: discountLine.name || '',
             amount: Math.round(amount * 100) / 100,
+            productNames: [...matchedProductNames],
           });
         }
       }
