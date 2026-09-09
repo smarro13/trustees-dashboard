@@ -56,9 +56,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ ok: false, error: 'You cannot force sign out yourself.' });
   }
 
-  // Revoke all sessions for the target user globally
-  const { error } = await (supabaseAdmin.auth.admin as any).signOut(userId, 'global');
-  if (error) return res.status(500).json({ ok: false, error: error.message });
+  // Revoke all sessions for the target user globally.
+  //
+  // auth-js's admin.signOut() takes a user *access-token JWT*, not a user id —
+  // passing the id makes GoTrue fail with "invalid JWT ... invalid number of
+  // segments". The admin REST endpoint below revokes by user id instead.
+  //
+  // Note: this invalidates the user's refresh token immediately, but any access
+  // token already in their browser stays valid until it expires (project JWT
+  // expiry). For an instant, everyone-at-once bounce use the
+  // FORCE_DASHBOARD_LOGOUT env switch handled in proxy.ts.
+  const resp = await fetch(
+    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${userId}/logout?scope=global`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
+      },
+    },
+  );
+
+  if (!resp.ok && resp.status !== 204) {
+    const body = await resp.text();
+    return res.status(500).json({ ok: false, error: body || `Sign out failed (${resp.status})` });
+  }
 
   return res.status(200).json({ ok: true });
 }
