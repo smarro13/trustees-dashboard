@@ -56,31 +56,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ ok: false, error: 'You cannot force sign out yourself.' });
   }
 
-  // Revoke all sessions for the target user globally.
+  // Revoke all sessions for the target user by deleting their rows from
+  // auth.sessions (auth.refresh_tokens cascades off it). Done via a
+  // SECURITY DEFINER RPC because PostgREST can't touch the auth schema
+  // directly, and because GoTrue has no stable per-user admin-logout REST
+  // route across versions (auth-js's admin.signOut() wants a user JWT, not
+  // an id; the /admin/users/{id}/logout endpoint 404s on older builds).
   //
-  // auth-js's admin.signOut() takes a user *access-token JWT*, not a user id —
-  // passing the id makes GoTrue fail with "invalid JWT ... invalid number of
-  // segments". The admin REST endpoint below revokes by user id instead.
+  // See supabase/policies/admin_force_signout.sql for the function.
   //
-  // Note: this invalidates the user's refresh token immediately, but any access
-  // token already in their browser stays valid until it expires (project JWT
-  // expiry). For an instant, everyone-at-once bounce use the
+  // Note: this drops the refresh token immediately, but an access token
+  // already in the user's browser stays valid until it expires (project JWT
+  // expiry). For an instant, everyone-at-once bounce, use the
   // FORCE_DASHBOARD_LOGOUT env switch handled in proxy.ts.
-  const resp = await fetch(
-    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${userId}/logout?scope=global`,
-    {
-      method: 'POST',
-      headers: {
-        apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
-      },
-    },
-  );
-
-  if (!resp.ok && resp.status !== 204) {
-    const body = await resp.text();
-    return res.status(500).json({ ok: false, error: body || `Sign out failed (${resp.status})` });
-  }
+  const { error } = await supabaseAdmin.rpc('admin_force_signout', { target_user: userId });
+  if (error) return res.status(500).json({ ok: false, error: error.message });
 
   return res.status(200).json({ ok: true });
 }
