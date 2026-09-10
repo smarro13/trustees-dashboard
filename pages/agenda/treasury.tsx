@@ -388,10 +388,16 @@ export default function TreasuryPage() {
             .join('\n\n');
 
           // Update report with summary
-          await supabase
+          const { error: summaryError } = await supabase
             .from('treasury_reports')
             .update({ summary })
             .eq('id', report.id);
+
+          if (summaryError) {
+            showNotice('error', `Report saved, but its summary could not be updated: ${summaryError.message}`);
+            setLoading(false);
+            return;
+          }
         }
       }
 

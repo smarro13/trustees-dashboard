@@ -107,7 +107,7 @@ export default function MattersArisingPage() {
 
     // 2️⃣ Optionally create action
     if (addToActions && data) {
-      await supabase.from('action_items').insert({
+      const { error: actionError } = await supabase.from('action_items').insert({
         title,
         description: details || null,
         meeting_id: nextMeetingId,
@@ -115,6 +115,13 @@ export default function MattersArisingPage() {
         status: 'Open',
         created_by: raisedBy || null,
       });
+
+      if (actionError) {
+        setLoading(false);
+        loadData();
+        showNotice('error', 'Matter saved, but the linked action could not be created: ' + actionError.message);
+        return;
+      }
     }
 
     setTitle('');
