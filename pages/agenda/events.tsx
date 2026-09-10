@@ -74,7 +74,7 @@ export default function EventsPlanningPage() {
         ? new Date(eventMonth + '-01').toISOString()
         : null;
 
-    await supabase.from('events_planning').insert({
+    const { error } = await supabase.from('events_planning').insert({
       title,
       event_date: monthDate, // store month as first day
       suggested_date: suggestedDate || null,
@@ -84,6 +84,12 @@ export default function EventsPlanningPage() {
       discussion_points: discussionPoints || null,
       meeting_id: meetingId,
     });
+    setLoading(false);
+
+    if (error) {
+      window.alert(`Could not save event: ${error.message}`);
+      return;
+    }
 
     setTitle('');
     setEventMonth('');
@@ -93,7 +99,6 @@ export default function EventsPlanningPage() {
     setNotes('');
     setDiscussionPoints('');
     setMeetingId(null);
-    setLoading(false);
     loadData();
   };
 

@@ -58,20 +58,25 @@ export default function CorrespondencePage() {
 
     setLoading(true);
 
-    await supabase.from('correspondence').insert({
+    const { error } = await supabase.from('correspondence').insert({
       subject,
       sender: sender || null,
       summary,
       received_date: receivedDate || null,
       meeting_id: meetingId,
     });
+    setLoading(false);
+
+    if (error) {
+      window.alert(`Could not save correspondence: ${error.message}`);
+      return;
+    }
 
     setSubject('');
     setSender('');
     setSummary('');
     setReceivedDate('');
     setMeetingId(null);
-    setLoading(false);
 
     loadData();
   };

@@ -68,16 +68,21 @@ export default function ApologiesPage() {
     if (!name.trim()) return;
 
     setLoading(true);
-    await supabase.from('apologies').insert({
+    const { error } = await supabase.from('apologies').insert({
       name,
       note,
       meeting_id: meetingId
     });
+    setLoading(false);
+
+    if (error) {
+      window.alert(`Could not save apology: ${error.message}`);
+      return;
+    }
 
     setName('');
     setNote('');
     setMeetingId(null);
-    setLoading(false);
     loadApologies();
   };
 

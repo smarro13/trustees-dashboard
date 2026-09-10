@@ -58,20 +58,25 @@ export default function ConflictsPage() {
 
     setLoading(true);
 
-    await supabase.from('conflicts_of_interest').insert({
+    const { error } = await supabase.from('conflicts_of_interest').insert({
       trustee_name: trusteeName,
       interest_description: description,
       standing,
       meeting_id: standing ? null : meetingId,
       action_taken: actionTaken || null
     });
+    setLoading(false);
+
+    if (error) {
+      window.alert(`Could not save conflict of interest: ${error.message}`);
+      return;
+    }
 
     setTrusteeName('');
     setDescription('');
     setStanding(false);
     setMeetingId(null);
     setActionTaken('');
-    setLoading(false);
 
     loadData();
   };

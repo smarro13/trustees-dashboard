@@ -7,6 +7,8 @@ import {
   parseAction,
   parseMatterItems,
   createDocxBlob,
+  MINUTES_DOC_MIME,
+  MINUTES_DOC_EXTENSION,
   type Action,
   type MatterGroup,
 } from '../../lib/minutesGenerator';
@@ -409,7 +411,7 @@ export default function MinutesFormatterPage() {
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = `${meetingTitle || 'minutes'}-${meetingDate || 'draft'}.docx`.replace(/\s+/g, '-');
+      anchor.download = `${meetingTitle || 'minutes'}-${meetingDate || 'draft'}.${MINUTES_DOC_EXTENSION}`.replace(/\s+/g, '-');
       document.body.appendChild(anchor);
       anchor.click();
       document.body.removeChild(anchor);
@@ -431,7 +433,7 @@ export default function MinutesFormatterPage() {
     setSavingMinutesDoc(true);
 
     try {
-      const fileName = `${meetingTitle || 'minutes'}-${meetingDate || new Date().toISOString().slice(0, 10)}.docx`
+      const fileName = `${meetingTitle || 'minutes'}-${meetingDate || new Date().toISOString().slice(0, 10)}.${MINUTES_DOC_EXTENSION}`
         .replace(/\s+/g, '-')
         .replace(/[^a-zA-Z0-9._-]/g, '')
         .toLowerCase();
@@ -450,7 +452,7 @@ export default function MinutesFormatterPage() {
 
       const { error: uploadError } = await supabase.storage
         .from('minutes')
-        .upload(filePath, blob, { contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', upsert: false });
+        .upload(filePath, blob, { contentType: MINUTES_DOC_MIME, upsert: false });
 
       if (uploadError) {
         showNotice('error', `Failed to upload minutes document: ${uploadError.message}`);

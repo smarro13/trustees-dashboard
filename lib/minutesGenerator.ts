@@ -205,7 +205,24 @@ export const markdownToHtml = (md: string): string => {
 };
 
 /**
- * Create a simple HTML representation of minutes that Word can open as DOCX
+ * MIME type and file extension for the generated minutes document.
+ *
+ * The generator emits "Word HTML" (an HTML document with the MSO / Word XML
+ * namespace preamble) rather than a real OOXML .docx package. Word opens this
+ * reliably when it is served as `application/msword` with a `.doc` extension.
+ * It must NOT be labelled as
+ * `application/vnd.openxmlformats-officedocument.wordprocessingml.document`
+ * or given a `.docx` extension — modern Word / Office 365 / Google Docs
+ * validate the ZIP/OOXML structure and reject the file as corrupt ("Word
+ * found unreadable content"), which is why the saved minutes wouldn't open.
+ */
+export const MINUTES_DOC_MIME = 'application/msword';
+export const MINUTES_DOC_EXTENSION = 'doc';
+
+/**
+ * Create a Word-compatible document (Word HTML) representation of minutes.
+ * Returns a Blob typed as {@link MINUTES_DOC_MIME}; save it with a
+ * `.${MINUTES_DOC_EXTENSION}` extension.
  */
 export const createDocxBlob = (
   title: string,
@@ -223,9 +240,13 @@ export const createDocxBlob = (
         .join('')}
        ${matterGroups.length > 0 ? `<h2>Matters Arising &amp; Other Business</h2>${matterGroups.map((g) => `<h3>${g.heading}</h3><ul>${g.items.map((item) => `<li>${item.text}${item.isAction ? ' <span class="action-flag">[ACTION]</span>' : ''}</li>`).join('')}</ul>`).join('')}` : ''}`;
   const html = `<!DOCTYPE html>
-<html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
 <head>
   <meta charset="utf-8"/>
+  <meta name="ProgId" content="Word.Document"/>
+  <!--[if gte mso 9]><xml>
+    <w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument>
+  </xml><![endif]-->
   <style>
     body { font-family: Calibri, Arial; margin: 20px; }
     h1 { font-size: 28pt; font-weight: bold; margin-bottom: 10px; }
@@ -284,5 +305,7 @@ export const createDocxBlob = (
 </body>
 </html>`;
 
-  return new Blob([html], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  // BOM + msword MIME so Word (desktop, 365, and Word Online via download)
+  // opens it without the "unreadable content" prompt.
+  return new Blob(['﻿', html], { type: MINUTES_DOC_MIME });
 };

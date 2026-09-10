@@ -236,13 +236,22 @@ export default function ActionTrackerPage() {
 
     // Insert status update history
     if (statusUpdateNote.trim()) {
-      await supabase.from('action_status_updates').insert({
+      const { error: historyError } = await supabase.from('action_status_updates').insert({
         action_id: actionId,
         status: newStatus,
         update_note: statusUpdateNote.trim(),
         updated_by: createdBy || 'Unknown',
         updated_at: new Date().toISOString(),
       });
+
+      if (historyError) {
+        await loadData();
+        setStatusChangeModal(null);
+        setStatusUpdateNote('');
+        setLoading(false);
+        showNotice('error', 'Status changed, but the update note could not be saved: ' + historyError.message);
+        return;
+      }
     }
 
     // Reload data first, then close modal
