@@ -66,7 +66,7 @@ export default function AnniversaryTiesPage() {
             </Link>
           )}
 
-          <h1 className="text-3xl font-extrabold text-zinc-900">🎽 90th Anniversary Ties</h1>
+          <h1 className="text-3xl font-extrabold text-zinc-900">👔 90th Anniversary Ties</h1>
           <p className="mt-1 text-zinc-600">
             Live sales figures from{' '}
             <a
@@ -78,6 +78,24 @@ export default function AnniversaryTiesPage() {
               aldwinians.co.uk/club-stash
             </a>
           </p>
+          <div className="mt-2 flex flex-wrap gap-4 text-xs text-zinc-600">
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-block h-3 w-3 rounded-sm ring-1 ring-black/10"
+                style={{ background: 'linear-gradient(90deg, #b91c1c 50%, #ffffff 50%)' }}
+                aria-hidden
+              />
+              Style 1 — Red &amp; White
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-block h-3 w-3 rounded-sm ring-1 ring-black/10"
+                style={{ background: 'linear-gradient(90deg, #1e3a5f 50%, #b91c1c 50%)' }}
+                aria-hidden
+              />
+              Style 2 — Navy &amp; Red
+            </span>
+          </div>
         </header>
 
         <InlineNoticeBanner notice={notice} className="mb-6" />
