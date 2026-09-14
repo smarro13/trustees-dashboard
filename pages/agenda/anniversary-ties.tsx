@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
+import FulfillmentAction from '../../components/FulfillmentAction';
 import {
   type AnalyticsResponse,
   DAY_PRESETS,
@@ -9,6 +10,7 @@ import {
   formatCurrency,
   getAvatarClass,
   getInitials,
+  markOrderFulfilled,
 } from '../../lib/anniversaryTies';
 
 export default function AnniversaryTiesPage() {
@@ -35,6 +37,22 @@ export default function AnniversaryTiesPage() {
     }
 
     setLoading(false);
+  };
+
+  // Squarespace fulfills a whole order at once, so every line on this order
+  // (there may be more than one if a buyer ordered more than one variant)
+  // flips to fulfilled together.
+  const handleOrderFulfilled = (orderId: string) => {
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            orders: (current.orders || []).map((o) =>
+              o.orderId === orderId ? { ...o, fulfillmentStatus: 'FULFILLED' } : o,
+            ),
+          }
+        : current,
+    );
   };
 
   useEffect(() => {
@@ -198,7 +216,7 @@ export default function AnniversaryTiesPage() {
                           <th className="px-3 py-2 text-left font-semibold text-zinc-700">Ordered</th>
                           <th className="px-3 py-2 text-right font-semibold text-zinc-700">Qty</th>
                           <th className="px-3 py-2 text-left font-semibold text-zinc-700">Date</th>
-                          <th className="px-3 py-2 text-left font-semibold text-zinc-700">Status</th>
+                          <th className="px-3 py-2 text-left font-semibold text-zinc-700">Fulfillment</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-100">
@@ -229,9 +247,12 @@ export default function AnniversaryTiesPage() {
                               })}
                             </td>
                             <td className="px-3 py-2">
-                              <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-700">
-                                {order.fulfillmentStatus}
-                              </span>
+                              <FulfillmentAction
+                                orderId={order.orderId}
+                                status={order.fulfillmentStatus}
+                                markOrderFulfilled={markOrderFulfilled}
+                                onFulfilled={handleOrderFulfilled}
+                              />
                             </td>
                           </tr>
                         ))}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import InlineNoticeBanner, { type InlineNotice } from '../../../components/InlineNotice';
+import FulfillmentAction from '../../../components/FulfillmentAction';
 import {
   type AnalyticsResponse,
   discountCodesByCustomerForProduct,
@@ -9,6 +10,7 @@ import {
   formatCurrency,
   getAvatarClass,
   getInitials,
+  markOrderFulfilled,
 } from '../../../lib/anniversaryTies';
 
 export default function AnniversaryTieDetailPage() {
@@ -51,6 +53,22 @@ export default function AnniversaryTieDetailPage() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router.isReady, days, productFilter, excludeUnitPrice]);
+
+  // Squarespace fulfills a whole order at once, so every line on this order
+  // (there may be more than one if a buyer ordered more than one variant)
+  // flips to fulfilled together.
+  const handleOrderFulfilled = (orderId: string) => {
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            orders: (current.orders || []).map((o) =>
+              o.orderId === orderId ? { ...o, fulfillmentStatus: 'FULFILLED' } : o,
+            ),
+          }
+        : current,
+    );
+  };
 
   const currency = data?.currency || 'GBP';
   const stat = data?.byProduct?.find((p) => p.productName === productName);
@@ -146,9 +164,17 @@ export default function AnniversaryTieDetailPage() {
                               )}
                             </div>
                           </div>
-                          <span className="rounded-full bg-red-50 px-3 py-1 text-sm font-semibold text-red-700">
-                            × {order.quantity}
-                          </span>
+                          <div className="flex items-center gap-3">
+                            <span className="rounded-full bg-red-50 px-3 py-1 text-sm font-semibold text-red-700">
+                              × {order.quantity}
+                            </span>
+                            <FulfillmentAction
+                              orderId={order.orderId}
+                              status={order.fulfillmentStatus}
+                              markOrderFulfilled={markOrderFulfilled}
+                              onFulfilled={handleOrderFulfilled}
+                            />
+                          </div>
                         </li>
                       );
                     })}

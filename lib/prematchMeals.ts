@@ -107,6 +107,37 @@ export const fetchPrematchMealsAnalytics = async (
   }
 };
 
+// Marks the WHOLE Squarespace order as fulfilled (Squarespace has no
+// per-line-item fulfillment) — every item on the order is affected, not just
+// the meal. Shared with lib/anniversaryTies.ts's identical helper via the
+// same API route; kept duplicated here rather than imported so this file has
+// no cross-feature dependency.
+export const markOrderFulfilled = async (orderId: string): Promise<{ ok: boolean; error?: string }> => {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+
+  if (!token) {
+    return { ok: false, error: 'You are not logged in.' };
+  }
+
+  try {
+    const response = await fetch('/api/private/mark-order-fulfilled', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ orderId }),
+    });
+    const payload = await response.json();
+
+    if (!response.ok || !payload.ok) {
+      return { ok: false, error: payload.error || 'Failed to mark the order as fulfilled.' };
+    }
+
+    return { ok: true };
+  } catch {
+    return { ok: false, error: 'Failed to reach the fulfillment API.' };
+  }
+};
+
 // Deterministic pastel-ish colour for a buyer's initials avatar, based on their name.
 const AVATAR_PALETTE = [
   'bg-red-100 text-red-700',
