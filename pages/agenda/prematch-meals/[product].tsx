@@ -2,14 +2,15 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import InlineNoticeBanner, { type InlineNotice } from '../../../components/InlineNotice';
+import FulfillmentAction from '../../../components/FulfillmentAction';
 import {
   type AnalyticsResponse,
-  buyersForProduct,
   discountCodesByCustomerForProduct,
   fetchPrematchMealsAnalytics,
   formatCurrency,
   getAvatarClass,
   getInitials,
+  markOrderFulfilled,
 } from '../../../lib/prematchMeals';
 
 export default function PreMatchMealDetailPage() {
@@ -53,9 +54,27 @@ export default function PreMatchMealDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router.isReady, days, productFilter, excludeUnitPrice]);
 
+  // Squarespace fulfills a whole order at once, so every line on this order
+  // (there may be more than one if a buyer ordered more than one meal) flips
+  // to fulfilled together.
+  const handleOrderFulfilled = (orderId: string) => {
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            orders: (current.orders || []).map((o) =>
+              o.orderId === orderId ? { ...o, fulfillmentStatus: 'FULFILLED' } : o,
+            ),
+          }
+        : current,
+    );
+  };
+
   const currency = data?.currency || 'GBP';
   const stat = data?.byProduct?.find((p) => p.productName === productName);
-  const buyers = data?.orders ? buyersForProduct(data.orders, productName) : [];
+  // Every order line for this exact meal, name + order detail, newest first.
+  const orderLines = (data?.orders || []).filter((o) => o.productName === productName);
+  const uniqueBuyerCount = new Set(orderLines.map((o) => o.customerKey)).size;
   const discountCodesByCustomer = data?.discountUsage
     ? discountCodesByCustomerForProduct(data.discountUsage, productName)
     : new Map<string, string[]>();
@@ -105,29 +124,37 @@ export default function PreMatchMealDetailPage() {
               </div>
               <div className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-zinc-200">
                 <p className="text-sm text-zinc-500">👥 Unique buyers</p>
-                <p className="mt-1 text-3xl font-bold text-zinc-900">{buyers.length}</p>
+                <p className="mt-1 text-3xl font-bold text-zinc-900">{uniqueBuyerCount}</p>
               </div>
             </section>
 
             <section className="rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
               <div className="border-b border-zinc-200 px-6 py-4">
                 <h2 className="text-xl font-semibold text-zinc-900">Buyers</h2>
+                <p className="mt-0.5 text-sm text-zinc-500">Name and order detail, most recent first.</p>
               </div>
               <div className="px-2 py-2 sm:px-4">
-                {buyers.length === 0 ? (
+                {orderLines.length === 0 ? (
                   <p className="px-4 py-8 text-center text-sm text-zinc-500">No buyer detail available for this meal.</p>
                 ) : (
                   <ul className="divide-y divide-zinc-100">
-                    {buyers.map((buyer) => {
-                      const discountCodes = discountCodesByCustomer.get(buyer.key);
+                    {orderLines.map((order) => {
+                      const discountCodes = discountCodesByCustomer.get(order.customerKey);
                       return (
-                        <li key={buyer.key} className="flex items-center justify-between gap-3 px-2 py-3">
+                        <li key={order.orderId} className="flex items-center justify-between gap-3 px-2 py-3">
                           <div className="flex items-center gap-3">
-                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${getAvatarClass(buyer.name)}`}>
-                              {getInitials(buyer.name)}
+                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${getAvatarClass(order.customerName)}`}>
+                              {getInitials(order.customerName)}
                             </span>
                             <div>
-                              <p className="font-medium text-zinc-800">{buyer.name}</p>
+                              <p className="font-medium text-zinc-800">{order.customerName}</p>
+                              <p className="mt-0.5 text-xs text-zinc-500">
+                                {new Date(order.createdOn).toLocaleDateString('en-GB', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric',
+                                })}
+                              </p>
                               {discountCodes && discountCodes.length > 0 && (
                                 <p className="mt-0.5 text-xs font-medium text-amber-700">
                                   🏷️ Discount used ({discountCodes.join(', ')})
@@ -135,9 +162,17 @@ export default function PreMatchMealDetailPage() {
                               )}
                             </div>
                           </div>
-                          <span className="rounded-full bg-red-50 px-3 py-1 text-sm font-semibold text-red-700">
-                            × {buyer.quantity}
-                          </span>
+                          <div className="flex items-center gap-3">
+                            <span className="rounded-full bg-red-50 px-3 py-1 text-sm font-semibold text-red-700">
+                              × {order.quantity}
+                            </span>
+                            <FulfillmentAction
+                              orderId={order.orderId}
+                              status={order.fulfillmentStatus}
+                              markOrderFulfilled={markOrderFulfilled}
+                              onFulfilled={handleOrderFulfilled}
+                            />
+                          </div>
                         </li>
                       );
                     })}
