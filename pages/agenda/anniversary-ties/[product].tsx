@@ -92,7 +92,7 @@ export default function AnniversaryTieDetailPage() {
         ) : (
           <>
             <header className="mb-8">
-              <h1 className="text-3xl font-extrabold text-zinc-900">🎽 {productName}</h1>
+              <h1 className="text-3xl font-extrabold text-zinc-900">👔 {productName}</h1>
               <p className="mt-1 text-zinc-600">Buyer breakdown for this product</p>
             </header>
 
