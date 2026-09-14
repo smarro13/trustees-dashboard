@@ -94,7 +94,7 @@ const parseSupportingEvidenceUrls = (value: unknown): string[] => {
 };
 
 export default function CommercialTransformationPage() {
-	const [activeTab, setActiveTab] = useState<'updates' | 'gym' | 'jobclub' | 'prematchmeals'>('updates');
+	const [activeTab, setActiveTab] = useState<'updates' | 'gym' | 'jobclub' | 'prematchmeals' | 'anniversaryties'>('updates');
 	const [user, setUser] = useState<User | null>(null);
 	const [meetings, setMeetings] = useState<any[]>([]);
 	const [reports, setReports] = useState<any[]>([]);
@@ -457,7 +457,7 @@ export default function CommercialTransformationPage() {
 				)}
 
 				<section className="mb-6 rounded-lg border border-zinc-200 bg-zinc-50 p-2">
-					<div className="grid gap-2 sm:grid-cols-4">
+					<div className="grid gap-2 sm:grid-cols-5">
 						<button
 							type="button"
 							onClick={() => setActiveTab('updates')}
@@ -485,6 +485,13 @@ export default function CommercialTransformationPage() {
 							className={`rounded-md px-4 py-2 text-sm font-medium transition ${activeTab === 'prematchmeals' ? 'bg-red-600 text-white' : 'bg-white text-zinc-700 hover:bg-zinc-100'}`}
 						>
 							Pre-Match Meals
+						</button>
+						<button
+							type="button"
+							onClick={() => setActiveTab('anniversaryties')}
+							className={`rounded-md px-4 py-2 text-sm font-medium transition ${activeTab === 'anniversaryties' ? 'bg-red-600 text-white' : 'bg-white text-zinc-700 hover:bg-zinc-100'}`}
+						>
+							90th Anniversary Ties
 						</button>
 					</div>
 				</section>
@@ -890,6 +897,24 @@ export default function CommercialTransformationPage() {
 							<iframe
 								title="Pre-Match Meals"
 								src="/agenda/prematch-meals?embedded=1"
+								className="h-[900px] w-full rounded-md border border-zinc-200"
+							/>
+						</div>
+					</section>
+				)}
+
+				{activeTab === 'anniversaryties' && (
+					<section className="space-y-4">
+						<div className="rounded-lg border border-zinc-200 bg-white p-4">
+							<div className="mb-3 flex items-center justify-between gap-3">
+								<h2 className="text-xl font-semibold text-zinc-900">90th Anniversary Ties</h2>
+								<Link href="/agenda/anniversary-ties" className="text-sm font-medium text-blue-600 hover:underline">
+									Open full page
+								</Link>
+							</div>
+							<iframe
+								title="90th Anniversary Ties"
+								src="/agenda/anniversary-ties?embedded=1"
 								className="h-[900px] w-full rounded-md border border-zinc-200"
 							/>
 						</div>
