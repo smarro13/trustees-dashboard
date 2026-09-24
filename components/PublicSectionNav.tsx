@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: '/public/agm-minutes', label: 'AGM Minutes' },
   { href: '/public/padel-vote', label: 'Padel Vote' },
   { href: '/public/registers', label: 'Registers' },
+  { href: '/public/veo-booking', label: 'VEO Booking' },
 ];
 
 export default function PublicSectionNav() {
