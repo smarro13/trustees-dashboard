@@ -2,8 +2,8 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { sendVeoClubEmail, type VeoEmailEvent } from '../../../lib/veoEmail';
 
-// Records a VEO camera being collected (out), returned (in) or a booking
-// cancelled, and emails the club. Called by /operations/veo-bookings.
+// Signs a VEO camera back in from the dashboard (when a coach forgot to) or
+// cancels a mistaken sign-out, and emails the club. Called by /operations/veo-bookings.
 
 // Kept local (not imported from lib/roles.ts) because this is a server-side
 // API route — see pages/api/private/prematch-meals-orders.ts.
@@ -33,10 +33,9 @@ const resolveRole = (user: any): DashboardRole =>
 const EDIT_ROLES: DashboardRole[] = ['admin', 'trustee', 'director'];
 
 // Which statuses each action is allowed from, and the status it moves to.
-const ACTIONS: Record<Exclude<VeoEmailEvent, 'booked'>, { from: string[]; to: string }> = {
-  collected: { from: ['booked'], to: 'out' },
-  returned: { from: ['booked', 'out'], to: 'returned' },
-  cancelled: { from: ['booked'], to: 'cancelled' },
+const ACTIONS: Record<Exclude<VeoEmailEvent, 'out'>, { from: string[]; to: string }> = {
+  returned: { from: ['out'], to: 'returned' },
+  cancelled: { from: ['out'], to: 'cancelled' },
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -58,6 +57,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const action = req.body?.action as keyof typeof ACTIONS;
   if (!id || !ACTIONS[action]) return res.status(400).json({ ok: false, error: 'id and a valid action are required.' });
   const returnNotes = typeof req.body?.returnNotes === 'string' ? req.body.returnNotes.trim().slice(0, 1000) : '';
+  const timeIn = typeof req.body?.timeIn === 'string' && req.body.timeIn ? new Date(req.body.timeIn) : new Date();
+  if (Number.isNaN(timeIn.getTime())) return res.status(400).json({ ok: false, error: 'Invalid time in.' });
 
   const { data: booking, error: loadError } = await supabaseAdmin
     .from('veo_bookings')
@@ -66,7 +67,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     .single();
   if (loadError || !booking) return res.status(404).json({ ok: false, error: 'Booking not found.' });
   if (!ACTIONS[action].from.includes(booking.status)) {
-    return res.status(409).json({ ok: false, error: `This booking is already ${booking.status}.` });
+    return res.status(409).json({ ok: false, error: `This camera is already ${booking.status}.` });
+  }
+  if (action === 'returned' && timeIn.getTime() < new Date(booking.time_out).getTime()) {
+    return res.status(400).json({ ok: false, error: 'Time in can’t be before the time it went out.' });
   }
 
   const now = new Date().toISOString();
@@ -75,10 +79,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     updated_at: now,
     updated_by: user.email || user.id,
   };
-  if (action === 'collected') patch.collected_at = now;
   if (action === 'returned') {
+    patch.time_in = timeIn.toISOString();
     patch.returned_at = now;
-    patch.collected_at = booking.collected_at ?? booking.time_out;
     patch.return_notes = returnNotes || null;
   }
 

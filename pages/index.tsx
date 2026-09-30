@@ -33,8 +33,8 @@ const SHAREABLE_PAGES = [
     href: '/public/job-club',
   },
   {
-    title: 'VEO Booking',
-    description: 'Public booking form for the club VEO cameras.',
+    title: 'VEO Cameras',
+    description: 'Public sign-out / sign-in form for the club VEO cameras.',
     href: '/public/veo-booking',
   },
   {
@@ -51,8 +51,8 @@ const OPERATIONS_PAGES = [
     href: '/operations/programme-stats',
   },
   {
-    title: '🎥 VEO Bookings',
-    description: 'Camera bookings, who has VEO 1 / VEO 2, and returns.',
+    title: '🎥 VEO Cameras',
+    description: 'Who has VEO 1 / VEO 2, and the sign-out log.',
     href: '/operations/veo-bookings',
   },
   {
