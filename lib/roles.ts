@@ -89,6 +89,7 @@ const SAFEGUARDING_HREF = '/agenda/safeguarding';
 const COMMERCIAL_VIEW_HREFS = new Set([
   '/agenda/commercial-transformation',
   '/agenda/prematch-meals',
+  '/agenda/programme-analytics',
   '/agenda/actions',
   '/agenda/matters-arising',
   '/agenda/aob',
