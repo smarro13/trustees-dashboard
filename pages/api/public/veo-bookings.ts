@@ -1,10 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
-import type { PublicVeoBooking } from '../../../lib/veoBookings';
+import type { PublicVeoCheckout } from '../../../lib/veoBookings';
 
-// Upcoming VEO bookings for the public booking page, so people can see when
-// each camera is free. Contact details are never returned, and only the
-// booker's first name is shown.
+// Cameras currently signed out, for the public page's status cards and the
+// "Return a camera" list. Only the first name of whoever signed it out is
+// shown, and no contact details.
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,20 +18,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { data, error } = await supabaseAdmin
     .from('veo_bookings')
-    .select('id, camera, booked_by, team_name, purpose, fixture, time_out, time_in, status')
-    .neq('status', 'cancelled')
-    .neq('status', 'returned')
-    .gte('time_in', new Date().toISOString())
-    .order('time_out', { ascending: true })
-    .limit(100);
+    .select('id, camera, booked_by, team_name, fixture, time_out')
+    .eq('status', 'out')
+    .order('camera', { ascending: true });
 
   if (error) return res.status(500).json({ ok: false, error: error.message });
 
-  const bookings: PublicVeoBooking[] = (data || []).map((b) => ({
+  const out: PublicVeoCheckout[] = (data || []).map((b) => ({
     ...b,
     booked_by: String(b.booked_by).trim().split(/\s+/)[0] || '',
   }));
 
   res.setHeader('Cache-Control', 'no-store');
-  return res.status(200).json({ ok: true, bookings });
+  return res.status(200).json({ ok: true, out });
 }

@@ -1,4 +1,4 @@
-// Shared settings for VEO camera bookings — used by the public booking page,
+// Shared settings for the VEO camera sign-out log — used by the public page,
 // its API routes and the dashboard's /operations/veo-bookings page.
 // Schema: supabase/policies/veo_bookings.sql.
 
@@ -22,19 +22,16 @@ export const VEO_TEAMS = [
   'U11', 'U10', 'U9', 'U8', 'U7', 'Mini Winnies',
 ] as const;
 
-export type VeoBookingStatus = 'booked' | 'out' | 'returned' | 'cancelled';
+export type VeoBookingStatus = 'out' | 'returned' | 'cancelled';
 
-// What the public page is allowed to see about other bookings (no contact details).
-export type PublicVeoBooking = {
+// What the public page may see about cameras currently out (no contact details).
+export type PublicVeoCheckout = {
   id: string;
   camera: VeoCamera;
   booked_by: string; // first name only
   team_name: string;
-  purpose: VeoPurpose;
   fixture: string | null;
   time_out: string;
-  time_in: string;
-  status: VeoBookingStatus;
 };
 
 export const formatVeoTime = (iso: string) =>
@@ -42,3 +39,18 @@ export const formatVeoTime = (iso: string) =>
     weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
     timeZone: 'Europe/London',
   });
+
+// How long a camera has been out, e.g. "3 hours" or "2 days".
+export const veoDurationSince = (iso: string, until = Date.now()) => {
+  const hours = Math.max(0, (until - new Date(iso).getTime()) / 3_600_000);
+  if (hours < 1) return 'under an hour';
+  if (hours < 48) return `${Math.round(hours)} hour${Math.round(hours) === 1 ? '' : 's'}`;
+  return `${Math.floor(hours / 24)} days`;
+};
+
+// Current time as a value for <input type="datetime-local"> (browser's local time).
+export const nowForDateTimeInput = () => {
+  const d = new Date();
+  d.setSeconds(0, 0);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+};
