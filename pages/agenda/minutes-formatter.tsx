@@ -398,10 +398,10 @@ export default function MinutesFormatterPage() {
 
 
 
-  const downloadAsDocx = () => {
+  const downloadAsDocx = async () => {
     setDownloadingDocx(true);
     try {
-      const blob = createDocxBlob(
+      const blob = await createDocxBlob(
         meetingTitle,
         meetingDate,
         parsed.sections,
@@ -441,7 +441,7 @@ export default function MinutesFormatterPage() {
       const filePath = `minutes-generated/${Date.now()}-${fileName}`;
       
       // Generate DOCX blob
-      const blob = createDocxBlob(
+      const blob = await createDocxBlob(
         meetingTitle,
         meetingDate,
         parsed.sections,

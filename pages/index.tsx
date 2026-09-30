@@ -33,9 +33,27 @@ const SHAREABLE_PAGES = [
     href: '/public/job-club',
   },
   {
+    title: 'VEO Booking',
+    description: 'Public booking page for the club VEO camera (coming soon).',
+    href: '/public/veo-booking',
+  },
+  {
     title: 'Gym',
     description: 'Gym dashboard link.',
     href: 'https://ald-net2-01.tail6b59c1.ts.net/',
+  },
+];
+
+const OPERATIONS_PAGES = [
+  {
+    title: '📦 Asset Register',
+    description: 'Record of club-owned equipment, fixtures and property.',
+    href: '/operations/asset-register',
+  },
+  {
+    title: '📺 Media Screens',
+    description: 'Manage content shown on the clubhouse media screens.',
+    href: '/operations/media-screens',
   },
 ];
 
@@ -482,6 +500,39 @@ export default function LandingPage() {
                   </div>
                 </>
               )}
+            </section>
+
+            {/* Club Operations */}
+            <section className="mt-12 rounded-lg bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
+              <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">🛠️</span>
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Club Operations</h2>
+                    <p className="text-xs text-slate-500">Registers and tools for running the club</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 px-4 py-4 md:grid-cols-2">
+                {OPERATIONS_PAGES.map((page) => (
+                  <Link
+                    key={page.href}
+                    href={page.href}
+                    className="rounded-lg border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:bg-blue-50"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-semibold text-slate-900">{page.title}</h3>
+                        <p className="mt-1 text-sm text-slate-600">{page.description}</p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                        Coming soon
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
             </section>
 
             {/* Shareable Pages - Bottom of Page */}

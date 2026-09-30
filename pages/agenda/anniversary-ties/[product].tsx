@@ -6,14 +6,14 @@ import FulfillmentAction from '../../../components/FulfillmentAction';
 import {
   type AnalyticsResponse,
   discountCodesByCustomerForProduct,
-  fetchPrematchMealsAnalytics,
+  fetchAnniversaryTiesAnalytics,
   formatCurrency,
   getAvatarClass,
   getInitials,
   markOrderFulfilled,
-} from '../../../lib/prematchMeals';
+} from '../../../lib/anniversaryTies';
 
-export default function PreMatchMealDetailPage() {
+export default function AnniversaryTieDetailPage() {
   const router = useRouter();
   const {
     product,
@@ -25,8 +25,8 @@ export default function PreMatchMealDetailPage() {
 
   const embedded = embeddedQuery === '1';
   const productName = typeof product === 'string' ? product : '';
-  const days = typeof daysQuery === 'string' && parseInt(daysQuery, 10) > 0 ? parseInt(daysQuery, 10) : 90;
-  const productFilter = typeof productFilterQuery === 'string' ? productFilterQuery : 'pre match';
+  const days = typeof daysQuery === 'string' && parseInt(daysQuery, 10) > 0 ? parseInt(daysQuery, 10) : 365;
+  const productFilter = typeof productFilterQuery === 'string' ? productFilterQuery : '90th anniversary';
   const excludeUnitPrice = typeof excludeUnitPriceQuery === 'string' ? excludeUnitPriceQuery : '';
 
   const [data, setData] = useState<AnalyticsResponse | null>(null);
@@ -38,7 +38,7 @@ export default function PreMatchMealDetailPage() {
 
     const load = async () => {
       setLoading(true);
-      const result = await fetchPrematchMealsAnalytics(days, productFilter, excludeUnitPrice);
+      const result = await fetchAnniversaryTiesAnalytics(days, productFilter, excludeUnitPrice);
 
       if (!result.ok || !result.payload) {
         setNotice({ type: 'error', message: result.error || 'Failed to load sales analytics.' });
@@ -55,8 +55,8 @@ export default function PreMatchMealDetailPage() {
   }, [router.isReady, days, productFilter, excludeUnitPrice]);
 
   // Squarespace fulfills a whole order at once, so every line on this order
-  // (there may be more than one if a buyer ordered more than one meal) flips
-  // to fulfilled together.
+  // (there may be more than one if a buyer ordered more than one variant)
+  // flips to fulfilled together.
   const handleOrderFulfilled = (orderId: string) => {
     setData((current) =>
       current
@@ -72,7 +72,8 @@ export default function PreMatchMealDetailPage() {
 
   const currency = data?.currency || 'GBP';
   const stat = data?.byProduct?.find((p) => p.productName === productName);
-  // Every order line for this exact meal, name + order detail, newest first.
+  // Every order line for this exact product, name + what they ordered
+  // (variant), newest first — matches the main page's Orders table.
   const orderLines = (data?.orders || []).filter((o) => o.productName === productName);
   const uniqueBuyerCount = new Set(orderLines.map((o) => o.customerKey)).size;
   const discountCodesByCustomer = data?.discountUsage
@@ -83,14 +84,14 @@ export default function PreMatchMealDetailPage() {
     const params = new URLSearchParams({ days: String(days), productFilter });
     if (excludeUnitPrice) params.set('excludeUnitPrice', excludeUnitPrice);
     if (embedded) params.set('embedded', '1');
-    return `/agenda/prematch-meals?${params.toString()}`;
+    return `/agenda/anniversary-ties?${params.toString()}`;
   })();
 
   return (
     <main className="min-h-screen">
       <div className={embedded ? 'mx-auto w-full px-2 py-2' : 'mx-auto w-full max-w-4xl px-4 py-10'}>
         <Link href={backHref} className="mb-4 inline-block text-sm font-medium text-blue-600 hover:underline">
-          ← Back to Pre-Match Meals
+          ← Back to 90th Anniversary Ties
         </Link>
 
         <InlineNoticeBanner notice={notice} className="mb-6" />
@@ -103,19 +104,19 @@ export default function PreMatchMealDetailPage() {
               Couldn't find "{productName}" in the current date range. It may have sold outside this window.
             </p>
             <Link href={backHref} className="mt-3 inline-block text-sm font-medium text-red-700 hover:underline">
-              ← Back to Pre-Match Meals
+              ← Back to 90th Anniversary Ties
             </Link>
           </div>
         ) : (
           <>
             <header className="mb-8">
-              <h1 className="text-3xl font-extrabold text-zinc-900">🍽️ {productName}</h1>
-              <p className="mt-1 text-zinc-600">Buyer breakdown for this meal</p>
+              <h1 className="text-3xl font-extrabold text-zinc-900">👔 {productName}</h1>
+              <p className="mt-1 text-zinc-600">Buyer breakdown for this product</p>
             </header>
 
             <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-zinc-200">
-                <p className="text-sm text-zinc-500">🎟️ Sold</p>
+                <p className="text-sm text-zinc-500">📦 Sold</p>
                 <p className="mt-1 text-3xl font-bold text-zinc-900">{stat.quantity}</p>
               </div>
               <div className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-zinc-200">
@@ -131,17 +132,17 @@ export default function PreMatchMealDetailPage() {
             <section className="rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
               <div className="border-b border-zinc-200 px-6 py-4">
                 <h2 className="text-xl font-semibold text-zinc-900">Buyers</h2>
-                <p className="mt-0.5 text-sm text-zinc-500">Name and order detail, most recent first.</p>
+                <p className="mt-0.5 text-sm text-zinc-500">Name and what they ordered, most recent first.</p>
               </div>
               <div className="px-2 py-2 sm:px-4">
                 {orderLines.length === 0 ? (
-                  <p className="px-4 py-8 text-center text-sm text-zinc-500">No buyer detail available for this meal.</p>
+                  <p className="px-4 py-8 text-center text-sm text-zinc-500">No buyer detail available for this product.</p>
                 ) : (
                   <ul className="divide-y divide-zinc-100">
                     {orderLines.map((order) => {
                       const discountCodes = discountCodesByCustomer.get(order.customerKey);
                       return (
-                        <li key={order.orderId} className="flex items-center justify-between gap-3 px-2 py-3">
+                        <li key={`${order.orderId}-${order.variantDetail}`} className="flex items-center justify-between gap-3 px-2 py-3">
                           <div className="flex items-center gap-3">
                             <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${getAvatarClass(order.customerName)}`}>
                               {getInitials(order.customerName)}
@@ -149,6 +150,7 @@ export default function PreMatchMealDetailPage() {
                             <div>
                               <p className="font-medium text-zinc-800">{order.customerName}</p>
                               <p className="mt-0.5 text-xs text-zinc-500">
+                                {order.variantDetail || 'No size/variant recorded'} ·{' '}
                                 {new Date(order.createdOn).toLocaleDateString('en-GB', {
                                   day: '2-digit',
                                   month: '2-digit',

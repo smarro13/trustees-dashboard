@@ -14,6 +14,10 @@ export type OrderLineItem = {
   customerName: string;
   customerEmail: string;
   productName: string;
+  // e.g. "Size: Large" — Squarespace variant options (size/colour/etc) joined
+  // into one string, so "what they ordered" is visible even when a size
+  // variant isn't broken out as its own product name. Empty if none.
+  variantDetail: string;
   quantity: number;
   unitPrice: number;
   lineRevenue: number;
@@ -21,10 +25,10 @@ export type OrderLineItem = {
   paymentState: string;
 };
 
-export type RegularAttendee = {
+export type RepeatBuyer = {
   key: string;
   name: string;
-  eventCount: number;
+  productCount: number;
   totalQuantity: number;
 };
 
@@ -53,7 +57,7 @@ export type AnalyticsResponse = {
   totalRevenue?: number;
   currency?: string;
   byProduct?: ProductStat[];
-  regularAttendees?: RegularAttendee[];
+  repeatBuyers?: RepeatBuyer[];
   discountUsage?: DiscountUsage[];
   orders?: OrderLineItem[];
   generatedAt?: string;
@@ -64,6 +68,7 @@ export const DAY_PRESETS = [
   { label: 'Last 90 days', days: 90 },
   { label: 'Last 6 months', days: 182 },
   { label: 'Last 12 months', days: 365 },
+  { label: 'Since launch (2 years)', days: 730 },
 ];
 
 export const formatCurrency = (value: number, currency: string) => {
@@ -74,7 +79,7 @@ export const formatCurrency = (value: number, currency: string) => {
   }
 };
 
-export const fetchPrematchMealsAnalytics = async (
+export const fetchAnniversaryTiesAnalytics = async (
   days: number,
   productFilter: string,
   excludeUnitPrice?: string,
@@ -92,7 +97,7 @@ export const fetchPrematchMealsAnalytics = async (
   }
 
   try {
-    const response = await fetch(`/api/private/prematch-meals-orders?${params.toString()}`, {
+    const response = await fetch(`/api/private/anniversary-ties-orders?${params.toString()}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const payload = (await response.json()) as AnalyticsResponse;
@@ -109,9 +114,9 @@ export const fetchPrematchMealsAnalytics = async (
 
 // Marks the WHOLE Squarespace order as fulfilled (Squarespace has no
 // per-line-item fulfillment) — every item on the order is affected, not just
-// the meal. Shared with lib/anniversaryTies.ts's identical helper via the
-// same API route; kept duplicated here rather than imported so this file has
-// no cross-feature dependency.
+// the tie. Shared with lib/prematchMeals.ts's identical helper via the same
+// API route; kept duplicated here rather than imported so this file has no
+// cross-feature dependency.
 export const markOrderFulfilled = async (orderId: string): Promise<{ ok: boolean; error?: string }> => {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
@@ -181,7 +186,7 @@ export const discountsForProduct = (discountUsage: DiscountUsage[], productName:
     .filter((usage) => usage.productNames.includes(productName))
     .sort((a, b) => new Date(b.createdOn).getTime() - new Date(a.createdOn).getTime());
 
-// Maps customerKey -> the promo code(s) they used for this specific meal, so
+// Maps customerKey -> the promo code(s) they used for this specific product, so
 // the buyer list can flag "this order was discounted" per person.
 export const discountCodesByCustomerForProduct = (discountUsage: DiscountUsage[], productName: string) => {
   const map = new Map<string, string[]>();
