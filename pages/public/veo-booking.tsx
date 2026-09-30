@@ -4,9 +4,12 @@ import { useRouter } from 'next/router';
 import PublicSectionNav from '../../components/PublicSectionNav';
 import {
   type PublicVeoCheckout,
+  type PublicVeoRecording,
   VEO_ACCESSORIES,
   VEO_CAMERAS,
+  VEO_CLUB_URL,
   VEO_PURPOSES,
+  VEO_RECENT_DAYS,
   VEO_TEAMS,
   formatVeoTime,
   nowForDateTimeInput,
@@ -14,7 +17,68 @@ import {
 } from '../../lib/veoBookings';
 
 // Public VEO camera sign-out / sign-in. Taking a camera out records the time
-// out; coming back to "Return a camera" records the time in.
+// out; coming back to "Return a camera" records the time in. Also shows any
+// Veo Live stream in progress and links to recent recordings.
+
+// Inline "paste a Veo link" box, for adding a live or recording link later.
+function AddLink({ id, kind, onAdded }: { id: string; kind: 'live' | 'recording'; onAdded: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="text-xs font-medium text-red-700 hover:underline">
+        {kind === 'live' ? '+ Add live link' : '+ Add recording link'}
+      </button>
+    );
+  }
+
+  const save = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/public/veo-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, kind, url }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) { setError(payload.error || 'Could not save the link.'); return; }
+      setOpen(false);
+      onAdded();
+    } catch {
+      setError('Could not reach the server.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={save} className="mt-2 w-full space-y-1">
+      <div className="flex gap-2">
+        <input
+          type="url"
+          autoFocus
+          required
+          placeholder="https://app.veo.co/…"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-2 py-1 text-sm focus:border-red-400 focus:outline-none"
+        />
+        <button type="submit" disabled={saving} className="rounded-lg bg-red-700 px-3 py-1 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+          Save
+        </button>
+        <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-600">
+          Cancel
+        </button>
+      </div>
+      {error && <p className="text-xs text-rose-700">{error}</p>}
+    </form>
+  );
+}
 
 type Mode = 'out' | 'return';
 
@@ -35,6 +99,7 @@ const emptyOutForm = () => ({
   timeOut: nowForDateTimeInput(),
   accessories: [...VEO_ACCESSORIES] as string[],
   notes: '',
+  liveUrl: '',
   agreed: false,
   website: '',
 });
@@ -44,6 +109,7 @@ const emptyReturnForm = () => ({
   name: '',
   timeIn: nowForDateTimeInput(),
   returnNotes: '',
+  recordingUrl: '',
   charged: false,
   website: '',
 });
@@ -55,6 +121,7 @@ export default function VeoBookingPage() {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>('out');
   const [out, setOut] = useState<PublicVeoCheckout[]>([]);
+  const [recent, setRecent] = useState<PublicVeoRecording[]>([]);
   const [outForm, setOutForm] = useState(emptyOutForm);
   const [returnForm, setReturnForm] = useState(emptyReturnForm);
   const [submitting, setSubmitting] = useState(false);
@@ -69,7 +136,10 @@ export default function VeoBookingPage() {
     try {
       const response = await fetch('/api/public/veo-bookings');
       const payload = await response.json();
-      if (response.ok && payload.ok) setOut(payload.out);
+      if (response.ok && payload.ok) {
+        setOut(payload.out);
+        setRecent(payload.recent ?? []);
+      }
     } catch {
       // The forms still work without the status list.
     }
@@ -164,17 +234,51 @@ export default function VeoBookingPage() {
             </Link>
           </div>
 
+          <a
+            href={VEO_CLUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-5 flex items-center justify-between gap-3 rounded-xl bg-zinc-900 px-4 py-3 text-white hover:bg-zinc-800"
+          >
+            <span>
+              <span className="block text-sm font-semibold">▶ Watch recordings &amp; live matches</span>
+              <span className="block text-xs text-zinc-300">All VEO 1 and VEO 2 recordings in the club&apos;s Veo page (Veo login needed)</span>
+            </span>
+            <span aria-hidden className="text-lg">→</span>
+          </a>
+
           {/* Camera status */}
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             {VEO_CAMERAS.map((camera) => {
               const current = outByCamera.get(camera);
               return (
                 <div key={camera} className={`rounded-xl border p-4 ${current ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}>
-                  <p className="text-sm font-semibold text-zinc-900">{camera}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-zinc-900">{camera}</p>
+                    {current?.live_url && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-rose-600 px-2 py-0.5 text-xs font-bold text-white">
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" aria-hidden /> LIVE
+                      </span>
+                    )}
+                  </div>
                   {current ? (
-                    <p className="mt-1 text-sm text-amber-900">
-                      Out with {current.team_name} ({current.booked_by}) since {formatVeoTime(current.time_out)}
-                    </p>
+                    <>
+                      <p className="mt-1 text-sm text-amber-900">
+                        Out with {current.team_name} ({current.booked_by}) since {formatVeoTime(current.time_out)}
+                      </p>
+                      {current.live_url ? (
+                        <a
+                          href={current.live_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2 inline-flex rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-rose-700"
+                        >
+                          🔴 Watch live{current.fixture ? ` — ${current.fixture}` : ''}
+                        </a>
+                      ) : (
+                        <div className="mt-1"><AddLink id={current.id} kind="live" onAdded={loadOut} /></div>
+                      )}
+                    </>
                   ) : (
                     <p className="mt-1 text-sm text-emerald-800">Available at the club</p>
                   )}
@@ -334,6 +438,17 @@ export default function VeoBookingPage() {
                 />
               </label>
 
+              <label className={labelClass}>
+                Veo Live link <span className="font-normal text-zinc-500">(optional — if you&apos;re streaming, so people can watch from this page)</span>
+                <input
+                  className={inputClass}
+                  type="url"
+                  placeholder="https://app.veo.co/…"
+                  value={outForm.liveUrl}
+                  onChange={(e) => setOutForm({ ...outForm, liveUrl: e.target.value })}
+                />
+              </label>
+
               <label className="flex items-start gap-2 text-sm text-zinc-700">
                 <input
                   type="checkbox"
@@ -434,6 +549,17 @@ export default function VeoBookingPage() {
                   />
                 </label>
 
+                <label className={labelClass}>
+                  Recording link <span className="font-normal text-zinc-500">(optional — or add it below once Veo has processed it)</span>
+                  <input
+                    className={inputClass}
+                    type="url"
+                    placeholder="https://app.veo.co/…"
+                    value={returnForm.recordingUrl}
+                    onChange={(e) => setReturnForm({ ...returnForm, recordingUrl: e.target.value })}
+                  />
+                </label>
+
                 <label className="flex items-start gap-2 text-sm text-zinc-700">
                   <input
                     type="checkbox"
@@ -455,6 +581,45 @@ export default function VeoBookingPage() {
                 </button>
               </form>
             )
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-zinc-900">Recent recordings</h2>
+          <p className="mt-1 text-sm text-zinc-600">
+            Last {VEO_RECENT_DAYS} days. Veo can take a few hours to process a recording — once it&apos;s ready, anyone can add the link here.
+          </p>
+          {recent.length === 0 ? (
+            <p className="mt-4 text-sm text-zinc-500">No recordings in the last {VEO_RECENT_DAYS} days.</p>
+          ) : (
+            <ul className="mt-4 divide-y divide-zinc-100">
+              {recent.map((r) => (
+                <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-zinc-900">
+                      {r.team_name}{r.fixture ? ` — ${r.fixture}` : ''}
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      {formatVeoTime(r.time_out)} · {r.camera} · {VEO_PURPOSES.find((p) => p.value === r.purpose)?.label ?? r.purpose}
+                    </p>
+                  </div>
+                  {r.recording_url ? (
+                    <a
+                      href={r.recording_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-semibold text-white hover:bg-zinc-800"
+                    >
+                      ▶ Watch
+                    </a>
+                  ) : (
+                    <div className="w-full sm:w-auto">
+                      <AddLink id={r.id} kind="recording" onAdded={loadOut} />
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
           )}
         </section>
       </div>

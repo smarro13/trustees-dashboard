@@ -32,6 +32,39 @@ export type PublicVeoCheckout = {
   team_name: string;
   fixture: string | null;
   time_out: string;
+  live_url: string | null;
+};
+
+// A recently returned session, for the public "Recent recordings" list.
+export type PublicVeoRecording = {
+  id: string;
+  camera: VeoCamera;
+  team_name: string;
+  purpose: string;
+  fixture: string | null;
+  time_out: string;
+  recording_url: string | null;
+};
+
+// The club's page in the Veo app: every recording and live stream, for
+// anyone who is a member of the club in Veo.
+export const VEO_CLUB_URL = 'https://app.veo.co/clubs/aldwinians-rufc/recordings/';
+
+// How far back the public page lists recordings (and allows adding a link).
+export const VEO_RECENT_DAYS = 30;
+
+// Only accept links to Veo's own sites, so the public page can't be used to
+// post arbitrary links. Returns the cleaned URL, or null if it isn't a Veo link.
+export const cleanVeoUrl = (value: unknown): string | null => {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    const url = new URL(value.trim());
+    const host = url.hostname.toLowerCase();
+    const isVeo = ['veo.co', 'veo.com'].some((d) => host === d || host.endsWith(`.${d}`));
+    return url.protocol === 'https:' && isVeo ? url.toString().slice(0, 500) : null;
+  } catch {
+    return null;
+  }
 };
 
 export const formatVeoTime = (iso: string) =>
