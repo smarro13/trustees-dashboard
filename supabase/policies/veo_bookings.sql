@@ -55,15 +55,6 @@ alter table public.veo_bookings
 alter table public.veo_bookings
   add constraint veo_bookings_time_order check (time_in is null or time_in >= time_out);
 
--- Veo links: a Veo Live stream while the camera is out, and the recording
--- once Veo has processed it. Only veo.co / veo.com links are accepted (checked
--- in the API routes).
-alter table public.veo_bookings add column if not exists live_url text;
-alter table public.veo_bookings add column if not exists recording_url text;
-
-create index if not exists veo_bookings_recent_recordings_idx
-  on public.veo_bookings (time_in desc) where (status = 'returned');
-
 -- One open sign-out per camera.
 create unique index if not exists veo_bookings_one_out_per_camera
   on public.veo_bookings (camera) where (status = 'out');
