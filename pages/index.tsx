@@ -58,9 +58,8 @@ const OPERATIONS_PAGES = [
   },
   {
     title: '📺 Media Screens',
-    description: 'Manage content shown on the clubhouse media screens.',
+    description: 'What each clubhouse screen shows and where its content comes from.',
     href: '/operations/media-screens',
-    comingSoon: true,
   },
 ];
 
