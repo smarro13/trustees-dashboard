@@ -5,11 +5,11 @@
 -- the PDF. No IP addresses or other personal data are stored — just when,
 -- which link (source) and the rough device type.
 --
---   programme_opens : SELECT admin, trustee, director, president, commercial
+--   programme_opens : SELECT any logged-in dashboard user
 --                     INSERT/UPDATE/DELETE nobody (the tracking route writes
 --                     with the service role key, which bypasses RLS)
 --
--- Read by /agenda/programme-analytics. Run once in the Supabase SQL editor.
+-- Read by /operations/programme-stats. Run once in the Supabase SQL editor.
 -- Idempotent — safe to re-run.
 
 begin;
@@ -35,8 +35,7 @@ create policy "dashboard read programme_opens"
   on public.programme_opens
   for select
   to authenticated
-  using (lower(coalesce(auth.jwt() -> 'app_metadata' ->> 'role', auth.jwt() -> 'user_metadata' ->> 'role'))
-    in ('admin', 'trustee', 'director', 'directors', 'management', 'mangement', 'president', 'commercial', 'commerical'));
+  using (true);
 
 -- Totals for the dashboard, so it never has to page through raw rows.
 -- security_invoker makes the views obey the RLS policy above.

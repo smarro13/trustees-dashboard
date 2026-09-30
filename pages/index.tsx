@@ -46,14 +46,21 @@ const SHAREABLE_PAGES = [
 
 const OPERATIONS_PAGES = [
   {
+    title: '📰 Matchday Programme',
+    description: 'How many times the matchday programme is opened each week.',
+    href: '/operations/programme-stats',
+  },
+  {
     title: '📦 Asset Register',
     description: 'Record of club-owned equipment, fixtures and property.',
     href: '/operations/asset-register',
+    comingSoon: true,
   },
   {
     title: '📺 Media Screens',
     description: 'Manage content shown on the clubhouse media screens.',
     href: '/operations/media-screens',
+    comingSoon: true,
   },
 ];
 
@@ -526,9 +533,11 @@ export default function LandingPage() {
                         <h3 className="text-base font-semibold text-slate-900">{page.title}</h3>
                         <p className="mt-1 text-sm text-slate-600">{page.description}</p>
                       </div>
-                      <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-                        Coming soon
-                      </span>
+                      {page.comingSoon && (
+                        <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                          Coming soon
+                        </span>
+                      )}
                     </div>
                   </Link>
                 ))}
