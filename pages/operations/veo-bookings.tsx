@@ -4,38 +4,42 @@ import { supabase } from '../../lib/supabaseClient';
 import { resolveRoleFromUser } from '../../lib/roles';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 import ConfirmDialog from '../../components/ConfirmDialog';
-import { type VeoBookingStatus, VEO_CAMERAS, VEO_PURPOSES, formatVeoTime } from '../../lib/veoBookings';
+import {
+  type VeoBookingStatus,
+  VEO_CAMERAS,
+  VEO_PURPOSES,
+  formatVeoTime,
+  nowForDateTimeInput,
+  veoDurationSince,
+} from '../../lib/veoBookings';
 
-// All VEO camera bookings made on /public/veo-booking, with contact details.
-// Admins, trustees and directors can record collection, return and
-// cancellation (enforced by RLS in supabase/policies/veo_bookings.sql).
+// The VEO camera sign-out log from /public/veo-booking. Admins, trustees and
+// directors can sign a camera back in (if the coach forgot) or cancel a
+// mistaken sign-out — both via pages/api/private/veo-booking-status.ts, which
+// also emails the club.
 
 type Booking = {
   id: string;
   camera: string;
   booked_by: string;
-  contact_phone: string;
   contact_email: string | null;
   team_name: string;
   purpose: string;
   fixture: string | null;
   time_out: string;
-  time_in: string;
+  time_in: string | null;
   accessories: string[];
   notes: string | null;
   status: VeoBookingStatus;
-  collected_at: string | null;
   returned_at: string | null;
   return_notes: string | null;
-  created_at: string;
+  updated_by: string | null;
 };
 
-type View = 'current' | 'past';
-
 const EDIT_ROLES = new Set(['admin', 'trustee', 'director']);
+const LONG_OUT_HOURS = 48;
 
 const STATUS_STYLES: Record<VeoBookingStatus, { label: string; className: string }> = {
-  booked: { label: 'Booked', className: 'bg-blue-100 text-blue-800' },
   out: { label: 'Out', className: 'bg-amber-100 text-amber-800' },
   returned: { label: 'Returned', className: 'bg-emerald-100 text-emerald-800' },
   cancelled: { label: 'Cancelled', className: 'bg-zinc-100 text-zinc-600' },
@@ -48,10 +52,10 @@ export default function VeoBookingsAdminPage() {
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
   const [canEdit, setCanEdit] = useState(false);
-  const [view, setView] = useState<View>('current');
   const [cameraFilter, setCameraFilter] = useState<string>('all');
 
   const [returningId, setReturningId] = useState<string | null>(null);
+  const [returnTime, setReturnTime] = useState('');
   const [returnNotes, setReturnNotes] = useState('');
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null);
   const [busy, setBusy] = useState(false);
@@ -66,9 +70,9 @@ export default function VeoBookingsAdminPage() {
     const { data, error } = await supabase
       .from('veo_bookings')
       .select('*')
-      .order('time_out', { ascending: true })
-      .limit(500);
-    if (error) setNotice({ type: 'error', message: `Failed to load bookings: ${error.message}` });
+      .order('time_out', { ascending: false })
+      .limit(300);
+    if (error) setNotice({ type: 'error', message: `Failed to load the log: ${error.message}` });
     else setBookings(data as Booking[]);
     setLoading(false);
   };
@@ -83,13 +87,8 @@ export default function VeoBookingsAdminPage() {
     void init();
   }, []);
 
-  // Saves the change and emails the club (pages/api/private/veo-booking-status.ts).
-  const update = async (
-    booking: Booking,
-    action: 'collected' | 'returned' | 'cancelled',
-    message: string,
-    returnNotes?: string,
-  ) => {
+  // Saves the change and emails the club.
+  const update = async (booking: Booking, action: 'returned' | 'cancelled', message: string, extra?: Record<string, string>) => {
     setBusy(true);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -97,11 +96,11 @@ export default function VeoBookingsAdminPage() {
       const response = await fetch('/api/private/veo-booking-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
-        body: JSON.stringify({ id: booking.id, action, returnNotes }),
+        body: JSON.stringify({ id: booking.id, action, ...extra }),
       });
       const body = await response.json();
       if (!response.ok || !body.ok) {
-        setNotice({ type: 'error', message: `Failed to update booking: ${body.error ?? 'unknown error'}` });
+        setNotice({ type: 'error', message: `Failed to update: ${body.error ?? 'unknown error'}` });
         return false;
       }
       setNotice({
@@ -111,22 +110,16 @@ export default function VeoBookingsAdminPage() {
       await loadBookings();
       return true;
     } catch {
-      setNotice({ type: 'error', message: 'Failed to update booking: could not reach the server.' });
+      setNotice({ type: 'error', message: 'Failed to update: could not reach the server.' });
       return false;
     } finally {
       setBusy(false);
     }
   };
 
-  const now = Date.now();
-  const isPast = (b: Booking) => b.status === 'returned' || b.status === 'cancelled';
-  const isOverdue = (b: Booking) => b.status === 'out' && new Date(b.time_in).getTime() < now;
+  const hoursOut = (b: Booking) => (Date.now() - new Date(b.time_out).getTime()) / 3_600_000;
   const outNow = bookings.filter((b) => b.status === 'out');
-
-  const shown = bookings
-    .filter((b) => (view === 'past' ? isPast(b) : !isPast(b)))
-    .filter((b) => cameraFilter === 'all' || b.camera === cameraFilter);
-  if (view === 'past') shown.reverse();
+  const shown = bookings.filter((b) => cameraFilter === 'all' || b.camera === cameraFilter);
 
   return (
     <main className="min-h-screen bg-zinc-50">
@@ -135,10 +128,10 @@ export default function VeoBookingsAdminPage() {
           <Link href="/" className="mb-3 inline-block text-sm font-medium text-blue-600 hover:underline">
             ← Back to Dashboard
           </Link>
-          <h1 className="text-3xl font-extrabold text-zinc-900">🎥 VEO Bookings</h1>
+          <h1 className="text-3xl font-extrabold text-zinc-900">🎥 VEO Cameras</h1>
           <p className="mt-1 text-zinc-600">
-            Camera bookings made on the{' '}
-            <Link href="/public/veo-booking" className="font-medium text-blue-600 hover:underline">public booking page</Link>.
+            Sign-out log from the{' '}
+            <Link href="/public/veo-booking" className="font-medium text-blue-600 hover:underline">public VEO page</Link>.
           </p>
         </header>
 
@@ -146,48 +139,34 @@ export default function VeoBookingsAdminPage() {
 
         <section className="mb-6 grid gap-3 sm:grid-cols-2">
           {VEO_CAMERAS.map((camera) => {
-            const out = outNow.find((b) => b.camera === camera);
-            const next = bookings.find((b) => b.camera === camera && b.status === 'booked' && new Date(b.time_in).getTime() >= now);
+            const current = outNow.find((b) => b.camera === camera);
+            const long = current && hoursOut(current) > LONG_OUT_HOURS;
             return (
               <div key={camera} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-zinc-200">
                 <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{camera}</p>
-                {out ? (
+                {current ? (
                   <>
-                    <p className={`mt-1 text-lg font-bold ${isOverdue(out) ? 'text-rose-700' : 'text-amber-700'}`}>
-                      {isOverdue(out) ? 'Overdue' : 'Out'} with {out.team_name}
+                    <p className={`mt-1 text-lg font-bold ${long ? 'text-rose-700' : 'text-amber-700'}`}>
+                      Out with {current.team_name}
                     </p>
-                    <p className="text-sm text-zinc-600">Due back {formatVeoTime(out.time_in)} · {out.booked_by}</p>
+                    <p className="text-sm text-zinc-600">
+                      {current.booked_by} · since {formatVeoTime(current.time_out)} ({veoDurationSince(current.time_out)})
+                    </p>
                   </>
                 ) : (
-                  <>
-                    <p className="mt-1 text-lg font-bold text-emerald-700">At the club</p>
-                    <p className="text-sm text-zinc-600">
-                      {next ? `Next: ${next.team_name}, ${formatVeoTime(next.time_out)}` : 'No upcoming bookings'}
-                    </p>
-                  </>
+                  <p className="mt-1 text-lg font-bold text-emerald-700">At the club</p>
                 )}
               </div>
             );
           })}
         </section>
 
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          {(['current', 'past'] as View[]).map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setView(v)}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium ${
-                view === v ? 'bg-zinc-900 text-white' : 'border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
-              }`}
-            >
-              {v === 'current' ? 'Upcoming & out' : 'Past & cancelled'}
-            </button>
-          ))}
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold text-zinc-900">Log</h2>
           <select
             value={cameraFilter}
             onChange={(e) => setCameraFilter(e.target.value)}
-            className="ml-auto rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm"
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm"
             aria-label="Filter by camera"
           >
             <option value="all">Both cameras</option>
@@ -199,25 +178,26 @@ export default function VeoBookingsAdminPage() {
           <p className="text-sm text-zinc-400">Loading…</p>
         ) : shown.length === 0 ? (
           <p className="rounded-lg border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500">
-            {view === 'current' ? 'No upcoming bookings.' : 'No past bookings yet.'}
+            No sign-outs yet.
           </p>
         ) : (
           <ul className="space-y-3">
             {shown.map((b) => {
-              const status = STATUS_STYLES[b.status];
-              const overdue = isOverdue(b);
+              const status = STATUS_STYLES[b.status] ?? STATUS_STYLES.cancelled;
+              const long = b.status === 'out' && hoursOut(b) > LONG_OUT_HOURS;
               return (
-                <li key={b.id} className={`rounded-2xl bg-white p-5 shadow-sm ring-1 ${overdue ? 'ring-rose-300' : 'ring-zinc-200'}`}>
+                <li key={b.id} className={`rounded-2xl bg-white p-5 shadow-sm ring-1 ${long ? 'ring-rose-300' : 'ring-zinc-200'}`}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-base font-semibold text-zinc-900">
                         {b.camera} · {b.team_name}
-                        <span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-medium ${overdue ? 'bg-rose-100 text-rose-800' : status.className}`}>
-                          {overdue ? 'Overdue' : status.label}
+                        <span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-medium ${long ? 'bg-rose-100 text-rose-800' : status.className}`}>
+                          {long ? `Out ${veoDurationSince(b.time_out)}` : status.label}
                         </span>
                       </p>
                       <p className="mt-0.5 text-sm text-zinc-700">
-                        {formatVeoTime(b.time_out)} → {formatVeoTime(b.time_in)}
+                        Out {formatVeoTime(b.time_out)}
+                        {b.time_in ? ` → in ${formatVeoTime(b.time_in)} (${veoDurationSince(b.time_out, new Date(b.time_in).getTime())})` : ''}
                       </p>
                       <p className="mt-0.5 text-sm text-zinc-500">
                         {purposeLabel(b.purpose)}{b.fixture ? ` · ${b.fixture}` : ''}
@@ -225,75 +205,70 @@ export default function VeoBookingsAdminPage() {
                     </div>
                     <div className="text-right text-sm">
                       <p className="font-medium text-zinc-900">{b.booked_by}</p>
-                      <a href={`tel:${b.contact_phone.replace(/\s+/g, '')}`} className="block text-blue-600 hover:underline">{b.contact_phone}</a>
                       {b.contact_email && (
                         <a href={`mailto:${b.contact_email}`} className="block text-blue-600 hover:underline">{b.contact_email}</a>
                       )}
                     </div>
                   </div>
 
-                  {(b.accessories.length > 0 || b.notes || b.return_notes || b.collected_at || b.returned_at) && (
+                  {(b.accessories.length > 0 || b.notes || b.return_notes) && (
                     <div className="mt-3 space-y-1 border-t border-zinc-100 pt-3 text-sm text-zinc-600">
-                      {b.accessories.length > 0 && <p>Taking: {b.accessories.join(', ')}</p>}
+                      {b.accessories.length > 0 && <p>Taken: {b.accessories.join(', ')}</p>}
                       {b.notes && <p>Notes: {b.notes}</p>}
-                      {b.collected_at && <p>Collected {formatVeoTime(b.collected_at)}</p>}
-                      {b.returned_at && <p>Returned {formatVeoTime(b.returned_at)}</p>}
                       {b.return_notes && <p>Return notes: {b.return_notes}</p>}
                     </div>
                   )}
 
-                  {canEdit && !isPast(b) && (
+                  {canEdit && b.status === 'out' && returningId !== b.id && (
                     <div className="mt-3 flex flex-wrap gap-2 border-t border-zinc-100 pt-3">
-                      {b.status === 'booked' && (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => update(b, 'collected', `${b.camera} marked as collected.`)}
-                          className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-                        >
-                          Mark collected
-                        </button>
-                      )}
                       <button
                         type="button"
                         disabled={busy}
-                        onClick={() => { setReturningId(b.id); setReturnNotes(''); }}
+                        onClick={() => { setReturningId(b.id); setReturnTime(nowForDateTimeInput()); setReturnNotes(''); }}
                         className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
                       >
-                        Mark returned
+                        Sign back in
                       </button>
-                      {b.status === 'booked' && (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => setCancelTarget(b)}
-                          className="rounded-lg border border-rose-200 px-3 py-1.5 text-sm font-medium text-rose-600 hover:bg-rose-50"
-                        >
-                          Cancel booking
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setCancelTarget(b)}
+                        className="rounded-lg border border-rose-200 px-3 py-1.5 text-sm font-medium text-rose-600 hover:bg-rose-50"
+                      >
+                        Cancel (entered by mistake)
+                      </button>
                     </div>
                   )}
 
                   {returningId === b.id && (
                     <form
-                      className="mt-3 flex flex-col gap-2 sm:flex-row"
+                      className="mt-3 grid gap-2 border-t border-zinc-100 pt-3 sm:grid-cols-[auto_1fr_auto]"
                       onSubmit={async (e) => {
                         e.preventDefault();
-                        const ok = await update(b, 'returned', `${b.camera} marked as returned.`, returnNotes);
+                        const ok = await update(b, 'returned', `${b.camera} signed back in.`, {
+                          timeIn: new Date(returnTime).toISOString(),
+                          returnNotes,
+                        });
                         if (ok) setReturningId(null);
                       }}
                     >
                       <input
-                        autoFocus
-                        placeholder="Condition / battery / anything missing (optional)"
+                        type="datetime-local"
+                        aria-label="Time in"
+                        value={returnTime}
+                        onChange={(e) => setReturnTime(e.target.value)}
+                        required
+                        className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-emerald-400 focus:outline-none"
+                      />
+                      <input
+                        placeholder="Condition / anything missing (optional)"
                         value={returnNotes}
                         onChange={(e) => setReturnNotes(e.target.value)}
-                        className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-emerald-400 focus:outline-none"
+                        className="min-w-0 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-emerald-400 focus:outline-none"
                       />
                       <div className="flex gap-2">
                         <button type="submit" disabled={busy} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
-                          Confirm return
+                          Save
                         </button>
                         <button type="button" onClick={() => setReturningId(null)} className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50">
                           Cancel
@@ -310,12 +285,12 @@ export default function VeoBookingsAdminPage() {
 
       <ConfirmDialog
         open={!!cancelTarget}
-        title="Cancel this booking?"
-        description={cancelTarget ? `${cancelTarget.camera} for ${cancelTarget.team_name}, ${formatVeoTime(cancelTarget.time_out)}. The camera becomes free for that time.` : ''}
-        confirmLabel="Cancel booking"
+        title="Cancel this sign-out?"
+        description={cancelTarget ? `${cancelTarget.camera} for ${cancelTarget.team_name}, ${formatVeoTime(cancelTarget.time_out)}. Use this only if it was entered by mistake — the camera shows as available again.` : ''}
+        confirmLabel="Cancel sign-out"
         onConfirm={async () => {
           if (!cancelTarget) return;
-          const ok = await update(cancelTarget, 'cancelled', 'Booking cancelled.');
+          const ok = await update(cancelTarget, 'cancelled', 'Sign-out cancelled.');
           if (ok) setCancelTarget(null);
         }}
         onCancel={() => setCancelTarget(null)}

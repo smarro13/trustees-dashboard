@@ -103,13 +103,13 @@ export async function sendVeoBookerConfirmation(booking: VeoEmailBooking) {
   if (!booking.contact_email) return false;
   try {
     const { text, html } = buildEmail('out', booking, undefined, false);
-    const reminder = 'When you bring it back, sign it back in on the same page: dashboard.aldwinians.co.uk/public/veo-booking. Please return it charged and in its case.';
+    const reminder = 'When you bring it back, sign it back in on the same page: dashboard.aldwinians.co.uk/public/veo-booking?mode=return. Please return it charged and in its case.';
     return await send({
       to: [booking.contact_email],
       reply_to: VEO_EMAIL_TO[0],
       subject: `You've signed out ${booking.camera}`,
       text: `${text}\n\n${reminder}`,
-      html: `${html}<p>When you bring it back, sign it back in on the same page: <a href="https://dashboard.aldwinians.co.uk/public/veo-booking">dashboard.aldwinians.co.uk/public/veo-booking</a>. Please return it charged and in its case.</p>`,
+      html: `${html}<p>When you bring it back, sign it back in on the same page: <a href="https://dashboard.aldwinians.co.uk/public/veo-booking?mode=return">dashboard.aldwinians.co.uk/public/veo-booking</a>. Please return it charged and in its case.</p>`,
     });
   } catch {
     return false;
