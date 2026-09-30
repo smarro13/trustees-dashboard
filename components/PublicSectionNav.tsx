@@ -10,7 +10,6 @@ const NAV_ITEMS = [
   { href: '/public/minutes', label: 'Minutes' },
   { href: '/public/agm-minutes', label: 'AGM Minutes' },
   { href: '/public/padel-vote', label: 'Padel Vote' },
-  { href: '/public/registers', label: 'Registers' },
   { href: '/public/veo-booking', label: 'VEO Booking' },
 ];
 

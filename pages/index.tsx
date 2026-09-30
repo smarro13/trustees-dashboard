@@ -34,7 +34,7 @@ const SHAREABLE_PAGES = [
   },
   {
     title: 'VEO Booking',
-    description: 'Public booking page for the club VEO camera (coming soon).',
+    description: 'Public booking form for the club VEO cameras.',
     href: '/public/veo-booking',
   },
   {
@@ -49,6 +49,11 @@ const OPERATIONS_PAGES = [
     title: '📰 Matchday Programme',
     description: 'How many times the matchday programme is opened each week.',
     href: '/operations/programme-stats',
+  },
+  {
+    title: '🎥 VEO Bookings',
+    description: 'Camera bookings, who has VEO 1 / VEO 2, and returns.',
+    href: '/operations/veo-bookings',
   },
   {
     title: '📦 Asset Register',
@@ -515,7 +520,7 @@ export default function LandingPage() {
                   <span className="text-xl">🛠️</span>
                   <div>
                     <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Club Operations</h2>
-                    <p className="text-xs text-slate-500">Registers and tools for running the club</p>
+                    <p className="text-xs text-slate-500">Tools for running the club</p>
                   </div>
                 </div>
               </div>
