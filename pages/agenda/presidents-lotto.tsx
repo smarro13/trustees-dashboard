@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabaseClient';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
+import { resolveRoleFromUser } from '../../lib/roles';
 
 type LottoMember = {
   id: string;
@@ -16,6 +17,7 @@ type DrawResult = {
   first: string;
   second: string;
   third: string;
+  memberIds: [string, string, string];
 };
 
 type SavedDraw = {
@@ -134,6 +136,15 @@ export default function PresidentsLottoPage() {
 
   // Add member form
   const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+
+  // Member emails (admin only), keyed by member id
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [contacts, setContacts] = useState<Record<string, string>>({});
+
+  // Inline email edit
+  const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
+  const [emailDraft, setEmailDraft] = useState('');
   const [adding, setAdding] = useState(false);
 
   // Delete confirm
@@ -148,6 +159,8 @@ export default function PresidentsLottoPage() {
   const [revealed, setRevealed] = useState<[boolean, boolean, boolean]>([false, false, false]);
   const [confetti, setConfetti] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [testMemberId, setTestMemberId] = useState('');
+  const [sendingTest, setSendingTest] = useState(false);
   const [canEdit, setCanEdit] = useState(true);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -171,10 +184,23 @@ export default function PresidentsLottoPage() {
     const loadCanEdit = async () => {
       const allowed = await canCurrentUserEditThisAgendaPage();
       setCanEdit(allowed);
+      const { data } = await supabase.auth.getUser();
+      setIsAdmin(resolveRoleFromUser(data.user) === 'admin');
     };
 
     void loadCanEdit();
   }, []);
+
+  // Member emails are admin-only, enforced by RLS on
+  // presidents_lotto_member_contacts — other roles never load them.
+  const loadContacts = async () => {
+    const { data } = await supabase
+      .from('presidents_lotto_member_contacts')
+      .select('member_id, email');
+    setContacts(Object.fromEntries((data ?? []).map((c) => [c.member_id, c.email])));
+  };
+
+  useEffect(() => { if (isAdmin) void loadContacts(); }, [isAdmin]);
 
   const loadData = async () => {
     setLoading(true);
@@ -209,13 +235,29 @@ export default function PresidentsLottoPage() {
     const trimmed = newName.trim();
     if (!trimmed) return;
     setAdding(true);
-    const { error } = await supabase
+    const { data: added, error } = await supabase
       .from('presidents_lotto_members')
-      .insert({ name: trimmed, is_active: true });
+      .insert({ name: trimmed, is_active: true })
+      .select('id')
+      .single();
+    if (error || !added) {
+      setAdding(false);
+      showNotice('error', 'Failed to add member: ' + (error?.message ?? 'unknown error'));
+      return;
+    }
+
+    const email = isAdmin ? newEmail.trim() : '';
+    const contactError = email
+      ? (await supabase.from('presidents_lotto_member_contacts').insert({ member_id: added.id, email })).error
+      : null;
     setAdding(false);
-    if (error) { showNotice('error', 'Failed to add member: ' + error.message); return; }
     setNewName('');
-    await loadData();
+    setNewEmail('');
+    await Promise.all([loadData(), isAdmin ? loadContacts() : Promise.resolve()]);
+    if (contactError) {
+      showNotice('error', `${trimmed} added, but their email could not be saved: ${contactError.message}`);
+      return;
+    }
     showNotice('success', `${trimmed} added to the lotto.`);
   };
 
@@ -233,6 +275,21 @@ export default function PresidentsLottoPage() {
     if (error) { showNotice('error', 'Failed to update member.'); return; }
     await loadData();
     showNotice('success', `${member.name} ${member.is_active ? 'removed from' : 'added to'} this draw.`);
+  };
+
+  // ── Edit email ───────────────────────────────────────────────────────────────
+  const saveEmail = async (member: LottoMember) => {
+    if (!isAdmin) return;
+
+    const email = emailDraft.trim();
+    const contactsTable = supabase.from('presidents_lotto_member_contacts');
+    const { error } = email
+      ? await contactsTable.upsert({ member_id: member.id, email, updated_at: new Date().toISOString() })
+      : await contactsTable.delete().eq('member_id', member.id);
+    if (error) { showNotice('error', 'Failed to update email: ' + error.message); return; }
+    setEditingEmailId(null);
+    await loadContacts();
+    showNotice('success', email ? `Email updated for ${member.name}.` : `Email removed for ${member.name}.`);
   };
 
   // ── Delete member ────────────────────────────────────────────────────────────
@@ -306,7 +363,12 @@ export default function PresidentsLottoPage() {
       setSlots(winners);
       setLocked([true, true, true]);
       setDrawing(false);
-      setResult({ first: winners[0], second: winners[1], third: winners[2] });
+      setResult({
+        first: winners[0],
+        second: winners[1],
+        third: winners[2],
+        memberIds: [shuffled[0].id, shuffled[1].id, shuffled[2].id],
+      });
     }, 4400);
 
     // Staggered reveal + confetti
@@ -327,15 +389,72 @@ export default function PresidentsLottoPage() {
 
     if (!result) return;
     setSaving(true);
-    const { error } = await supabase.from('presidents_lotto_draws').insert({
-      first_place: result.first,
-      second_place: result.second,
-      third_place: result.third,
-    });
+    const { data: saved, error } = await supabase
+      .from('presidents_lotto_draws')
+      .insert({
+        first_place: result.first,
+        second_place: result.second,
+        third_place: result.third,
+      })
+      .select('id')
+      .single();
+    if (error || !saved) {
+      setSaving(false);
+      showNotice('error', 'Failed to save draw: ' + (error?.message ?? 'unknown error'));
+      return;
+    }
+
+    const notifyMessage = await notifyWinners(saved.id, result.memberIds);
     setSaving(false);
-    if (error) { showNotice('error', 'Failed to save draw: ' + error.message); return; }
+    setResult(null);
     await loadData();
-    showNotice('success', 'Draw saved to history.');
+    showNotice('success', `Draw saved to history. ${notifyMessage}`);
+  };
+
+  // Emails the winners; returns a sentence describing what happened.
+  const notifyWinners = async (drawId: string, memberIds: [string, string, string]) => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const response = await fetch('/api/private/lotto-notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
+        body: JSON.stringify({ drawId, memberIds }),
+      });
+      const body = await response.json();
+      if (!response.ok || !body.ok) return `Winners were not emailed: ${body.error ?? 'unknown error'}.`;
+      if (!body.configured) return 'Winner emails are not set up yet, so nobody was emailed.';
+
+      const parts: string[] = [];
+      if (body.sent.length) parts.push(`Emailed ${body.sent.join(', ')}.`);
+      if (body.skipped.length) parts.push(`No email address for ${body.skipped.join(', ')}.`);
+      if (body.failed?.length) parts.push(`Email failed for ${body.failed.join(', ')}.`);
+      return parts.join(' ');
+    } catch {
+      return 'Winners were not emailed: could not reach the server.';
+    }
+  };
+
+  // ── Test email (admin only) ─────────────────────────────────────────────────
+  const sendTestEmail = async () => {
+    if (!isAdmin || !testMemberId) return;
+    setSendingTest(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const response = await fetch('/api/private/lotto-notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
+        body: JSON.stringify({ test: true, memberId: testMemberId }),
+      });
+      const body = await response.json();
+      if (!response.ok || !body.ok) showNotice('error', `Test email not sent: ${body.error ?? 'unknown error'}`);
+      else showNotice('success', `Test email sent to ${body.sentTo}.`);
+    } catch {
+      showNotice('error', 'Test email not sent: could not reach the server.');
+    } finally {
+      setSendingTest(false);
+    }
   };
 
   const drawPhase = drawing ? 'spinning' : result ? (revealed[2] ? 'done' : 'revealing') : 'idle';
@@ -456,15 +575,25 @@ export default function PresidentsLottoPage() {
             </div>
 
             {/* Add member form */}
-            <form onSubmit={addMember} className="flex gap-2 border-b border-zinc-100 px-5 py-3">
+            <form onSubmit={addMember} className="flex flex-wrap gap-2 border-b border-zinc-100 px-5 py-3">
               <input
                 type="text"
                 placeholder="Member name…"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-400 focus:outline-none"
+                className="min-w-0 flex-1 basis-32 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-400 focus:outline-none"
                 disabled={!canEdit}
               />
+              {isAdmin && (
+                <input
+                  type="email"
+                  placeholder="Email (optional)"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  className="min-w-0 flex-1 basis-40 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-400 focus:outline-none"
+                  disabled={!canEdit}
+                />
+              )}
               <button
                 type="submit"
                 disabled={adding || !newName.trim() || !canEdit}
@@ -481,18 +610,33 @@ export default function PresidentsLottoPage() {
             ) : (
               <ul className="divide-y divide-zinc-100 max-h-[480px] overflow-y-auto">
                 {members.map((member) => (
-                  <li key={member.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                  <li key={member.id} className="px-5 py-3">
+                  <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 min-w-0">
                       <span
                         className={`inline-block h-2 w-2 shrink-0 rounded-full ${
                           member.is_active ? 'bg-emerald-500' : 'bg-zinc-300'
                         }`}
                       />
-                      <span className={`text-sm truncate ${member.is_active ? 'text-zinc-900 font-medium' : 'text-zinc-400 line-through'}`}>
-                        {member.name}
-                      </span>
+                      <div className="min-w-0">
+                        <p className={`text-sm truncate ${member.is_active ? 'text-zinc-900 font-medium' : 'text-zinc-400 line-through'}`}>
+                          {member.name}
+                        </p>
+                        {isAdmin && (
+                          <p className="text-xs truncate text-zinc-400">{contacts[member.id] || 'No email'}</p>
+                        )}
+                      </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => { setEditingEmailId(member.id); setEmailDraft(contacts[member.id] ?? ''); }}
+                          className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+                        >
+                          Email
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => toggleActive(member)}
@@ -514,6 +658,32 @@ export default function PresidentsLottoPage() {
                         Delete
                       </button>
                     </div>
+                  </div>
+                  {isAdmin && editingEmailId === member.id && (
+                    <form
+                      onSubmit={(e) => { e.preventDefault(); void saveEmail(member); }}
+                      className="mt-2 flex gap-2"
+                    >
+                      <input
+                        type="email"
+                        autoFocus
+                        placeholder="name@example.com"
+                        value={emailDraft}
+                        onChange={(e) => setEmailDraft(e.target.value)}
+                        className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-red-400 focus:outline-none"
+                      />
+                      <button type="submit" className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-800">
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingEmailId(null)}
+                        className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+                      >
+                        Cancel
+                      </button>
+                    </form>
+                  )}
                   </li>
                 ))}
               </ul>
@@ -547,6 +717,38 @@ export default function PresidentsLottoPage() {
             )}
           </section>
         </div>
+
+        {/* ── TEST EMAIL (admin only) ───────────────────── */}
+        {isAdmin && (
+          <section className="mt-8 rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200">
+            <div className="border-b border-zinc-200 px-5 py-4">
+              <h2 className="text-lg font-semibold text-zinc-900">Test winner email</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Sends the 1st place email, marked [TEST], to one member&apos;s address. No draw is created.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 px-5 py-4">
+              <select
+                value={testMemberId}
+                onChange={(e) => setTestMemberId(e.target.value)}
+                className="min-w-0 flex-1 basis-48 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-400 focus:outline-none"
+              >
+                <option value="">Choose a member…</option>
+                {members.filter((m) => contacts[m.id]).map((m) => (
+                  <option key={m.id} value={m.id}>{m.name} — {contacts[m.id]}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={sendTestEmail}
+                disabled={!testMemberId || sendingTest}
+                className="rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-50"
+              >
+                {sendingTest ? 'Sending…' : 'Send test'}
+              </button>
+            </div>
+          </section>
+        )}
       </div>
 
       <ConfirmDialog
