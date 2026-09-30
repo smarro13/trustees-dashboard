@@ -57,11 +57,8 @@ const getRequiredRoleForPath = (pathname: string): DashboardRole => {
   if (
     pathname === '/agenda/commercial-transformation' ||
     pathname.startsWith('/agenda/prematch-meals') ||
-<<<<<<< HEAD
-    pathname === '/agenda/programme-analytics'
-=======
+    pathname === '/agenda/programme-analytics' ||
     pathname.startsWith('/agenda/anniversary-ties')
->>>>>>> b0402751f7cbd4db53ce58a6a851058b562110f4
   ) {
     return 'commercial';
   }
