@@ -44,7 +44,7 @@ const SHAREABLE_PAGES = [
   },
 ];
 
-const OPERATIONS_PAGES = [
+const OPERATIONS_PAGES: { title: string; description: string; href: string; comingSoon?: boolean }[] = [
   {
     title: '📰 Matchday Programme',
     description: 'How many times the matchday programme is opened each week.',
@@ -57,9 +57,8 @@ const OPERATIONS_PAGES = [
   },
   {
     title: '📦 Asset Register',
-    description: 'Record of club-owned equipment, fixtures and property.',
+    description: 'Club equipment, technology and subscriptions, with renewal and service dates.',
     href: '/operations/asset-register',
-    comingSoon: true,
   },
   {
     title: '📺 Media Screens',

@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
-import { VEO_ACCESSORIES, VEO_CAMERAS, VEO_PURPOSES, formatVeoTime } from '../../../lib/veoBookings';
+import { VEO_ACCESSORIES, VEO_CAMERAS, VEO_PURPOSES, cleanVeoUrl, formatVeoTime } from '../../../lib/veoBookings';
 import { sendVeoBookerConfirmation, sendVeoClubEmail } from '../../../lib/veoEmail';
 
 // Signs a VEO camera out from the public page. The database refuses a second
@@ -38,6 +38,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ? body.accessories.filter((a: unknown): a is string => typeof a === 'string' && (VEO_ACCESSORIES as readonly string[]).includes(a))
     : [];
   const timeOut = new Date(text(body.timeOut, 40));
+  const liveUrl = cleanVeoUrl(body.liveUrl);
+  if (text(body.liveUrl, 500) && !liveUrl) {
+    return res.status(400).json({ ok: false, error: 'The live link must be a Veo link (veo.co or veo.com).' });
+  }
 
   if (!bookedBy) return res.status(400).json({ ok: false, error: 'Your name is required.' });
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ ok: false, error: 'That email address doesn’t look right.' });
@@ -62,6 +66,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     time_out: timeOut.toISOString(),
     accessories,
     notes: notes || null,
+    live_url: liveUrl,
     status: 'out',
   };
 

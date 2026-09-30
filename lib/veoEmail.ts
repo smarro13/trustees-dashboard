@@ -27,6 +27,8 @@ export type VeoEmailBooking = {
   accessories: string[];
   notes: string | null;
   return_notes?: string | null;
+  live_url?: string | null;
+  recording_url?: string | null;
 };
 
 const HEADLINES: Record<VeoEmailEvent, string> = {
@@ -56,6 +58,8 @@ const buildEmail = (event: VeoEmailEvent, b: VeoEmailBooking, by?: string, forCl
     ...(b.accessories.length ? [['Taken', b.accessories.join(', ')] as Row] : []),
     ...(b.notes ? [['Notes', b.notes] as Row] : []),
     ...(b.return_notes ? [['Return notes', b.return_notes] as Row] : []),
+    ...(b.live_url ? [['Live stream', b.live_url] as Row] : []),
+    ...(b.recording_url ? [['Recording', b.recording_url] as Row] : []),
     ...(by ? [['Recorded on dashboard by', by] as Row] : []),
   ];
 

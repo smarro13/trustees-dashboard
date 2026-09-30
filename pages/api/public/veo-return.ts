@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { sendVeoClubEmail } from '../../../lib/veoEmail';
+import { cleanVeoUrl } from '../../../lib/veoBookings';
 
 // Signs a VEO camera back in from the public page: records the time in and
 // any condition notes against the open sign-out, then emails the club.
@@ -27,6 +28,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const returnedBy = text(body.name, 100);
   const returnNotes = text(body.returnNotes, 1000);
   const timeIn = new Date(text(body.timeIn, 40));
+  const recordingUrl = cleanVeoUrl(body.recordingUrl);
+  if (text(body.recordingUrl, 500) && !recordingUrl) {
+    return res.status(400).json({ ok: false, error: 'The recording link must be a Veo link (veo.co or veo.com).' });
+  }
 
   if (!id) return res.status(400).json({ ok: false, error: 'Choose the camera you’re returning.' });
   if (Number.isNaN(timeIn.getTime())) return res.status(400).json({ ok: false, error: 'Enter the time in.' });
@@ -56,6 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       time_in: timeIn.toISOString(),
       returned_at: new Date().toISOString(),
       return_notes: notes || null,
+      ...(recordingUrl ? { recording_url: recordingUrl } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)

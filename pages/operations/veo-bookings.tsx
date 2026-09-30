@@ -7,7 +7,9 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import {
   type VeoBookingStatus,
   VEO_CAMERAS,
+  VEO_CLUB_URL,
   VEO_PURPOSES,
+  cleanVeoUrl,
   formatVeoTime,
   nowForDateTimeInput,
   veoDurationSince,
@@ -33,6 +35,8 @@ type Booking = {
   status: VeoBookingStatus;
   returned_at: string | null;
   return_notes: string | null;
+  live_url: string | null;
+  recording_url: string | null;
   updated_by: string | null;
 };
 
@@ -58,6 +62,8 @@ export default function VeoBookingsAdminPage() {
   const [returnTime, setReturnTime] = useState('');
   const [returnNotes, setReturnNotes] = useState('');
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null);
+  const [linksId, setLinksId] = useState<string | null>(null);
+  const [linkDraft, setLinkDraft] = useState({ live_url: '', recording_url: '' });
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -117,6 +123,28 @@ export default function VeoBookingsAdminPage() {
     }
   };
 
+  // Admin edit of the Veo links (RLS allows admin / trustee / director).
+  const saveLinks = async (booking: Booking) => {
+    const cleaned = {
+      live_url: linkDraft.live_url.trim() ? cleanVeoUrl(linkDraft.live_url) : null,
+      recording_url: linkDraft.recording_url.trim() ? cleanVeoUrl(linkDraft.recording_url) : null,
+    };
+    if ((linkDraft.live_url.trim() && !cleaned.live_url) || (linkDraft.recording_url.trim() && !cleaned.recording_url)) {
+      setNotice({ type: 'error', message: 'Links must be Veo links (https://…veo.co or veo.com).' });
+      return;
+    }
+    setBusy(true);
+    const { error } = await supabase
+      .from('veo_bookings')
+      .update({ ...cleaned, updated_at: new Date().toISOString() })
+      .eq('id', booking.id);
+    setBusy(false);
+    if (error) { setNotice({ type: 'error', message: `Failed to save links: ${error.message}` }); return; }
+    setLinksId(null);
+    setNotice({ type: 'success', message: 'Links saved.' });
+    await loadBookings();
+  };
+
   const hoursOut = (b: Booking) => (Date.now() - new Date(b.time_out).getTime()) / 3_600_000;
   const outNow = bookings.filter((b) => b.status === 'out');
   const shown = bookings.filter((b) => cameraFilter === 'all' || b.camera === cameraFilter);
@@ -131,7 +159,11 @@ export default function VeoBookingsAdminPage() {
           <h1 className="text-3xl font-extrabold text-zinc-900">🎥 VEO Cameras</h1>
           <p className="mt-1 text-zinc-600">
             Sign-out log from the{' '}
-            <Link href="/public/veo-booking" className="font-medium text-blue-600 hover:underline">public VEO page</Link>.
+            <Link href="/public/veo-booking" className="font-medium text-blue-600 hover:underline">public VEO page</Link>
+            {' · '}
+            <a href={VEO_CLUB_URL} target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 hover:underline">
+              Club recordings in Veo ↗
+            </a>
           </p>
         </header>
 
@@ -217,6 +249,63 @@ export default function VeoBookingsAdminPage() {
                       {b.notes && <p>Notes: {b.notes}</p>}
                       {b.return_notes && <p>Return notes: {b.return_notes}</p>}
                     </div>
+                  )}
+
+                  {b.status !== 'cancelled' && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-3 text-sm">
+                      {b.live_url && (
+                        <a href={b.live_url} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-rose-600 px-3 py-1 font-medium text-white hover:bg-rose-700">
+                          🔴 Live link
+                        </a>
+                      )}
+                      {b.recording_url && (
+                        <a href={b.recording_url} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-zinc-900 px-3 py-1 font-medium text-white hover:bg-zinc-800">
+                          ▶ Recording
+                        </a>
+                      )}
+                      {!b.live_url && !b.recording_url && <span className="text-zinc-400">No Veo links yet</span>}
+                      {canEdit && linksId !== b.id && (
+                        <button
+                          type="button"
+                          onClick={() => { setLinksId(b.id); setLinkDraft({ live_url: b.live_url ?? '', recording_url: b.recording_url ?? '' }); }}
+                          className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                        >
+                          Edit links
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {linksId === b.id && (
+                    <form
+                      className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
+                      onSubmit={(e) => { e.preventDefault(); void saveLinks(b); }}
+                    >
+                      <input
+                        type="url"
+                        aria-label="Live link"
+                        placeholder="Live link (https://app.veo.co/…)"
+                        value={linkDraft.live_url}
+                        onChange={(e) => setLinkDraft({ ...linkDraft, live_url: e.target.value })}
+                        className="min-w-0 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-blue-400 focus:outline-none"
+                      />
+                      <input
+                        type="url"
+                        aria-label="Recording link"
+                        placeholder="Recording link (https://app.veo.co/…)"
+                        value={linkDraft.recording_url}
+                        onChange={(e) => setLinkDraft({ ...linkDraft, recording_url: e.target.value })}
+                        className="min-w-0 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-blue-400 focus:outline-none"
+                      />
+                      <div className="flex gap-2">
+                        <button type="submit" disabled={busy} className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                          Save
+                        </button>
+                        <button type="button" onClick={() => setLinksId(null)} className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50">
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
                   )}
 
                   {canEdit && b.status === 'out' && returningId !== b.id && (
