@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { VEO_ACCESSORIES, VEO_CAMERAS, VEO_PURPOSES, formatVeoTime } from '../../../lib/veoBookings';
+import { sendVeoBookerConfirmation, sendVeoClubEmail } from '../../../lib/veoEmail';
 
 // Creates a VEO camera booking from the public booking page. The database
 // refuses overlapping bookings of the same camera (veo_bookings_no_overlap).
@@ -98,6 +99,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     return res.status(500).json({ ok: false, error: error.message });
   }
+
+  const saved = {
+    camera,
+    booked_by: bookedBy,
+    contact_phone: phone,
+    contact_email: email || null,
+    team_name: team,
+    purpose,
+    fixture: fixture || null,
+    time_out: timeOut.toISOString(),
+    time_in: timeIn.toISOString(),
+    accessories,
+    notes: notes || null,
+  };
+  // Emails never block the booking — it's already saved.
+  await Promise.all([sendVeoClubEmail('booked', saved), sendVeoBookerConfirmation(saved)]);
 
   return res.status(200).json({ ok: true, id: data.id });
 }

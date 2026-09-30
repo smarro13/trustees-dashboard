@@ -48,7 +48,6 @@ export default function VeoBookingsAdminPage() {
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
   const [canEdit, setCanEdit] = useState(false);
-  const [userEmail, setUserEmail] = useState('');
   const [view, setView] = useState<View>('current');
   const [cameraFilter, setCameraFilter] = useState<string>('all');
 
@@ -79,23 +78,44 @@ export default function VeoBookingsAdminPage() {
       const { data } = await supabase.auth.getUser();
       const role = resolveRoleFromUser(data.user);
       setCanEdit(!!role && EDIT_ROLES.has(role));
-      setUserEmail(data.user?.email ?? '');
       await loadBookings();
     };
     void init();
   }, []);
 
-  const update = async (booking: Booking, patch: Partial<Booking>, message: string) => {
+  // Saves the change and emails the club (pages/api/private/veo-booking-status.ts).
+  const update = async (
+    booking: Booking,
+    action: 'collected' | 'returned' | 'cancelled',
+    message: string,
+    returnNotes?: string,
+  ) => {
     setBusy(true);
-    const { error } = await supabase
-      .from('veo_bookings')
-      .update({ ...patch, updated_at: new Date().toISOString(), updated_by: userEmail || null })
-      .eq('id', booking.id);
-    setBusy(false);
-    if (error) { setNotice({ type: 'error', message: `Failed to update booking: ${error.message}` }); return false; }
-    setNotice({ type: 'success', message });
-    await loadBookings();
-    return true;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const response = await fetch('/api/private/veo-booking-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
+        body: JSON.stringify({ id: booking.id, action, returnNotes }),
+      });
+      const body = await response.json();
+      if (!response.ok || !body.ok) {
+        setNotice({ type: 'error', message: `Failed to update booking: ${body.error ?? 'unknown error'}` });
+        return false;
+      }
+      setNotice({
+        type: 'success',
+        message: body.emailed ? `${message} Club emailed.` : `${message} (The club email could not be sent.)`,
+      });
+      await loadBookings();
+      return true;
+    } catch {
+      setNotice({ type: 'error', message: 'Failed to update booking: could not reach the server.' });
+      return false;
+    } finally {
+      setBusy(false);
+    }
   };
 
   const now = Date.now();
@@ -228,7 +248,7 @@ export default function VeoBookingsAdminPage() {
                         <button
                           type="button"
                           disabled={busy}
-                          onClick={() => update(b, { status: 'out', collected_at: new Date().toISOString() }, `${b.camera} marked as collected.`)}
+                          onClick={() => update(b, 'collected', `${b.camera} marked as collected.`)}
                           className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
                         >
                           Mark collected
@@ -260,16 +280,7 @@ export default function VeoBookingsAdminPage() {
                       className="mt-3 flex flex-col gap-2 sm:flex-row"
                       onSubmit={async (e) => {
                         e.preventDefault();
-                        const ok = await update(
-                          b,
-                          {
-                            status: 'returned',
-                            returned_at: new Date().toISOString(),
-                            collected_at: b.collected_at ?? b.time_out,
-                            return_notes: returnNotes.trim() || null,
-                          },
-                          `${b.camera} marked as returned.`,
-                        );
+                        const ok = await update(b, 'returned', `${b.camera} marked as returned.`, returnNotes);
                         if (ok) setReturningId(null);
                       }}
                     >
@@ -304,7 +315,7 @@ export default function VeoBookingsAdminPage() {
         confirmLabel="Cancel booking"
         onConfirm={async () => {
           if (!cancelTarget) return;
-          const ok = await update(cancelTarget, { status: 'cancelled' }, 'Booking cancelled.');
+          const ok = await update(cancelTarget, 'cancelled', 'Booking cancelled.');
           if (ok) setCancelTarget(null);
         }}
         onCancel={() => setCancelTarget(null)}
