@@ -180,132 +180,135 @@ export const parseMatterItems = (
   return Array.from(groupMap.entries()).map(([heading, items]) => ({ heading, items }));
 };
 
-/** Convert a simple Markdown string to HTML for Word-compatible DOCX output. */
-export const markdownToHtml = (md: string): string => {
-  const lines = md.split('\n');
-  const out: string[] = [];
-  let inList = false;
-
-  const closeList = () => { if (inList) { out.push('</ul>'); inList = false; } };
-
-  for (const raw of lines) {
-    if (raw.startsWith('#### ')) { closeList(); out.push(`<h4>${raw.slice(5).trim()}</h4>`); }
-    else if (raw.startsWith('### ')) { closeList(); out.push(`<h3>${raw.slice(4).trim()}</h3>`); }
-    else if (raw.startsWith('## ')) { closeList(); out.push(`<h2>${raw.slice(3).trim()}</h2>`); }
-    else if (raw.startsWith('# ')) { closeList(); out.push(`<h1>${raw.slice(2).trim()}</h1>`); }
-    else if (raw.startsWith('- ') || raw.startsWith('* ')) {
-      if (!inList) { out.push('<ul>'); inList = true; }
-      out.push(`<li>${raw.slice(2).trim()}</li>`);
-    } else if (raw.trim() === '---') { closeList(); out.push('<hr/>'); }
-    else if (raw.trim() === '') { closeList(); }
-    else { closeList(); out.push(`<p>${raw.trim()}</p>`); }
-  }
-  closeList();
-  return out.join('\n');
-};
-
 /**
  * MIME type and file extension for the generated minutes document.
  *
- * The generator emits "Word HTML" (an HTML document with the MSO / Word XML
- * namespace preamble) rather than a real OOXML .docx package. Word opens this
- * reliably when it is served as `application/msword` with a `.doc` extension.
- * It must NOT be labelled as
- * `application/vnd.openxmlformats-officedocument.wordprocessingml.document`
- * or given a `.docx` extension — modern Word / Office 365 / Google Docs
- * validate the ZIP/OOXML structure and reject the file as corrupt ("Word
- * found unreadable content"), which is why the saved minutes wouldn't open.
+ * This MUST be a genuine OOXML (ZIP) package, built with the `docx` package
+ * below — not HTML served under a Word MIME type / `.doc` extension.
+ *
+ * An earlier version of this generator emitted "Word HTML" (an HTML document
+ * with the MSO / Word XML namespace preamble) served as `application/msword`
+ * with a `.doc` extension. That trick only works via desktop Word's legacy
+ * HTML-import filter — it opened fine on a Windows laptop, but Word Mobile
+ * (iOS/Android), Word Online, and Google Docs all expect a real OOXML
+ * structure and either refuse the file or render it as raw markup, which is
+ * why it failed on mobile. A real .docx package opens correctly everywhere.
  */
-export const MINUTES_DOC_MIME = 'application/msword';
-export const MINUTES_DOC_EXTENSION = 'doc';
+export const MINUTES_DOC_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+export const MINUTES_DOC_EXTENSION = 'docx';
+
+const PRIORITY_COLOR: Record<Action['priority'], string> = {
+  high: 'D32F2F',
+  medium: 'F57C00',
+  low: '388E3C',
+};
+
+/** Turn a simple Markdown string into docx Paragraph blocks (headings, bullets, rules). */
+const buildRichTextParagraphs = (md: string, docx: typeof import('docx')): InstanceType<typeof import('docx').Paragraph>[] => {
+  const { Paragraph, HeadingLevel, BorderStyle } = docx;
+  const out: InstanceType<typeof Paragraph>[] = [];
+
+  for (const raw of md.split('\n')) {
+    if (raw.startsWith('#### ')) out.push(new Paragraph({ text: raw.slice(5).trim(), heading: HeadingLevel.HEADING_4 }));
+    else if (raw.startsWith('### ')) out.push(new Paragraph({ text: raw.slice(4).trim(), heading: HeadingLevel.HEADING_3 }));
+    else if (raw.startsWith('## ')) out.push(new Paragraph({ text: raw.slice(3).trim(), heading: HeadingLevel.HEADING_2 }));
+    else if (raw.startsWith('# ')) out.push(new Paragraph({ text: raw.slice(2).trim(), heading: HeadingLevel.HEADING_1 }));
+    else if (raw.startsWith('- ') || raw.startsWith('* ')) out.push(new Paragraph({ text: raw.slice(2).trim(), bullet: { level: 0 } }));
+    else if (raw.trim() === '---') out.push(new Paragraph({ text: '', border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: 'CCCCCC' } } }));
+    else if (raw.trim() === '') continue;
+    else out.push(new Paragraph({ text: raw.trim() }));
+  }
+  return out;
+};
 
 /**
- * Create a Word-compatible document (Word HTML) representation of minutes.
- * Returns a Blob typed as {@link MINUTES_DOC_MIME}; save it with a
- * `.${MINUTES_DOC_EXTENSION}` extension.
+ * Create a real Word (.docx) document for the minutes. Returns a Blob typed
+ * as {@link MINUTES_DOC_MIME}; save it with a `.${MINUTES_DOC_EXTENSION}`
+ * extension. `docx` is imported dynamically so it's only pulled into the
+ * bundle when a document is actually being generated.
  */
-export const createDocxBlob = (
+export const createDocxBlob = async (
   title: string,
   date: string,
   sections: Array<{ title: string; notes: string[] }>,
   actions: Action[],
   matterGroups: MatterGroup[],
   richText?: string,
-): Blob => {
-  const mainContent = richText
-    ? markdownToHtml(richText)
-    : `${sections
-        .filter((s) => s.notes.length > 0 && s.title !== 'Matters Arising' && s.title !== 'AOB')
-        .map((s) => `<h2>${s.title}</h2><ul>${s.notes.map((n) => `<li>${n}</li>`).join('')}</ul>`)
-        .join('')}
-       ${matterGroups.length > 0 ? `<h2>Matters Arising &amp; Other Business</h2>${matterGroups.map((g) => `<h3>${g.heading}</h3><ul>${g.items.map((item) => `<li>${item.text}${item.isAction ? ' <span class="action-flag">[ACTION]</span>' : ''}</li>`).join('')}</ul>`).join('')}` : ''}`;
-  const html = `<!DOCTYPE html>
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="ProgId" content="Word.Document"/>
-  <!--[if gte mso 9]><xml>
-    <w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument>
-  </xml><![endif]-->
-  <style>
-    body { font-family: Calibri, Arial; margin: 20px; }
-    h1 { font-size: 28pt; font-weight: bold; margin-bottom: 10px; }
-    h2 { font-size: 14pt; font-weight: bold; margin-top: 20px; margin-bottom: 8px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
-    h3 { font-size: 12pt; font-weight: bold; margin-top: 14px; margin-bottom: 4px; }
-    table { border-collapse: collapse; width: 100%; margin: 15px 0; }
-    th, td { border: 1px solid #000; padding: 8px; text-align: left; }
-    th { background-color: #D3D3D3; font-weight: bold; }
-    .meta { font-size: 11pt; margin-bottom: 20px; }
-    .priority-high { color: #d32f2f; font-weight: bold; }
-    .priority-medium { color: #f57c00; }
-    .priority-low { color: #388e3c; }
-    .action-flag { background-color: #fff3e0; padding: 2px 6px; border-radius: 3px; font-size: 9pt; }
-  </style>
-</head>
-<body>
-  <h1>${title}</h1>
-  <div class="meta">
-    <p><strong>Date:</strong> ${date}</p>
-    <p><strong>Generated:</strong> ${new Date().toLocaleString('en-GB')}</p>
-  </div>
+): Promise<Blob> => {
+  const docx = await import('docx');
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, ShadingType } = docx;
 
-  ${mainContent}
+  const bullet = (text: string) => new Paragraph({ text, bullet: { level: 0 } });
+  const heading = (text: string, level: (typeof HeadingLevel)[keyof typeof HeadingLevel]) =>
+    new Paragraph({ text, heading: level, spacing: { before: 240, after: 120 } });
 
-  ${
-    actions.length > 0
-      ? `
-    <h2>Action Items Summary</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Action</th>
-          <th>Owner</th>
-          <th>Due Date</th>
-          <th>Priority</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${actions
-          .map(
-            (a) => `
-          <tr>
-            <td>${a.what}</td>
-            <td>${a.owner || '—'}</td>
-            <td>${a.byWhen || '—'}</td>
-            <td class="priority-${a.priority}">${a.priority.toUpperCase()}</td>
-          </tr>
-        `,
-          )
-          .join('')}
-      </tbody>
-    </table>
-  `
-      : ''
+  const children: Array<InstanceType<typeof Paragraph> | InstanceType<typeof Table>> = [
+    new Paragraph({ text: title, heading: HeadingLevel.TITLE, spacing: { after: 160 } }),
+    new Paragraph({ children: [new TextRun({ text: `Date: ${date}`, bold: true })] }),
+    new Paragraph({
+      children: [new TextRun({ text: `Generated: ${new Date().toLocaleString('en-GB')}`, bold: true })],
+      spacing: { after: 200 },
+    }),
+  ];
+
+  if (richText) {
+    children.push(...buildRichTextParagraphs(richText, docx));
+  } else {
+    for (const s of sections) {
+      if (s.notes.length === 0 || s.title === 'Matters Arising' || s.title === 'AOB') continue;
+      children.push(heading(s.title, HeadingLevel.HEADING_2));
+      for (const note of s.notes) children.push(bullet(note));
+    }
+
+    if (matterGroups.length > 0) {
+      children.push(heading('Matters Arising & Other Business', HeadingLevel.HEADING_2));
+      for (const group of matterGroups) {
+        children.push(heading(group.heading, HeadingLevel.HEADING_3));
+        for (const item of group.items) {
+          children.push(
+            new Paragraph({
+              bullet: { level: 0 },
+              children: [
+                new TextRun(item.text),
+                ...(item.isAction ? [new TextRun({ text: '  [ACTION]', bold: true, color: 'B45309' })] : []),
+              ],
+            }),
+          );
+        }
+      }
+    }
   }
-</body>
-</html>`;
 
-  // BOM + msword MIME so Word (desktop, 365, and Word Online via download)
-  // opens it without the "unreadable content" prompt.
-  return new Blob(['﻿', html], { type: MINUTES_DOC_MIME });
+  if (actions.length > 0) {
+    children.push(heading('Action Items Summary', HeadingLevel.HEADING_2));
+
+    const headerCell = (text: string) =>
+      new TableCell({
+        shading: { fill: 'D3D3D3', type: ShadingType.CLEAR, color: 'auto' },
+        children: [new Paragraph({ children: [new TextRun({ text, bold: true })] })],
+      });
+    const bodyCell = (text: string, color?: string) =>
+      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text, bold: !!color, color })] })] });
+
+    const headerRow = new TableRow({
+      tableHeader: true,
+      children: [headerCell('Action'), headerCell('Owner'), headerCell('Due Date'), headerCell('Priority')],
+    });
+    const rows = actions.map(
+      (a) =>
+        new TableRow({
+          children: [
+            bodyCell(a.what),
+            bodyCell(a.owner || '—'),
+            bodyCell(a.byWhen || '—'),
+            bodyCell(a.priority.toUpperCase(), PRIORITY_COLOR[a.priority]),
+          ],
+        }),
+    );
+
+    children.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [headerRow, ...rows] }));
+  }
+
+  const doc = new Document({ sections: [{ properties: {}, children }] });
+  return Packer.toBlob(doc);
 };
