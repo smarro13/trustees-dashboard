@@ -94,7 +94,7 @@ const parseSupportingEvidenceUrls = (value: unknown): string[] => {
 };
 
 export default function CommercialTransformationPage() {
-	const [activeTab, setActiveTab] = useState<'updates' | 'gym' | 'jobclub' | 'prematchmeals' | 'anniversaryties'>('updates');
+	const [activeTab, setActiveTab] = useState<'updates' | 'gym' | 'jobclub' | 'prematchmeals' | 'anniversaryties' | 'halloween'>('updates');
 	const [user, setUser] = useState<User | null>(null);
 	const [meetings, setMeetings] = useState<any[]>([]);
 	const [reports, setReports] = useState<any[]>([]);
@@ -492,6 +492,13 @@ export default function CommercialTransformationPage() {
 							className={`rounded-md px-4 py-2 text-sm font-medium transition ${activeTab === 'anniversaryties' ? 'bg-red-600 text-white' : 'bg-white text-zinc-700 hover:bg-zinc-100'}`}
 						>
 							90th Anniversary Ties
+						</button>
+						<button
+							type="button"
+							onClick={() => setActiveTab('halloween')}
+							className={`rounded-md px-4 py-2 text-sm font-medium transition ${activeTab === 'halloween' ? 'bg-red-600 text-white' : 'bg-white text-zinc-700 hover:bg-zinc-100'}`}
+						>
+							Halloween
 						</button>
 					</div>
 				</section>
@@ -915,6 +922,24 @@ export default function CommercialTransformationPage() {
 							<iframe
 								title="90th Anniversary Ties"
 								src="/agenda/anniversary-ties?embedded=1"
+								className="h-[900px] w-full rounded-md border border-zinc-200"
+							/>
+						</div>
+					</section>
+				)}
+
+				{activeTab === 'halloween' && (
+					<section className="space-y-4">
+						<div className="rounded-lg border border-zinc-200 bg-white p-4">
+							<div className="mb-3 flex items-center justify-between gap-3">
+								<h2 className="text-xl font-semibold text-zinc-900">Halloween Family Fun Night</h2>
+								<Link href="/agenda/halloween" className="text-sm font-medium text-blue-600 hover:underline">
+									Open full page
+								</Link>
+							</div>
+							<iframe
+								title="Halloween Family Fun Night"
+								src="/agenda/halloween?embedded=1"
 								className="h-[900px] w-full rounded-md border border-zinc-200"
 							/>
 						</div>

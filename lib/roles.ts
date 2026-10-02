@@ -90,6 +90,7 @@ const COMMERCIAL_VIEW_HREFS = new Set([
   '/agenda/commercial-transformation',
   '/agenda/prematch-meals',
   '/agenda/anniversary-ties',
+  '/agenda/halloween',
   '/agenda/actions',
   '/agenda/matters-arising',
   '/agenda/aob',
