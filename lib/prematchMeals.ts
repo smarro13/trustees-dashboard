@@ -19,6 +19,8 @@ export type OrderLineItem = {
   lineRevenue: number;
   fulfillmentStatus: string;
   paymentState: string;
+  // Answers to the product's form, e.g. a child's name on an event ticket.
+  formAnswers?: Array<{ label: string; value: string }>;
 };
 
 export type RegularAttendee = {

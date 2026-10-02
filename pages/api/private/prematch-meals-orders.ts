@@ -28,7 +28,8 @@ const resolveRole = (user: any): DashboardRole => {
 };
 
 // Who can view Pre-Match Meals sales analytics — mirrors canRoleViewAgendaHref
-// in lib/roles.ts for '/agenda/prematch-meals'.
+// in lib/roles.ts for '/agenda/prematch-meals'. Also serves the Halloween
+// ticket page ('/agenda/halloween'), which passes productFilter=halloween.
 const ALLOWED_ROLES: DashboardRole[] = ['admin', 'trustee', 'director', 'president', 'commercial'];
 
 const getBearerToken = (req: NextApiRequest) => {
@@ -39,10 +40,14 @@ const getBearerToken = (req: NextApiRequest) => {
 };
 
 type SquarespaceMoney = { currency: string; value: string };
+type SquarespaceCustomization = { label?: string; value?: string };
 type SquarespaceLineItem = {
   productName: string;
   quantity: number;
   unitPricePaid: SquarespaceMoney;
+  // Answers to the product's own form (e.g. a child's name on an event
+  // ticket). Squarespace stores them per line item.
+  customizations?: SquarespaceCustomization[] | null;
 };
 type SquarespaceAddress = { firstName?: string; lastName?: string };
 type SquarespaceDiscountLine = {
@@ -96,6 +101,29 @@ const getCustomerName = (order: SquarespaceOrder): string => {
 
   return name(order.billingAddress) || name(order.shippingAddress) || order.customerEmail || 'Unknown';
 };
+// Squarespace keeps the product name an order was placed under, so renaming a
+// product splits its sales in two. This maps old names onto the current one
+// so each meal shows as a single product. A string key is compared
+// lower-case; a RegExp key is tested against the lower-cased name.
+const PRODUCT_NAME_ALIASES: Array<[string | RegExp, string]> = [
+  // The 17 Oct 2026 meal was sold with a TBC speaker before Gill Burns MBE
+  // was confirmed. If a future meal is listed as TBC, narrow this match first.
+  [/^pre[ -]?match meals?\b.*\btbc\b/, 'Pre Match Meals - Q and A with Gill Burns'],
+];
+
+const canonicalProductName = (name: string): string => {
+  const lower = name.trim().toLowerCase();
+  for (const [match, canonical] of PRODUCT_NAME_ALIASES) {
+    if (typeof match === 'string' ? lower === match : match.test(lower)) return canonical;
+  }
+  return name;
+};
+
+const formAnswers = (item: SquarespaceLineItem) =>
+  (item.customizations || [])
+    .filter((c) => c && c.value && String(c.value).trim())
+    .map((c) => ({ label: (c.label || '').trim(), value: String(c.value).trim() }));
+
 type SquarespaceOrdersResponse = {
   result: SquarespaceOrder[];
   pagination?: { hasNextPage: boolean; nextPageCursor?: string };
@@ -204,6 +232,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       lineRevenue: number;
       fulfillmentStatus: string;
       paymentState: string;
+      formAnswers: Array<{ label: string; value: string }>;
     }> = [];
     const discountUsage: Array<{
       orderId: string;
@@ -233,8 +262,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const unitPrice = parseFloat(item.unitPricePaid?.value || '0');
         if (excludeUnitPrice !== null && Math.abs(unitPrice - excludeUnitPrice) < 0.001) continue;
 
+        const productName = canonicalProductName(item.productName);
         matchedThisOrder = true;
-        matchedProductNames.add(item.productName);
+        matchedProductNames.add(productName);
         const qty = item.quantity || 0;
         // unitPricePaid is always the pre-discount list price, so apply the
         // order's discount/refund ratio to get what was actually collected.
@@ -244,15 +274,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         totalRevenue += lineRevenue;
         if (item.unitPricePaid?.currency) currency = item.unitPricePaid.currency;
 
-        const existing = byProduct.get(item.productName) || { quantity: 0, revenue: 0 };
+        const existing = byProduct.get(productName) || { quantity: 0, revenue: 0 };
         existing.quantity += qty;
         existing.revenue += lineRevenue;
-        byProduct.set(item.productName, existing);
+        byProduct.set(productName, existing);
 
         const customerName = getCustomerName(order);
         const customerKey = getCustomerKey(order);
         const customerEntry = byCustomer.get(customerKey) || { name: customerName, products: new Set<string>(), quantity: 0 };
-        customerEntry.products.add(item.productName);
+        customerEntry.products.add(productName);
         customerEntry.quantity += qty;
         byCustomer.set(customerKey, customerEntry);
 
@@ -263,12 +293,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           customerKey,
           customerName,
           customerEmail: order.customerEmail || '',
-          productName: item.productName,
+          productName,
           quantity: qty,
           unitPrice,
           lineRevenue: Math.round(lineRevenue * 100) / 100,
           fulfillmentStatus: order.fulfillmentStatus,
           paymentState: order.paymentState,
+          formAnswers: formAnswers(item),
         });
       }
 
