@@ -4,11 +4,15 @@ import { supabase } from '../../lib/supabaseClient';
 import { resolveRoleFromUser } from '../../lib/roles';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import { FIRESTICKS, isYouTubeUrl, type FirestickId } from '../../lib/firesticks';
 
 // Clubhouse screen setup: for each screen, which inputs feed which platform,
 // and what that shows on the screen. Stored in public.media_screens — see
 // supabase/policies/media_screens.sql. Admins, trustees and directors can edit;
 // everyone else sees it read-only (enforced by RLS as well as here).
+//
+// The same roles can also launch a YouTube link on a Firestick, via
+// pages/api/private/firestick-play.ts.
 
 type Area = 'lounge' | 'foyer' | 'function';
 
@@ -227,6 +231,91 @@ function ScreenForm({
   );
 }
 
+function LaunchYouTubeDialog({
+  open, device, setDevice, url, setUrl, error, launching, onLaunch, onCancel,
+}: {
+  open: boolean;
+  device: FirestickId;
+  setDevice: (d: FirestickId) => void;
+  url: string;
+  setUrl: (u: string) => void;
+  error: string;
+  launching: boolean;
+  onLaunch: () => void;
+  onCancel: () => void;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <form
+        className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl ring-1 ring-zinc-200"
+        onSubmit={(e) => { e.preventDefault(); onLaunch(); }}
+      >
+        <h2 className="text-lg font-semibold text-zinc-900">Launch YouTube</h2>
+        <p className="mt-1 text-sm text-zinc-600">Play a YouTube video on one of the clubhouse Firesticks.</p>
+
+        <fieldset className="mt-4">
+          <legend className="text-xs font-medium text-zinc-600">Firestick</legend>
+          <div className="mt-1 grid grid-cols-2 gap-2">
+            {FIRESTICKS.map((f) => (
+              <label
+                key={f.id}
+                className={`cursor-pointer rounded-lg border px-3 py-2 text-center text-sm font-medium ${
+                  device === f.id ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-zinc-300 text-zinc-700 hover:bg-zinc-50'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="firestick"
+                  className="sr-only"
+                  checked={device === f.id}
+                  onChange={() => setDevice(f.id)}
+                />
+                {f.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <label className="mt-4 block text-xs font-medium text-zinc-600">
+          YouTube link
+          <input
+            type="url"
+            inputMode="url"
+            autoFocus
+            required
+            placeholder="https://www.youtube.com/watch?v=…"
+            className={`${inputClass} mt-1`}
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+          />
+        </label>
+
+        {error && <p role="alert" className="mt-3 text-sm text-rose-600">{error}</p>}
+
+        <div className="mt-5 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={launching}
+            className="rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={launching}
+            className="rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            {launching ? 'Launching…' : 'Launch'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function MediaScreensPage() {
   const [screens, setScreens] = useState<Screen[]>([]);
   const [loading, setLoading] = useState(true);
@@ -240,6 +329,12 @@ export default function MediaScreensPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Screen | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const [launchOpen, setLaunchOpen] = useState(false);
+  const [launchDevice, setLaunchDevice] = useState<FirestickId>(FIRESTICKS[0].id);
+  const [launchUrl, setLaunchUrl] = useState('');
+  const [launchError, setLaunchError] = useState('');
+  const [launching, setLaunching] = useState(false);
 
   useEffect(() => {
     if (!notice) return;
@@ -319,6 +414,44 @@ export default function MediaScreensPage() {
     await loadScreens();
   };
 
+  const openLaunch = () => {
+    setLaunchUrl('');
+    setLaunchError('');
+    setLaunchOpen(true);
+  };
+
+  // Errors show inside the dialog so the link isn't lost; success closes it.
+  const launchYouTube = async () => {
+    const url = launchUrl.trim();
+    if (!isYouTubeUrl(url)) {
+      setLaunchError('Enter a YouTube link (youtube.com or youtu.be).');
+      return;
+    }
+    setLaunching(true);
+    setLaunchError('');
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const response = await fetch('/api/private/firestick-play', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
+        body: JSON.stringify({ device: launchDevice, url }),
+      });
+      const body = await response.json();
+      if (!response.ok || !body.ok) {
+        setLaunchError(body.error ?? 'Failed to launch.');
+        return;
+      }
+      const label = FIRESTICKS.find((f) => f.id === launchDevice)?.label ?? 'the Firestick';
+      setLaunchOpen(false);
+      setNotice({ type: 'success', message: `Sent to ${label} — it should start playing shortly.` });
+    } catch {
+      setLaunchError('Failed to launch. Check your connection and try again.');
+    } finally {
+      setLaunching(false);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-zinc-50">
       <div className="mx-auto w-full max-w-6xl px-4 py-10">
@@ -332,14 +465,25 @@ export default function MediaScreensPage() {
               What each clubhouse screen can show, and where its content comes from.
             </p>
           </div>
-          {canEdit && editingId === null && (
-            <button
-              type="button"
-              onClick={() => startEdit()}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              + Add screen
-            </button>
+          {canEdit && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={openLaunch}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              >
+                ▶ Launch YouTube
+              </button>
+              {editingId === null && (
+                <button
+                  type="button"
+                  onClick={() => startEdit()}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  + Add screen
+                </button>
+              )}
+            </div>
           )}
         </header>
 
@@ -458,6 +602,18 @@ export default function MediaScreensPage() {
         onConfirm={deleteScreen}
         onCancel={() => setDeleteTarget(null)}
         loading={deleting}
+      />
+
+      <LaunchYouTubeDialog
+        open={launchOpen}
+        device={launchDevice}
+        setDevice={setLaunchDevice}
+        url={launchUrl}
+        setUrl={setLaunchUrl}
+        error={launchError}
+        launching={launching}
+        onLaunch={launchYouTube}
+        onCancel={() => setLaunchOpen(false)}
       />
     </main>
   );
