@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
-import { VEO_ACCESSORIES, VEO_CAMERAS, VEO_PURPOSES, formatVeoTime } from '../../../lib/veoBookings';
+import { VEO_ACCESSORIES, VEO_CAMERAS, VEO_PURPOSES, formatVeoTime, veoCameraLabel } from '../../../lib/veoBookings';
 import { sendVeoBookerConfirmation, sendVeoClubEmail } from '../../../lib/veoEmail';
 
 // Signs a VEO camera out from the public page. The database refuses a second
@@ -79,7 +79,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const detail = current ? ` ${current.team_name} signed it out ${formatVeoTime(current.time_out)}.` : '';
       return res.status(409).json({
         ok: false,
-        error: `${camera} is already out.${detail} If it's back at the club, sign it in first using "Return a camera".`,
+        error: `${veoCameraLabel(camera)} is already out.${detail} If it's back at the club, sign it in first using "Return a camera".`,
       });
     }
     return res.status(500).json({ ok: false, error: error.message });

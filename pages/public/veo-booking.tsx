@@ -10,6 +10,7 @@ import {
   VEO_TEAMS,
   formatVeoTime,
   nowForDateTimeInput,
+  veoCameraLabel,
   veoDurationSince,
 } from '../../lib/veoBookings';
 
@@ -127,7 +128,7 @@ export default function VeoBookingPage() {
     const ok = await post('/api/public/veo-booking', { ...outForm, team, timeOut: toIso(outForm.timeOut) });
     if (!ok) return;
     setConfirmation(
-      `${outForm.camera} is signed out to ${team} from ${formatVeoTime(toIso(outForm.timeOut))}. When you bring it back, come back to this page and choose “Return a camera”.`,
+      `${veoCameraLabel(outForm.camera)} is signed out to ${team} from ${formatVeoTime(toIso(outForm.timeOut))}. When you bring it back, come back to this page and choose “Return a camera”.`,
     );
     setOutForm(emptyOutForm());
     await loadOut();
@@ -141,7 +142,7 @@ export default function VeoBookingPage() {
     const camera = out.find((o) => o.id === returnForm.id)?.camera ?? 'The camera';
     const ok = await post('/api/public/veo-return', { ...returnForm, timeIn: toIso(returnForm.timeIn) });
     if (!ok) return;
-    setConfirmation(`${camera} is signed back in at ${formatVeoTime(toIso(returnForm.timeIn))}. Thank you!`);
+    setConfirmation(`${veoCameraLabel(camera)} is signed back in at ${formatVeoTime(toIso(returnForm.timeIn))}. Thank you!`);
     setReturnForm(emptyReturnForm());
     await loadOut();
   };
@@ -170,7 +171,7 @@ export default function VeoBookingPage() {
               const current = outByCamera.get(camera);
               return (
                 <div key={camera} className={`rounded-xl border p-4 ${current ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}>
-                  <p className="text-sm font-semibold text-zinc-900">{camera}</p>
+                  <p className="text-sm font-semibold text-zinc-900">{veoCameraLabel(camera)}</p>
                   {current ? (
                     <p className="mt-1 text-sm text-amber-900">
                       Out with {current.team_name} ({current.booked_by}) since {formatVeoTime(current.time_out)}
@@ -244,7 +245,7 @@ export default function VeoBookingPage() {
                           onChange={() => setOutForm({ ...outForm, camera: c })}
                           className="sr-only"
                         />
-                        {c}{taken ? ' (out)' : ''}
+                        {veoCameraLabel(c)}{taken ? ' (out)' : ''}
                       </label>
                     );
                   })}
@@ -395,7 +396,7 @@ export default function VeoBookingPage() {
                           className="mt-1"
                         />
                         <span className="text-sm">
-                          <span className="font-semibold text-zinc-900">{o.camera}</span>
+                          <span className="font-semibold text-zinc-900">{veoCameraLabel(o.camera)}</span>
                           <span className="text-zinc-700"> — {o.team_name}, {o.booked_by}</span>
                           <span className="block text-zinc-500">
                             Out since {formatVeoTime(o.time_out)} ({veoDurationSince(o.time_out)}){o.fixture ? ` · ${o.fixture}` : ''}

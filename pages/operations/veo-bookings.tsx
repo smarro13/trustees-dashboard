@@ -10,6 +10,7 @@ import {
   VEO_PURPOSES,
   formatVeoTime,
   nowForDateTimeInput,
+  veoCameraLabel,
   veoDurationSince,
 } from '../../lib/veoBookings';
 
@@ -143,7 +144,7 @@ export default function VeoBookingsAdminPage() {
             const long = current && hoursOut(current) > LONG_OUT_HOURS;
             return (
               <div key={camera} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-zinc-200">
-                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{camera}</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{veoCameraLabel(camera)}</p>
                 {current ? (
                   <>
                     <p className={`mt-1 text-lg font-bold ${long ? 'text-rose-700' : 'text-amber-700'}`}>
@@ -170,7 +171,7 @@ export default function VeoBookingsAdminPage() {
             aria-label="Filter by camera"
           >
             <option value="all">Both cameras</option>
-            {VEO_CAMERAS.map((c) => <option key={c} value={c}>{c}</option>)}
+            {VEO_CAMERAS.map((c) => <option key={c} value={c}>{veoCameraLabel(c)}</option>)}
           </select>
         </div>
 
@@ -190,7 +191,7 @@ export default function VeoBookingsAdminPage() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-base font-semibold text-zinc-900">
-                        {b.camera} · {b.team_name}
+                        {veoCameraLabel(b.camera)} · {b.team_name}
                         <span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-medium ${long ? 'bg-rose-100 text-rose-800' : status.className}`}>
                           {long ? `Out ${veoDurationSince(b.time_out)}` : status.label}
                         </span>
@@ -245,7 +246,7 @@ export default function VeoBookingsAdminPage() {
                       className="mt-3 grid gap-2 border-t border-zinc-100 pt-3 sm:grid-cols-[auto_1fr_auto]"
                       onSubmit={async (e) => {
                         e.preventDefault();
-                        const ok = await update(b, 'returned', `${b.camera} signed back in.`, {
+                        const ok = await update(b, 'returned', `${veoCameraLabel(b.camera)} signed back in.`, {
                           timeIn: new Date(returnTime).toISOString(),
                           returnNotes,
                         });
@@ -286,7 +287,7 @@ export default function VeoBookingsAdminPage() {
       <ConfirmDialog
         open={!!cancelTarget}
         title="Cancel this sign-out?"
-        description={cancelTarget ? `${cancelTarget.camera} for ${cancelTarget.team_name}, ${formatVeoTime(cancelTarget.time_out)}. Use this only if it was entered by mistake — the camera shows as available again.` : ''}
+        description={cancelTarget ? `${veoCameraLabel(cancelTarget.camera)} for ${cancelTarget.team_name}, ${formatVeoTime(cancelTarget.time_out)}. Use this only if it was entered by mistake — the camera shows as available again.` : ''}
         confirmLabel="Cancel sign-out"
         onConfirm={async () => {
           if (!cancelTarget) return;
