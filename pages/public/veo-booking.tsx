@@ -6,6 +6,7 @@ import {
   type PublicVeoCheckout,
   VEO_ACCESSORIES,
   VEO_CAMERAS,
+  VEO_CAMERA_IDS,
   VEO_PURPOSES,
   VEO_TEAMS,
   formatVeoTime,
@@ -171,7 +172,10 @@ export default function VeoBookingPage() {
               const current = outByCamera.get(camera);
               return (
                 <div key={camera} className={`rounded-xl border p-4 ${current ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}>
-                  <p className="text-sm font-semibold text-zinc-900">{veoCameraLabel(camera)}</p>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-base font-semibold text-zinc-900">{camera}</p>
+                    <p className="font-mono text-sm font-semibold text-zinc-700">ID {VEO_CAMERA_IDS[camera]}</p>
+                  </div>
                   {current ? (
                     <p className="mt-1 text-sm text-amber-900">
                       Out with {current.team_name} ({current.booked_by}) since {formatVeoTime(current.time_out)}
@@ -228,7 +232,7 @@ export default function VeoBookingPage() {
                     return (
                       <label
                         key={c}
-                        className={`flex items-center justify-center rounded-lg border px-3 py-3 text-sm font-semibold ${
+                        className={`flex flex-col items-center justify-center rounded-lg border px-3 py-3 text-sm font-semibold ${
                           taken
                             ? 'cursor-not-allowed border-zinc-200 bg-zinc-50 text-zinc-400'
                             : outForm.camera === c
@@ -245,7 +249,8 @@ export default function VeoBookingPage() {
                           onChange={() => setOutForm({ ...outForm, camera: c })}
                           className="sr-only"
                         />
-                        {veoCameraLabel(c)}{taken ? ' (out)' : ''}
+                        <span>{c}{taken ? ' (out)' : ''}</span>
+                        <span className="mt-0.5 font-mono text-xs font-medium opacity-80">ID {VEO_CAMERA_IDS[c]}</span>
                       </label>
                     );
                   })}
