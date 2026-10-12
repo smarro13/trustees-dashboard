@@ -4,7 +4,7 @@
 //
 // Env: RESEND_API_KEY, and VEO_EMAIL_FROM (falls back to LOTTO_EMAIL_FROM).
 
-import { VEO_PURPOSES, formatVeoTime, veoDurationSince } from './veoBookings';
+import { VEO_PURPOSES, formatVeoTime, veoCameraLabel, veoDurationSince } from './veoBookings';
 
 export const VEO_EMAIL_TO = ['info@aldwinians.co.uk'];
 export const VEO_EMAIL_CC = [
@@ -43,10 +43,10 @@ type Row = [string, string];
 const buildEmail = (event: VeoEmailEvent, b: VeoEmailBooking, by?: string, forClub = true) => {
   const purpose = VEO_PURPOSES.find((p) => p.value === b.purpose)?.label ?? b.purpose;
   const when = event === 'returned' && b.time_in ? b.time_in : b.time_out;
-  const subject = `${b.camera} ${HEADLINES[event]} — ${b.team_name}, ${formatVeoTime(when)}`;
+  const subject = `${veoCameraLabel(b.camera)} ${HEADLINES[event]} — ${b.team_name}, ${formatVeoTime(when)}`;
 
   const rows: Row[] = [
-    ['Camera', b.camera],
+    ['Camera', veoCameraLabel(b.camera)],
     ['Team', b.team_name],
     ['Signed out by', b.booked_by],
     ...(b.contact_email ? [['Email', b.contact_email] as Row] : []),
@@ -59,7 +59,7 @@ const buildEmail = (event: VeoEmailEvent, b: VeoEmailBooking, by?: string, forCl
     ...(by ? [['Recorded on dashboard by', by] as Row] : []),
   ];
 
-  const intro = `${b.camera} ${HEADLINES[event]} — ${b.team_name}.`;
+  const intro = `${veoCameraLabel(b.camera)} ${HEADLINES[event]} — ${b.team_name}.`;
   const text = [intro, '', ...rows.map(([k, v]) => `${k}: ${v}`)].join('\n');
   const html = `
     <p>${escapeHtml(intro)}</p>
@@ -107,7 +107,7 @@ export async function sendVeoBookerConfirmation(booking: VeoEmailBooking) {
     return await send({
       to: [booking.contact_email],
       reply_to: VEO_EMAIL_TO[0],
-      subject: `You've signed out ${booking.camera}`,
+      subject: `You've signed out ${veoCameraLabel(booking.camera)}`,
       text: `${text}\n\n${reminder}`,
       html: `${html}<p>When you bring it back, sign it back in on the same page: <a href="https://dashboard.aldwinians.co.uk/public/veo-booking?mode=return">dashboard.aldwinians.co.uk/public/veo-booking</a>. Please return it charged and in its case.</p>`,
     });

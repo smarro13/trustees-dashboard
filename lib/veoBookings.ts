@@ -5,6 +5,21 @@
 export const VEO_CAMERAS = ['VEO 1', 'VEO 2'] as const;
 export type VeoCamera = (typeof VEO_CAMERAS)[number];
 
+// Each camera's Veo number (on the device and in the Veo app). Shown
+// alongside the name everywhere; the stored value stays "VEO 1" / "VEO 2"
+// (the database check constraint and past bookings use those).
+export const VEO_CAMERA_IDS: Record<VeoCamera, string> = {
+  'VEO 1': '#140391',
+  'VEO 2': '#140426',
+};
+
+// "VEO 1" -> "VEO 1 (#140391)". Accepts any string so it can label rows
+// read back from the database.
+export const veoCameraLabel = (camera: string) => {
+  const id = (VEO_CAMERA_IDS as Record<string, string>)[camera];
+  return id ? `${camera} (${id})` : camera;
+};
+
 export const VEO_PURPOSES = [
   { value: 'match', label: 'Match' },
   { value: 'training', label: 'Training' },
