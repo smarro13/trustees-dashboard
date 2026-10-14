@@ -54,12 +54,19 @@ create table if not exists public.sponsor_tracker (
   on_website boolean not null default true,
   in_footer boolean not null default false,
   in_programme boolean not null default false,
+  -- Where they appear in the club app. The app's sponsor list lives in the CMS
+  -- (a separate Supabase project), so this is kept in step by hand.
+  app_placement text check (app_placement in (
+    'Not in the app', 'Sponsors screen', 'Home: top slot', 'Home: after news', 'Home: after matchday', 'Main app sponsor'
+  )),
 
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   updated_by text
 );
+
+alter table public.sponsor_tracker add column if not exists app_placement text;
 
 -- One row per sponsor per thing they sponsor (a business can back two players).
 create unique index if not exists sponsor_tracker_unique_deal
@@ -146,6 +153,14 @@ values
   ('Crown Point Glass', 'Player sponsor', 'George Pennington', 'Active', 'https://crownpointglass.co.uk/', 'https://www.aldwinians.co.uk/player-sponsorship', null, null, null, '10% off', true, false),
   ('Leaap Solutions', 'Player sponsor', 'Josh Rowbottom', 'Active', 'https://leaapsolutions.co.uk/', 'https://www.aldwinians.co.uk/player-sponsorship', null, null, null, null, true, false)
 on conflict do nothing;
+
+-- Featured in the app from 14 Oct 2026 (set in the CMS: Sponsors → App slot).
+update public.sponsor_tracker set app_placement = 'Home: top slot'
+  where name = 'Kwik Fit' and app_placement is null;
+update public.sponsor_tracker set app_placement = 'Home: after news'
+  where name = 'Coolair' and app_placement is null;
+update public.sponsor_tracker set app_placement = 'Home: after matchday'
+  where name = 'Multiquip (UK) Ltd' and app_placement is null;
 
 -- ---------- Change log: what to update on the website ----------
 -- Every add, edit and removal on public.sponsor_tracker is written here by a trigger,

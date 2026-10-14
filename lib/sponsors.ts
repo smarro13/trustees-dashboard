@@ -15,6 +15,15 @@ export const SPONSOR_CATEGORIES = [
 export const SPONSOR_STATUSES = ['Prospect', 'Active', 'Renewal due', 'Lapsed', 'Ended'] as const;
 export const VALUE_TYPES = ['Cash', 'In kind', 'Mixed'] as const;
 export const PAYMENT_STATUSES = ['Not invoiced', 'Invoiced', 'Paid', 'Overdue', 'Not applicable'] as const;
+// Where they appear in the club app (the app's own list is in the CMS, a separate project).
+export const APP_PLACEMENTS = [
+  'Not in the app',
+  'Sponsors screen',
+  'Home: top slot',
+  'Home: after news',
+  'Home: after matchday',
+  'Main app sponsor',
+] as const;
 export const PACKAGES = [
   'Club sponsor',
   'Kit sponsor',
@@ -53,6 +62,7 @@ export type Sponsor = {
   on_website: boolean;
   in_footer: boolean;
   in_programme: boolean;
+  app_placement: (typeof APP_PLACEMENTS)[number] | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -82,7 +92,8 @@ export const FIELD_LABELS: Record<string, string> = {
   start_date: 'Start date', renewal_date: 'Renewal date', contact_name: 'Contact', contact_email: 'Email',
   contact_phone: 'Phone', address: 'Address', club_contact: 'Club contact', last_contacted: 'Last contacted',
   website: 'Website', page_url: 'Club page', member_offer: 'Member offer', benefits: 'Benefits',
-  on_website: 'On website', in_footer: 'In footer', in_programme: 'In programme', notes: 'Notes',
+  on_website: 'On website', in_footer: 'In footer', in_programme: 'In programme',
+  app_placement: 'In the app', notes: 'Notes',
 };
 
 /** Fields that show up on aldwinians.co.uk, so a change to them means the website needs updating. */
@@ -117,7 +128,7 @@ const CSV_COLUMNS: [keyof Sponsor, string][] = [
   ['contact_name', 'Contact'], ['contact_email', 'Email'], ['contact_phone', 'Phone'], ['address', 'Address'],
   ['club_contact', 'Club contact'], ['last_contacted', 'Last contacted'], ['website', 'Website'],
   ['page_url', 'Club page'], ['member_offer', 'Member offer'], ['benefits', 'What they get'],
-  ['on_website', 'On website'], ['in_footer', 'In footer'], ['in_programme', 'In programme'], ['notes', 'Notes'],
+  ['on_website', 'On website'], ['in_footer', 'In footer'], ['in_programme', 'In programme'], ['app_placement', 'In the app'], ['notes', 'Notes'],
 ];
 
 // Excel-friendly CSV (BOM + quoted fields).

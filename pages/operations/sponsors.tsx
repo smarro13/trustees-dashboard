@@ -10,6 +10,7 @@ import {
   FIELD_LABELS,
   WEBSITE_FIELDS,
   formatChangeValue,
+  APP_PLACEMENTS,
   PACKAGES,
   PAYMENT_STATUSES,
   SPONSOR_CATEGORIES,
@@ -41,7 +42,7 @@ type Draft = {
 const TEXT_FIELDS = [
   'name', 'category', 'sponsors_what', 'status', 'package', 'value', 'value_type', 'payment_status',
   'invoice_ref', 'start_date', 'renewal_date', 'contact_name', 'contact_email', 'contact_phone', 'address',
-  'club_contact', 'last_contacted', 'website', 'page_url', 'member_offer', 'benefits', 'notes',
+  'club_contact', 'last_contacted', 'website', 'page_url', 'member_offer', 'benefits', 'app_placement', 'notes',
 ] as const;
 const FLAG_FIELDS = ['on_website', 'in_footer', 'in_programme'] as const;
 
@@ -444,6 +445,13 @@ export default function SponsorsPage() {
                   <Field label="Member offer">
                     <input className={inputClass} value={text('member_offer')} onChange={(e) => set('member_offer', e.target.value)} placeholder="e.g. 10% off for members" />
                   </Field>
+                  <Field label="In the club app">
+                    <select className={inputClass} value={text('app_placement')} onChange={(e) => set('app_placement', e.target.value)}>
+                      <option value="">—</option>
+                      {APP_PLACEMENTS.map((p) => <option key={p}>{p}</option>)}
+                    </select>
+                    <span className="mt-1 block text-[11px] font-normal text-zinc-400">Set it in the CMS (Sponsors → App slot), then record it here.</span>
+                  </Field>
                   <Field label="Benefits">
                     <input className={inputClass} value={text('benefits')} onChange={(e) => set('benefits', e.target.value)} placeholder="e.g. shirt logo, 4 social posts, matchday hospitality" />
                   </Field>
@@ -679,7 +687,7 @@ export default function SponsorsPage() {
                           <td className="px-4 py-3">
                             <p className="font-medium text-zinc-900">{s.name}</p>
                             <p className="text-xs text-zinc-500">
-                              {[s.sponsors_what, s.package, s.member_offer && `Offer: ${s.member_offer}`].filter(Boolean).join(' · ')}
+                              {[s.sponsors_what, s.package, s.member_offer && `Offer: ${s.member_offer}`, s.app_placement && s.app_placement !== 'Not in the app' && `App: ${s.app_placement}`].filter(Boolean).join(' · ')}
                             </p>
                             <p className="mt-0.5 flex flex-wrap gap-x-3 text-xs">
                               {s.page_url && <a href={s.page_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Club page</a>}
