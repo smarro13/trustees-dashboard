@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
+import { authJsonHeaders } from '../../lib/authHeaders';
 import { User } from '@supabase/supabase-js';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
@@ -242,7 +243,7 @@ export default function TradingPage() {
 
       const res = await fetch('/api/till-sales-summary', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authJsonHeaders(),
         body: JSON.stringify({
           filename: file.name,
           contentBase64: base64,
@@ -308,7 +309,7 @@ export default function TradingPage() {
 
       const response = await fetch('/api/trading-update-import', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authJsonHeaders(),
         body: JSON.stringify({
           filename: file.name,
           contentBase64,
