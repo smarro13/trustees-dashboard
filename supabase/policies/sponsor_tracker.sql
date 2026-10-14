@@ -4,10 +4,15 @@
 -- sponsor and partner, with the deal, renewal date, payment, contact and
 -- where they're shown. Edited on /operations/sponsors.
 --
---   sponsors        : SELECT                 any logged-in dashboard user
---                     INSERT/UPDATE/DELETE   admin, trustee, director, commercial
---   sponsor_changes : change log for keeping the website up to date (admin only),
---                     filled by a trigger; see the bottom of this file.
+--   sponsor_tracker         : SELECT                 any logged-in dashboard user
+--                             INSERT/UPDATE/DELETE   admin, trustee, director, commercial
+--   sponsor_tracker_changes : change log for keeping the website up to date (admin only),
+--                             filled by a trigger; see the bottom of this file.
+--
+-- Named sponsor_tracker, not sponsors, on purpose: the CMS (cms-app-dashboard)
+-- has its own public.sponsors table for the app's sponsor screen (name, logo,
+-- url, sort order). Keeping the names apart means this file can never change
+-- that table, even if both apps share a Supabase project.
 --
 -- The seed at the bottom loads the 54 sponsors listed on the website on
 -- 14 Oct 2026 (from the aldwinians-webpages repo). Deal values, dates and
@@ -18,7 +23,7 @@
 
 begin;
 
-create table if not exists public.sponsors (
+create table if not exists public.sponsor_tracker (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   category text not null default 'Club sponsor' check (category in (
@@ -57,24 +62,24 @@ create table if not exists public.sponsors (
 );
 
 -- One row per sponsor per thing they sponsor (a business can back two players).
-create unique index if not exists sponsors_unique_deal
-  on public.sponsors (lower(name), category, coalesce(sponsors_what, ''));
-create index if not exists sponsors_renewal_idx on public.sponsors (renewal_date);
+create unique index if not exists sponsor_tracker_unique_deal
+  on public.sponsor_tracker (lower(name), category, coalesce(sponsors_what, ''));
+create index if not exists sponsor_tracker_renewal_idx on public.sponsor_tracker (renewal_date);
 
-alter table public.sponsors enable row level security;
-revoke all on public.sponsors from anon;
+alter table public.sponsor_tracker enable row level security;
+revoke all on public.sponsor_tracker from anon;
 
-drop policy if exists "dashboard read sponsors" on public.sponsors;
-drop policy if exists "commercial write sponsors" on public.sponsors;
+drop policy if exists "dashboard read sponsor_tracker" on public.sponsor_tracker;
+drop policy if exists "commercial write sponsor_tracker" on public.sponsor_tracker;
 
-create policy "dashboard read sponsors"
-  on public.sponsors
+create policy "dashboard read sponsor_tracker"
+  on public.sponsor_tracker
   for select
   to authenticated
   using (true);
 
-create policy "commercial write sponsors"
-  on public.sponsors
+create policy "commercial write sponsor_tracker"
+  on public.sponsor_tracker
   for all
   to authenticated
   using (lower(coalesce(auth.jwt() -> 'app_metadata' ->> 'role', auth.jwt() -> 'user_metadata' ->> 'role'))
@@ -83,7 +88,7 @@ create policy "commercial write sponsors"
     in ('admin', 'trustee', 'director', 'directors', 'management', 'mangement', 'commercial', 'commerical'));
 
 -- ---------- Seed: sponsors on the website, 14 Oct 2026 ----------
-insert into public.sponsors
+insert into public.sponsor_tracker
   (name, category, sponsors_what, status, website, page_url, contact_phone, contact_email, address, member_offer, on_website, in_footer)
 values
   ('Multiquip (UK) Ltd', 'Club sponsor', null, 'Active', 'https://multiquip.co.uk/', 'https://www.aldwinians.co.uk/sponsorship/multiquip-uk-ltd', null, 'sales@multiquip.co.uk', 'Unit 2, Northpoint Industrial Estate, Globe Lane, Dukinfield, Cheshire SK16 4UJ', null, true, true),
@@ -143,15 +148,15 @@ values
 on conflict do nothing;
 
 -- ---------- Change log: what to update on the website ----------
--- Every add, edit and removal on public.sponsors is written here by a trigger,
+-- Every add, edit and removal on public.sponsor_tracker is written here by a trigger,
 -- with who did it and which fields changed (old → new). Admins see the
 -- outstanding ones on /operations/sponsors and tick them off once the website
 -- has been updated. Created after the seed so the initial load isn't logged.
 --
---   sponsor_changes : SELECT / UPDATE (tick off)   admin only
+--   sponsor_tracker_changes : SELECT / UPDATE (tick off)   admin only
 --                     INSERT                       the trigger only
 
-create table if not exists public.sponsor_changes (
+create table if not exists public.sponsor_tracker_changes (
   id bigint generated always as identity primary key,
   sponsor_id uuid,
   sponsor_name text not null,
@@ -166,10 +171,10 @@ create table if not exists public.sponsor_changes (
   done_at timestamptz
 );
 
-create index if not exists sponsor_changes_pending_idx
-  on public.sponsor_changes (changed_at desc) where (not website_done);
+create index if not exists sponsor_tracker_changes_pending_idx
+  on public.sponsor_tracker_changes (changed_at desc) where (not website_done);
 
-create or replace function public.log_sponsor_change()
+create or replace function public.log_sponsor_tracker_change()
 returns trigger
 language plpgsql
 security definer
@@ -200,40 +205,40 @@ begin
     if diff = '{}'::jsonb then
       return new;  -- nothing that matters changed
     end if;
-    insert into public.sponsor_changes (sponsor_id, sponsor_name, category, sponsors_what, action, changes, changed_by)
+    insert into public.sponsor_tracker_changes (sponsor_id, sponsor_name, category, sponsors_what, action, changes, changed_by)
     values (new.id, new.name, new.category, new.sponsors_what, 'updated', diff, who);
     return new;
   elsif tg_op = 'INSERT' then
-    insert into public.sponsor_changes (sponsor_id, sponsor_name, category, sponsors_what, action, changes, changed_by)
+    insert into public.sponsor_tracker_changes (sponsor_id, sponsor_name, category, sponsors_what, action, changes, changed_by)
     values (new.id, new.name, new.category, new.sponsors_what, 'added', new_row - ignored, who);
     return new;
   else
-    insert into public.sponsor_changes (sponsor_id, sponsor_name, category, sponsors_what, action, changes, changed_by)
+    insert into public.sponsor_tracker_changes (sponsor_id, sponsor_name, category, sponsors_what, action, changes, changed_by)
     values (old.id, old.name, old.category, old.sponsors_what, 'removed', old_row - ignored, who);
     return old;
   end if;
 end;
 $$;
 
-drop trigger if exists sponsors_log_change on public.sponsors;
-create trigger sponsors_log_change
-  after insert or update or delete on public.sponsors
-  for each row execute function public.log_sponsor_change();
+drop trigger if exists sponsor_tracker_log_change on public.sponsor_tracker;
+create trigger sponsor_tracker_log_change
+  after insert or update or delete on public.sponsor_tracker
+  for each row execute function public.log_sponsor_tracker_change();
 
-alter table public.sponsor_changes enable row level security;
-revoke all on public.sponsor_changes from anon;
+alter table public.sponsor_tracker_changes enable row level security;
+revoke all on public.sponsor_tracker_changes from anon;
 
-drop policy if exists "admin read sponsor_changes" on public.sponsor_changes;
-drop policy if exists "admin tick off sponsor_changes" on public.sponsor_changes;
+drop policy if exists "admin read sponsor_tracker_changes" on public.sponsor_tracker_changes;
+drop policy if exists "admin tick off sponsor_tracker_changes" on public.sponsor_tracker_changes;
 
-create policy "admin read sponsor_changes"
-  on public.sponsor_changes
+create policy "admin read sponsor_tracker_changes"
+  on public.sponsor_tracker_changes
   for select
   to authenticated
   using (lower(coalesce(auth.jwt() -> 'app_metadata' ->> 'role', auth.jwt() -> 'user_metadata' ->> 'role')) = 'admin');
 
-create policy "admin tick off sponsor_changes"
-  on public.sponsor_changes
+create policy "admin tick off sponsor_tracker_changes"
+  on public.sponsor_tracker_changes
   for update
   to authenticated
   using (lower(coalesce(auth.jwt() -> 'app_metadata' ->> 'role', auth.jwt() -> 'user_metadata' ->> 'role')) = 'admin')

@@ -1,5 +1,5 @@
 // Sponsors tracker: types, lists and helpers for /operations/sponsors.
-// Table: public.sponsors (supabase/policies/sponsors.sql).
+// Table: public.sponsor_tracker (supabase/policies/sponsor_tracker.sql).
 
 export { daysUntil, describeDaysAway, formatMoney, formatAssetDate as formatSponsorDate } from './assets';
 import { daysUntil } from './assets';
@@ -59,7 +59,7 @@ export type Sponsor = {
   updated_by: string | null;
 };
 
-/** One row of public.sponsor_changes, written by a trigger on every add / edit / removal. */
+/** One row of public.sponsor_tracker_changes, written by a trigger on every add / edit / removal. */
 export type SponsorChange = {
   id: number;
   sponsor_id: string | null;

@@ -24,11 +24,11 @@ import {
 } from '../../lib/sponsors';
 
 // Sponsors tracker: every sponsor and partner, the deal, renewal date, payment,
-// contact and where they're shown. Stored in public.sponsors
-// (supabase/policies/sponsors.sql). Admins, trustees, directors and the
+// contact and where they're shown. Stored in public.sponsor_tracker
+// (supabase/policies/sponsor_tracker.sql). Admins, trustees, directors and the
 // commercial role can edit; everyone else sees it read-only (enforced by RLS too).
 // Admins also see "Website updates": every add / edit / removal, logged by a
-// database trigger into public.sponsor_changes, to tick off once
+// database trigger into public.sponsor_tracker_changes, to tick off once
 // aldwinians.co.uk has been updated to match.
 
 const EDIT_ROLES = new Set(['admin', 'trustee', 'director', 'commercial']);
@@ -185,7 +185,7 @@ export default function SponsorsPage() {
   }, [notice]);
 
   const loadSponsors = async () => {
-    const { data, error } = await supabase.from('sponsors').select('*').order('name', { ascending: true });
+    const { data, error } = await supabase.from('sponsor_tracker').select('*').order('name', { ascending: true });
     if (error) setNotice({ type: 'error', message: `Failed to load sponsors: ${error.message}` });
     else setSponsors(data as Sponsor[]);
     setLoading(false);
@@ -193,7 +193,7 @@ export default function SponsorsPage() {
 
   const loadChanges = async () => {
     const { data, error } = await supabase
-      .from('sponsor_changes')
+      .from('sponsor_tracker_changes')
       .select('*')
       .order('changed_at', { ascending: false })
       .limit(200);
@@ -216,7 +216,7 @@ export default function SponsorsPage() {
   const markChangesDone = async (ids: number[]) => {
     if (ids.length === 0) return;
     const { error } = await supabase
-      .from('sponsor_changes')
+      .from('sponsor_tracker_changes')
       .update({ website_done: true, done_by: userEmail || null, done_at: new Date().toISOString() })
       .in('id', ids);
     if (error) { setNotice({ type: 'error', message: `Failed to update: ${error.message}` }); return; }
@@ -270,8 +270,8 @@ export default function SponsorsPage() {
     setSaving(true);
     const stamp = { updated_at: new Date().toISOString(), updated_by: userEmail || null };
     const { error } = editingId === 'new'
-      ? await supabase.from('sponsors').insert({ ...row, ...stamp })
-      : await supabase.from('sponsors').update({ ...row, ...stamp }).eq('id', editingId!);
+      ? await supabase.from('sponsor_tracker').insert({ ...row, ...stamp })
+      : await supabase.from('sponsor_tracker').update({ ...row, ...stamp }).eq('id', editingId!);
     setSaving(false);
     if (error) {
       const message = error.code === '23505'
@@ -289,7 +289,7 @@ export default function SponsorsPage() {
   const deleteSponsor = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
-    const { error } = await supabase.from('sponsors').delete().eq('id', deleteTarget.id);
+    const { error } = await supabase.from('sponsor_tracker').delete().eq('id', deleteTarget.id);
     setDeleting(false);
     if (error) { setNotice({ type: 'error', message: `Failed to delete: ${error.message}` }); return; }
     setNotice({ type: 'success', message: `${deleteTarget.name} deleted.` });
@@ -656,7 +656,7 @@ export default function SponsorsPage() {
             {/* ── List ─────────────────────────────────────────────── */}
             {filtered.length === 0 ? (
               <p className="rounded-lg border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500">
-                {sponsors.length === 0 ? 'No sponsors yet. Run supabase/policies/sponsors.sql to load the ones on the website.' : 'No sponsors match those filters.'}
+                {sponsors.length === 0 ? 'No sponsors yet. Run supabase/policies/sponsor_tracker.sql to load the ones on the website.' : 'No sponsors match those filters.'}
               </p>
             ) : (
               <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200">
