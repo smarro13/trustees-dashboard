@@ -50,7 +50,18 @@ type Player = {
   emergency_phone: string | null;
 };
 
-type Import = { id: string; kind: 'members' | 'players'; file_name: string; uploaded_at: string; uploaded_by: string | null };
+type Import = { id: string; kind: 'members' | 'players' | 'loveadmin'; file_name: string; uploaded_at: string; uploaded_by: string | null };
+
+// LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+// A person a paid LoveAdmin invoice was for.
+type LoveAdminPayment = {
+  id: string;
+  name_key: string;
+  beneficiary: string;
+  payer: string | null;
+  invoice_amount: number | null;
+  invoice_date: string | null;
+};
 
 // One comment per person, keyed by nameKey() so it shows wherever they're listed.
 type Note = {
@@ -63,20 +74,22 @@ type Note = {
 };
 
 // team is worked out from date of birth and gender; null without a date of birth.
-type PlayerRow = Player & { team: string | null; status: PlayerStatus; member: Member | null };
+type PlayerRow = Player & { team: string | null; status: PlayerStatus; member: Member | null; loveAdmin: LoveAdminPayment | null };
 
 // 'all', 'group:Juniors' or 'team:Under 7s'.
 type Filter = string;
 type StatusFilter = 'all' | 'unpaid' | PlayerStatus;
 type View = 'report' | 'hidden';
-type Card = 'byTeam' | 'players' | 'notOnGms' | 'inactive';
+type Card = 'byTeam' | 'players' | 'notOnGms' | 'loveAdmin' | 'inactive';
 
 // Which report cards start open. Each viewer's own choice is remembered in
 // their browser after that.
-const DEFAULT_OPEN: Record<Card, boolean> = { byTeam: true, players: true, notOnGms: false, inactive: false };
+const DEFAULT_OPEN: Record<Card, boolean> = { byTeam: true, players: true, notOnGms: false, loveAdmin: false, inactive: false };
 const OPEN_CARDS_KEY = 'membership-open-cards';
 
 type MembersPreview = { total: number; inactive: number };
+// LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+type LoveAdminPreview = { paidInvoices: number; skippedInvoices: number; people: number };
 type PlayersPreview = {
   total: number;
   added: number;
@@ -180,6 +193,18 @@ function StatusBadge({ status }: { status: PlayerStatus }) {
   return (
     <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${STATUS_STYLES[status].badge}`}>
       {STATUS_LABELS[status]}
+    </span>
+  );
+}
+
+// LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+function LoveAdminTag() {
+  return (
+    <span
+      title="Paid through LoveAdmin — still needs moving to ClubControl"
+      className="inline-flex whitespace-nowrap rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-violet-200"
+    >
+      LoveAdmin
     </span>
   );
 }
@@ -371,9 +396,9 @@ function NoteCell({
 }
 
 function UploadPanel({ onSaved, setNotice }: { onSaved: () => Promise<void>; setNotice: (n: InlineNotice) => void }) {
-  const [kind, setKind] = useState<'members' | 'players'>('members');
+  const [kind, setKind] = useState<'members' | 'players' | 'loveadmin'>('members');
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<MembersPreview | PlayersPreview | null>(null);
+  const [preview, setPreview] = useState<MembersPreview | PlayersPreview | LoveAdminPreview | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [inputKey, setInputKey] = useState(0);
@@ -407,7 +432,9 @@ function UploadPanel({ onSaved, setNotice }: { onSaved: () => Promise<void>; set
         type: 'success',
         message: kind === 'members'
           ? `ClubControl export saved — ${body.saved.total} members.`
-          : `GMS player list saved — ${body.saved.added} added, ${body.saved.updated} updated.`,
+          : kind === 'loveadmin'
+            ? `LoveAdmin invoices saved — ${body.saved.people} people counted as paid.`
+            : `GMS player list saved — ${body.saved.added} added, ${body.saved.updated} updated.`,
       });
       reset();
       await onSaved();
@@ -420,6 +447,7 @@ function UploadPanel({ onSaved, setNotice }: { onSaved: () => Promise<void>; set
 
   const playersPreview = kind === 'players' ? (preview as PlayersPreview | null) : null;
   const membersPreview = kind === 'members' ? (preview as MembersPreview | null) : null;
+  const loveAdminPreview = kind === 'loveadmin' ? (preview as LoveAdminPreview | null) : null;
 
   return (
     <section className="mb-8 rounded-2xl bg-white shadow-sm ring-1 ring-blue-200">
@@ -431,16 +459,20 @@ function UploadPanel({ onSaved, setNotice }: { onSaved: () => Promise<void>; set
         <div className="flex flex-wrap gap-2">
           <Chip active={kind === 'members'} onClick={() => { setKind('members'); reset(); }}>ClubControl members export</Chip>
           <Chip active={kind === 'players'} onClick={() => { setKind('players'); reset(); }}>GMS player list</Chip>
+          {/* LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md. */}
+          <Chip active={kind === 'loveadmin'} onClick={() => { setKind('loveadmin'); reset(); }}>LoveAdmin invoices (temporary)</Chip>
         </div>
         <p className="text-sm text-zinc-600">
           {kind === 'members'
             ? 'The members .csv from ClubControl. It replaces the previous export.'
-            : 'The player list from GMS (.xlsx or .csv). New players are added and existing ones updated — nobody is removed. Teams come from each player’s date of birth and gender.'}
+            : kind === 'loveadmin'
+              ? 'LoveAdmin’s “Invoices All Report” (.xlsx). Everyone a paid invoice was for counts as paid, and shows under Still on LoveAdmin until they’ve moved. It replaces the previous upload.'
+              : 'The player list from GMS (.xlsx or .csv). New players are added and existing ones updated — nobody is removed. Teams come from each player’s date of birth and gender.'}
         </p>
         <input
           key={inputKey}
           type="file"
-          accept={kind === 'members' ? '.csv' : '.xlsx,.csv'}
+          accept={kind === 'members' ? '.csv' : kind === 'loveadmin' ? '.xlsx' : '.xlsx,.csv'}
           disabled={busy}
           className="block w-full text-sm text-zinc-700 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
           onChange={(e) => {
@@ -457,6 +489,18 @@ function UploadPanel({ onSaved, setNotice }: { onSaved: () => Promise<void>; set
           <div className="rounded-lg bg-zinc-50 p-4 text-sm ring-1 ring-zinc-200">
             <p className="font-medium text-zinc-900">{membersPreview.total} members, {membersPreview.inactive} inactive.</p>
             <p className="mt-1 text-zinc-600">This replaces the current ClubControl data.</p>
+          </div>
+        )}
+
+        {loveAdminPreview && (
+          <div className="rounded-lg bg-zinc-50 p-4 text-sm ring-1 ring-zinc-200">
+            <p className="font-medium text-zinc-900">
+              {loveAdminPreview.paidInvoices} paid invoices, covering {loveAdminPreview.people} people.
+            </p>
+            {loveAdminPreview.skippedInvoices > 0 && (
+              <p className="mt-1 text-zinc-600">{loveAdminPreview.skippedInvoices} unpaid or cancelled invoices are ignored.</p>
+            )}
+            <p className="mt-1 text-zinc-600">This replaces the current LoveAdmin data.</p>
           </div>
         )}
 
@@ -499,6 +543,8 @@ export default function MembershipPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [imports, setImports] = useState<Import[]>([]);
   const [notes, setNotes] = useState<Map<string, Note>>(new Map());
+  // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+  const [loveAdmin, setLoveAdmin] = useState<LoveAdminPayment[]>([]);
   const [view, setView] = useState<View>('report');
   const [openCards, setOpenCards] = useState<Record<Card, boolean>>(DEFAULT_OPEN);
   // Player cards (phones) with their emergency contact showing.
@@ -556,7 +602,8 @@ export default function MembershipPage() {
       if (recentImports.error) throw new Error(recentImports.error.message);
       const importRows = (recentImports.data ?? []) as Import[];
       const latestMembers = importRows.find((i) => i.kind === 'members');
-      const [memberRows, playerRows, noteRows] = await Promise.all([
+      const latestLoveAdmin = importRows.find((i) => i.kind === 'loveadmin');
+      const [memberRows, playerRows, noteRows, loveAdminRows] = await Promise.all([
         latestMembers
           ? loadAll<Member>((from, to) =>
               supabase.from('membership_members').select('id, first_name, last_name, email, categories, renewal_date, active')
@@ -567,11 +614,18 @@ export default function MembershipPage() {
             .order('last_name').order('first_name').order('id').range(from, to)),
         loadAll<Note>((from, to) =>
           supabase.from('membership_notes').select('*').order('person_key').range(from, to)),
+        // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+        latestLoveAdmin
+          ? loadAll<LoveAdminPayment>((from, to) =>
+              supabase.from('membership_loveadmin').select('id, name_key, beneficiary, payer, invoice_amount, invoice_date')
+                .eq('import_id', latestLoveAdmin.id).order('beneficiary').range(from, to))
+          : Promise.resolve([] as LoveAdminPayment[]),
       ]);
       setImports(importRows);
       setMembers(memberRows);
       setPlayers(playerRows);
       setNotes(new Map(noteRows.map((n) => [n.person_key, n])));
+      setLoveAdmin(loveAdminRows);
     } catch (error: any) {
       setNotice({ type: 'error', message: `Failed to load membership data: ${error.message}` });
     }
@@ -598,6 +652,11 @@ export default function MembershipPage() {
 
   const membersImport = imports.find((i) => i.kind === 'members');
   const playersImport = imports.find((i) => i.kind === 'players');
+  // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+  const loveAdminImport = imports.find((i) => i.kind === 'loveadmin');
+  const loveAdminByName = useMemo(() => new Map(loveAdmin.map((l) => [l.name_key, l])), [loveAdmin]);
+  // Paid up in ClubControl, or paid through LoveAdmin.
+  const paidAnywhere = (m: Member) => isPaidUp(m) || loveAdminByName.has(nameKey(m.first_name, m.last_name));
 
   // Everyone in the ClubControl export, by name. Someone listed twice counts
   // as paid up if either record is.
@@ -615,14 +674,17 @@ export default function MembershipPage() {
     () =>
       players.map((p) => {
         const member = membersByName.get(p.name_key) ?? null;
+        // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md. A paid LoveAdmin invoice counts as paid.
+        const loveAdminPayment = loveAdminByName.get(p.name_key) ?? null;
         return {
           ...p,
           team: teamFromBirthDate(p.date_of_birth, p.gender),
           member,
-          status: !member ? 'missing' : isPaidUp(member) ? 'paid' : 'lapsed',
+          loveAdmin: loveAdminPayment,
+          status: loveAdminPayment || (member && isPaidUp(member)) ? 'paid' : member ? 'lapsed' : 'missing',
         };
       }),
-    [players, membersByName],
+    [players, membersByName, loveAdminByName],
   );
 
   const updateNote = (personKey: string, note: Note | null) =>
@@ -699,12 +761,12 @@ export default function MembershipPage() {
   const inactiveMembers = useMemo(() => {
     const q = inactiveSearch.trim().toLowerCase();
     return members
-      .filter((m) => !isPaidUp(m) && !hiddenKeys.has(nameKey(m.first_name, m.last_name)))
+      .filter((m) => !paidAnywhere(m) && !hiddenKeys.has(nameKey(m.first_name, m.last_name)))
       .map((m) => ({ ...m, teams: teamsByName.get(nameKey(m.first_name, m.last_name)) ?? [] }))
       .filter((m) => filter === 'all' || m.teams.some((t) => teamNamesInFilter.has(t)))
       .filter((m) => !q || `${m.first_name} ${m.last_name} ${m.email ?? ''}`.toLowerCase().includes(q))
       .sort((a, b) => a.last_name.localeCompare(b.last_name) || a.first_name.localeCompare(b.first_name));
-  }, [members, teamsByName, filter, teamNamesInFilter, inactiveSearch, hiddenKeys]);
+  }, [members, teamsByName, filter, teamNamesInFilter, inactiveSearch, hiddenKeys, loveAdminByName]);
 
   // ClubControl members with a playing membership who aren't in the GMS
   // player list — they should be registered. GMS gives no team for them, so
@@ -725,6 +787,25 @@ export default function MembershipPage() {
       .sort((a, b) => a.last_name.localeCompare(b.last_name) || a.first_name.localeCompare(b.first_name));
   }, [members, players, hiddenKeys, notOnGmsSearch]);
 
+  // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+  // Everyone still paying through LoveAdmin, with their team and ClubControl
+  // status — the list shrinks to nothing as people move over.
+  const stillOnLoveAdmin = useMemo(() => {
+    const playersByKey = new Map(playerRows.map((p) => [p.name_key, p]));
+    return loveAdmin
+      .filter((l) => !hiddenKeys.has(l.name_key))
+      .map((l) => {
+        const member = membersByName.get(l.name_key) ?? null;
+        return {
+          ...l,
+          team: playersByKey.get(l.name_key)?.team ?? null,
+          clubControl: !member ? 'Not on ClubControl' : isPaidUp(member) ? 'Active' : 'Inactive',
+        };
+      })
+      .filter((l) => filter === 'all' || (l.team !== null && teamNamesInFilter.has(l.team)))
+      .sort((a, b) => byName(a.beneficiary, b.beneficiary));
+  }, [loveAdmin, playerRows, membersByName, hiddenKeys, filter, teamNamesInFilter]);
+
   // Admins' Hidden tab: everyone hidden, with what the report would show.
   const hiddenPeople = useMemo(() => {
     const playersByKey = new Map(playerRows.map((p) => [p.name_key, p]));
@@ -736,11 +817,11 @@ export default function MembershipPage() {
         return {
           note: n,
           team: player?.team ?? null,
-          status: player ? STATUS_LABELS[player.status] : member ? (isPaidUp(member) ? 'Active member' : 'Inactive member') : 'Not in the latest uploads',
+          status: player ? STATUS_LABELS[player.status] : member ? (paidAnywhere(member) ? 'Active member' : 'Inactive member') : 'Not in the latest uploads',
         };
       })
       .sort((a, b) => a.note.display_name.localeCompare(b.note.display_name));
-  }, [notes, playerRows, membersByName]);
+  }, [notes, playerRows, membersByName, loveAdminByName]);
 
   const unhide = async (n: Note) => {
     try {
@@ -777,6 +858,8 @@ export default function MembershipPage() {
               <p className="mt-1 text-xs text-zinc-500">
                 ClubControl export: {membersImport ? shortDate(membersImport.uploaded_at) : 'not uploaded yet'}
                 {' · '}GMS player list: {playersImport ? shortDate(playersImport.uploaded_at) : 'not uploaded yet'}
+                {/* LoveAdmin migration (temporary) */}
+                {loveAdminImport && <>{' · '}LoveAdmin: {shortDate(loveAdminImport.uploaded_at)}</>}
               </p>
             )}
           </div>
@@ -1016,6 +1099,7 @@ export default function MembershipPage() {
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                             <p className="text-sm font-medium text-zinc-900">{p.first_name} {p.last_name}</p>
                             <StatusBadge status={p.status} />
+                            {p.loveAdmin && <LoveAdminTag />}
                           </div>
                           <p className="text-xs text-zinc-500">
                             {[singleTeam ? null : p.team, age !== null ? `Age ${age}` : null].filter(Boolean).join(' · ')}
@@ -1081,7 +1165,12 @@ export default function MembershipPage() {
                           <td className="px-5 py-2 font-medium text-zinc-900">{p.first_name} {p.last_name}</td>
                           {!singleTeam && <td className="whitespace-nowrap px-3 py-2 text-zinc-600">{p.team}</td>}
                           <td className="px-3 py-2 text-right tabular-nums text-zinc-600">{ageOn(p.date_of_birth) ?? '—'}</td>
-                          <td className="px-3 py-2"><StatusBadge status={p.status} /></td>
+                          <td className="px-3 py-2">
+                            <div className="flex flex-wrap gap-1">
+                              <StatusBadge status={p.status} />
+                              {p.loveAdmin && <LoveAdminTag />}
+                            </div>
+                          </td>
                           <td className="px-3 py-2 text-zinc-600">
                             {p.status === 'lapsed' ? renewalText(p.member?.renewal_date ?? null) : membershipType(p.member)}
                           </td>
@@ -1151,8 +1240,8 @@ export default function MembershipPage() {
                       <div className="min-w-0 flex-1 space-y-0.5">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                           <p className="text-sm font-medium text-zinc-900">{m.first_name} {m.last_name}</p>
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${isPaidUp(m) ? STATUS_STYLES.paid.badge : STATUS_STYLES.lapsed.badge}`}>
-                            {isPaidUp(m) ? 'Active' : 'Inactive'}
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${paidAnywhere(m) ? STATUS_STYLES.paid.badge : STATUS_STYLES.lapsed.badge}`}>
+                            {paidAnywhere(m) ? 'Active' : 'Inactive'}
                           </span>
                         </div>
                         <p className="text-xs text-zinc-600">{membershipType(m)}</p>
@@ -1188,8 +1277,8 @@ export default function MembershipPage() {
                           <td className="px-5 py-2 font-medium text-zinc-900">{m.first_name} {m.last_name}</td>
                           <td className="px-3 py-2 text-zinc-600">{membershipType(m)}</td>
                           <td className="whitespace-nowrap px-3 py-2">
-                            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${isPaidUp(m) ? STATUS_STYLES.paid.badge : STATUS_STYLES.lapsed.badge}`}>
-                              {isPaidUp(m) ? 'Active' : 'Inactive'}
+                            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${paidAnywhere(m) ? STATUS_STYLES.paid.badge : STATUS_STYLES.lapsed.badge}`}>
+                              {paidAnywhere(m) ? 'Active' : 'Inactive'}
                             </span>
                           </td>
                           <td className="px-3 py-2 text-zinc-600">
@@ -1213,6 +1302,83 @@ export default function MembershipPage() {
                 </>
               )}
             </section>
+
+            {/* LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md. */}
+            {loveAdmin.length > 0 && (
+              <section className="mb-8 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-violet-200">
+                <div className={`flex flex-wrap items-center justify-between gap-3 bg-violet-50 px-5 py-4 ${openCards.loveAdmin ? 'border-b border-violet-200' : ''}`}>
+                  <CardHeading open={openCards.loveAdmin} onToggle={() => toggleCard('loveAdmin')} title={`Still on LoveAdmin (${stillOnLoveAdmin.length})`}>
+                    Paid through LoveAdmin, the old system, so counted as paid — but still to be moved to ClubControl.
+                    {filter !== 'all' && ` Showing only those on ${filterLabel}.`}
+                  </CardHeading>
+                </div>
+                {!openCards.loveAdmin ? null : stillOnLoveAdmin.length === 0 ? (
+                  <p className="px-5 py-6 text-sm text-zinc-400">Nobody on LoveAdmin for this selection.</p>
+                ) : (
+                  <>
+                    <ul className="divide-y divide-zinc-100 sm:hidden">
+                      {stillOnLoveAdmin.map((l) => (
+                        <li key={l.id} className="flex items-start gap-2 px-4 py-3">
+                          <div className="min-w-0 flex-1 space-y-0.5">
+                            <p className="text-sm font-medium text-zinc-900">{l.beneficiary}</p>
+                            <p className="text-xs text-zinc-500">
+                              {[l.team, `ClubControl: ${l.clubControl}`].filter(Boolean).join(' · ')}
+                            </p>
+                            <p className="text-xs text-zinc-600">
+                              {l.payer && nameKey(l.payer, '') !== l.name_key ? `Paid by ${l.payer}` : 'Pays for themselves'}
+                              {l.invoice_amount !== null && ` · ${money(l.invoice_amount)} invoice`}
+                            </p>
+                          </div>
+                          <NoteCell
+                            personKey={l.name_key}
+                            displayName={l.beneficiary}
+                            note={notes.get(l.name_key)}
+                            canHide={canUpload}
+                            onSaved={updateNote}
+                            setNotice={setNotice}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="relative hidden overflow-x-auto sm:block">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-xs uppercase tracking-wide text-zinc-500">
+                            <th className="px-5 py-2 font-semibold">Name</th>
+                            <th className="px-3 py-2 font-semibold">Team</th>
+                            <th className="px-3 py-2 font-semibold">Paid by</th>
+                            <th className="px-3 py-2 text-right font-semibold">Invoice</th>
+                            <th className="px-3 py-2 font-semibold">ClubControl</th>
+                            <th className="w-12 px-3 py-2"><span className="sr-only">Comment</span></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100">
+                          {stillOnLoveAdmin.map((l) => (
+                            <tr key={l.id} className="align-top">
+                              <td className="px-5 py-2 font-medium text-zinc-900">{l.beneficiary}</td>
+                              <td className="whitespace-nowrap px-3 py-2 text-zinc-600">{l.team ?? '—'}</td>
+                              <td className="px-3 py-2 text-zinc-600">{l.payer && nameKey(l.payer, '') !== l.name_key ? l.payer : 'Themselves'}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-zinc-600">{l.invoice_amount !== null ? money(l.invoice_amount) : '—'}</td>
+                              <td className="whitespace-nowrap px-3 py-2 text-zinc-600">{l.clubControl}</td>
+                              <td className="w-12 px-3 py-1.5 text-center">
+                                <NoteCell
+                                  personKey={l.name_key}
+                                  displayName={l.beneficiary}
+                                  note={notes.get(l.name_key)}
+                                  canHide={canUpload}
+                                  onSaved={updateNote}
+                                  setNotice={setNotice}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </section>
+            )}
 
             <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-amber-200">
               <div className={`flex flex-wrap items-center justify-between gap-3 bg-amber-50 px-5 py-4 ${openCards.inactive ? 'border-b border-amber-200' : ''}`}>

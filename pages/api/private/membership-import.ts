@@ -2,11 +2,16 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { parseGmsPlayers, parseMembersCsv } from '../../../lib/importers/membershipImportParser';
 import { teamFromBirthDate } from '../../../lib/membership';
+// LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+import { parseLoveAdminInvoices } from '../../../lib/importers/loveAdminImportParser';
 
 // Uploads for /operations/membership (tables in supabase/policies/membership.sql).
 //
 //   kind "members": a ClubControl members export (.csv). Replaces the
 //                   previous export.
+//   kind "loveadmin" (temporary, LoveAdmin migration — see LOVEADMIN_MIGRATION.md):
+//                   LoveAdmin's Invoices All Report (.xlsx). Replaces the
+//                   previous one; paid invoices' beneficiaries count as paid.
 //   kind "players": the RFU GMS player list (.xlsx / .csv). Adds new players
 //                   and updates existing ones; never removes anyone. Teams
 //                   aren't stored — the page works them out from date of
@@ -80,13 +85,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const filename = typeof req.body?.filename === 'string' ? req.body.filename.slice(0, 200) : '';
   const contentBase64 = typeof req.body?.contentBase64 === 'string' ? req.body.contentBase64 : '';
   const apply = req.body?.apply === true;
-  if ((kind !== 'members' && kind !== 'players') || !filename || !contentBase64) {
+  if (!['members', 'players', 'loveadmin'].includes(kind) || !filename || !contentBase64) {
     return res.status(400).json({ ok: false, error: 'kind, filename and file contents are required.' });
   }
   const bytes = Buffer.from(contentBase64, 'base64');
   if (!bytes.length) return res.status(400).json({ ok: false, error: 'That file is empty.' });
 
   const uploadedBy = user.email || user.id;
+
+  // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+  if (kind === 'loveadmin') {
+    let parsed;
+    try {
+      parsed = await parseLoveAdminInvoices(bytes);
+    } catch (error: any) {
+      return res.status(400).json({ ok: false, error: error?.message ?? 'Could not read that file.' });
+    }
+    const { payments, paidInvoices, skippedInvoices } = parsed;
+    if (payments.length === 0) return res.status(400).json({ ok: false, error: 'No paid invoices found in that file.' });
+    const summary = { paidInvoices, skippedInvoices, people: payments.length };
+    if (!apply) return res.status(200).json({ ok: true, preview: summary });
+
+    const { data: imported, error: importError } = await supabaseAdmin
+      .from('membership_imports')
+      .insert({ kind, file_name: filename, row_count: payments.length, uploaded_by: uploadedBy })
+      .select('id')
+      .single();
+    if (importError || !imported) return res.status(500).json({ ok: false, error: importError?.message ?? 'Save failed.' });
+
+    const { error } = await supabaseAdmin
+      .from('membership_loveadmin')
+      .insert(payments.map((p) => ({ ...p, import_id: imported.id })));
+    if (error) {
+      await supabaseAdmin.from('membership_imports').delete().eq('id', imported.id);
+      return res.status(500).json({ ok: false, error: `Save failed: ${error.message}` });
+    }
+    await supabaseAdmin.from('membership_imports').delete().eq('kind', 'loveadmin').neq('id', imported.id);
+    return res.status(200).json({ ok: true, saved: summary });
+  }
 
   if (kind === 'members') {
     let members;

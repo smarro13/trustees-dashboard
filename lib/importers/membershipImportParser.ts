@@ -131,7 +131,7 @@ const columnIndex = (ref: string) =>
 // this handles that and ordinary Excel-saved files alike. Dates typed as
 // dates (t="d") come back as YYYY-MM-DD; dates stored as serial numbers come
 // back as the number and are converted by cellDate().
-async function readXlsxSheets(bytes: Buffer): Promise<string[][][]> {
+export async function readXlsxSheets(bytes: Buffer): Promise<string[][][]> {
   const zip = await JSZip.loadAsync(bytes);
   const sharedXml = await zip.file('xl/sharedStrings.xml')?.async('string');
   const shared = sharedXml
@@ -173,7 +173,7 @@ async function readXlsxSheets(bytes: Buffer): Promise<string[][][]> {
 
 // Dates of birth arrive as YYYY-MM-DD, UK dd/mm/yyyy text, or an Excel
 // serial day number if the sheet was re-saved in Excel.
-function cellDate(value: string | undefined): string | null {
+export function cellDate(value: string | undefined): string | null {
   const text = (value ?? '').trim();
   if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
   if (/^\d+(\.\d+)?$/.test(text)) {
