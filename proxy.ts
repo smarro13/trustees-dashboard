@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
-type DashboardRole = 'admin' | 'trustee' | 'director' | 'president' | 'safeguarding' | 'commercial' | null;
+type DashboardRole = 'admin' | 'trustee' | 'director' | 'president' | 'safeguarding' | 'commercial' | 'dor' | null;
 
 const ROLE_RANK: Record<Exclude<DashboardRole, null>, number> = {
   admin: 5,
@@ -11,6 +11,7 @@ const ROLE_RANK: Record<Exclude<DashboardRole, null>, number> = {
   president: 2,
   safeguarding: 2,
   commercial: 1,
+  dor: 1,
 };
 
 const normalizeRole = (rawRole: unknown): DashboardRole => {
@@ -27,6 +28,7 @@ const normalizeRole = (rawRole: unknown): DashboardRole => {
   if (value === 'president') return 'president';
   if (value === 'safeguarding') return 'safeguarding';
   if (value === 'commercial' || value === 'commerical') return 'commercial';
+  if (value === 'dor' || value === 'director of rugby' || value === 'director-of-rugby' || value === 'director_of_rugby') return 'dor';
 
   return null;
 };
@@ -77,12 +79,17 @@ const getRequiredRoleForPath = (pathname: string): DashboardRole => {
 
   // Members' personal data — admins, trustees and directors only. Matches the
   // RLS policies in supabase/policies/membership.sql.
-  if (pathname === '/operations/membership') {
+  if (pathname === '/operations/membership' || pathname === '/operations/membership/report') {
     return 'director';
   }
 
   return null;
 };
+
+// Director of Rugby: the dashboard home (cut down to links to these two), the
+// Rugby agenda page and the membership page. Nothing else, including the
+// pages with no role requirement (meetings, operations, admin).
+const DOR_PATHS = new Set(['/', '/agenda/rugby', '/operations/membership', '/operations/membership/report']);
 
 const hasRequiredRole = (actual: DashboardRole, required: DashboardRole) => {
   if (!required) return true;
@@ -219,10 +226,22 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  if (session) {
+  if (session && !isPublicRoute && !req.nextUrl.pathname.startsWith('/auth/')) {
     const requiredRole = getRequiredRoleForPath(req.nextUrl.pathname);
 
-    if (requiredRole) {
+    // The Director of Rugby is limited to DOR_PATHS, so their role has to be
+    // checked on every page, not only on pages that require a role. The
+    // session's own claim decides whether that check is needed (a forged
+    // claim can only restrict a user further); the decision itself uses the
+    // verified user below.
+    const sessionUser = session.user as any;
+    const claimedRole =
+      normalizeRole(sessionUser?.app_metadata?.role) ||
+      normalizeRole(sessionUser?.user_metadata?.role) ||
+      getHighestRoleFromList(Array.isArray(sessionUser?.app_metadata?.roles) ? sessionUser.app_metadata.roles : []) ||
+      getHighestRoleFromList(Array.isArray(sessionUser?.user_metadata?.roles) ? sessionUser.user_metadata.roles : []);
+
+    if (requiredRole || claimedRole === 'dor') {
       const { data: userResult } = await supabase.auth.getUser();
       const user = userResult.user;
 
@@ -239,7 +258,16 @@ export async function proxy(req: NextRequest) {
 
       const effectiveRole = roleFromAppMeta || roleFromUserMeta || roleFromAppArray || roleFromUserArray;
 
-      if (!hasRequiredRole(effectiveRole, requiredRole)) {
+      if (effectiveRole === 'dor') {
+        if (!DOR_PATHS.has(req.nextUrl.pathname)) {
+          const redirectUrl = new URL('/', req.url);
+          redirectUrl.searchParams.set('access', 'denied');
+          return NextResponse.redirect(redirectUrl);
+        }
+        return response;
+      }
+
+      if (requiredRole && !hasRequiredRole(effectiveRole, requiredRole)) {
         const redirectUrl = new URL('/', req.url);
         redirectUrl.searchParams.set('access', 'denied');
         return NextResponse.redirect(redirectUrl);

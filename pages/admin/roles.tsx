@@ -17,13 +17,14 @@ type CreatedCredentials = {
   temporaryPassword: string;
 };
 
-const roleOptions: Array<{ value: 'admin' | 'trustee' | 'director' | 'president' | 'safeguarding' | 'commercial' | 'none'; label: string }> = [
+const roleOptions: Array<{ value: 'admin' | 'trustee' | 'director' | 'president' | 'safeguarding' | 'commercial' | 'dor' | 'none'; label: string }> = [
   { value: 'admin', label: 'Admin' },
   { value: 'trustee', label: 'Trustee' },
   { value: 'director', label: 'Director' },
   { value: 'president', label: 'President' },
   { value: 'safeguarding', label: 'Safeguarding' },
   { value: 'commercial', label: 'Commercial' },
+  { value: 'dor', label: 'Director of Rugby' },
   { value: 'none', label: 'No role' },
 ];
 
@@ -40,7 +41,7 @@ export default function AdminRolesPage() {
   const [deleting, setDeleting] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [newEmail, setNewEmail] = useState('');
-  const [newRole, setNewRole] = useState<'admin' | 'trustee' | 'director' | 'president' | 'safeguarding' | 'commercial' | 'none'>('director');
+  const [newRole, setNewRole] = useState<'admin' | 'trustee' | 'director' | 'president' | 'safeguarding' | 'commercial' | 'dor' | 'none'>('director');
   const [addingUser, setAddingUser] = useState(false);
   const [createdCredentials, setCreatedCredentials] = useState<CreatedCredentials | null>(null);
 
