@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { parseTradingUpdateFile } from '../../lib/importers/tradingUpdateImportParser';
+import { requireSignedInUser } from '../../lib/apiAuth';
 
 export const config = {
   api: {
@@ -18,6 +19,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed. Use POST.' });
   }
+
+  const user = await requireSignedInUser(req, res);
+  if (!user) return;
 
   const body = req.body as ReqBody;
   const filename = body?.filename || '';

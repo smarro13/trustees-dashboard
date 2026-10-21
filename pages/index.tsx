@@ -4,7 +4,9 @@ import { supabase } from '../lib/supabaseClient';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import AgendaMenu from '../components/AgendaMenu';
-import { type DashboardRole, resolveRoleFromUser as resolveRole, roleLabel, roleBadgeClass } from '../lib/roles';
+import { type DashboardRole, resolveRoleFromUser as resolveRole, roleLabel, roleBadgeClass, ROLE_RANK } from '../lib/roles';
+import { authJsonHeaders } from '../lib/authHeaders';
+import { todayKey } from '../lib/meetingSchedule';
 
 const SHAREABLE_PAGES = [
   {
@@ -56,6 +58,11 @@ const OPERATIONS_PAGES: { title: string; description: string; href: string; comi
     href: '/operations/veo-bookings',
   },
   {
+    title: '🤝 Sponsors',
+    description: 'Every sponsor and partner, with deals, renewal dates, payments and contacts.',
+    href: '/operations/sponsors',
+  },
+  {
     title: '📦 Asset Register',
     description: 'Club equipment, technology and subscriptions, with renewal and service dates.',
     href: '/operations/asset-register',
@@ -78,6 +85,9 @@ export default function LandingPage() {
   const [userEmail, setUserEmail] = useState<string>('');
   const [userRole, setUserRole] = useState<DashboardRole>(null);
   const [meetingsOpen, setMeetingsOpen] = useState(true);
+  const [showPastMeetings, setShowPastMeetings] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduleMessage, setScheduleMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -181,6 +191,69 @@ export default function LandingPage() {
     };
   }, []);
 
+  // Meetings: the next one up front, later ones below, past ones archived.
+  const today = todayKey();
+  const meetingKey = (m: any) => String(m.meeting_date || '').slice(0, 10);
+  const upcomingMeetings = meetings.filter((m) => meetingKey(m) >= today);
+  const pastMeetings = meetings.filter((m) => meetingKey(m) < today).reverse();
+  const nextMeeting = upcomingMeetings[0] || null;
+  const laterMeetings = upcomingMeetings.slice(1);
+  const canSchedule = Boolean(userRole && ROLE_RANK[userRole] >= ROLE_RANK.trustee);
+
+  const longDate = (m: any) =>
+    new Date(`${meetingKey(m)}T12:00:00`).toLocaleDateString('en-GB', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+    });
+  const shortDate = (m: any) =>
+    new Date(`${meetingKey(m)}T12:00:00`).toLocaleDateString('en-GB', {
+      weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+    });
+  const daysUntil = (m: any) => {
+    const ms = new Date(`${meetingKey(m)}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime();
+    const days = Math.round(ms / 86400000);
+    return days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `In ${days} days`;
+  };
+
+  const scheduleNextYear = async () => {
+    setScheduling(true);
+    setScheduleMessage(null);
+    try {
+      const res = await fetch('/api/private/schedule-meetings', {
+        method: 'POST',
+        headers: await authJsonHeaders(),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setScheduleMessage(body.error || 'Could not schedule meetings.');
+      } else {
+        setScheduleMessage(
+          body.inserted.length
+            ? `Added ${body.inserted.length} meeting${body.inserted.length === 1 ? '' : 's'}.`
+            : 'The next 12 months are already scheduled.',
+        );
+        fetchMeetings();
+      }
+    } catch {
+      setScheduleMessage('Could not schedule meetings.');
+    } finally {
+      setScheduling(false);
+    }
+  };
+
+  const meetingRow = (m: any, muted = false) => (
+    <Link
+      key={m.id}
+      href={`/meeting/${m.id}`}
+      className={`flex items-center justify-between rounded-md border border-slate-200 p-3 transition ${muted ? 'bg-white hover:bg-slate-50' : 'bg-slate-50 hover:bg-slate-100'}`}
+    >
+      <div className="flex items-center gap-2">
+        <span className={`text-sm font-semibold ${muted ? 'text-slate-600' : 'text-slate-900'}`}>{shortDate(m)}</span>
+        {m.is_locked && <span className="text-xs bg-red-100 text-red-700 rounded px-2 py-1">🔒 Locked</span>}
+      </div>
+      <span className="text-slate-400">→</span>
+    </Link>
+  );
+
   // split dueActions: with due date vs no due date
   const actionsWithDue = dueActions.filter((a) => a.due_date);
   const actionsWithoutDue = dueActions.filter((a) => !a.due_date);
@@ -241,7 +314,10 @@ export default function LandingPage() {
                   <span className="text-xl">📅</span>
                   <div>
                     <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Upcoming Meetings</h2>
-                    <p className="text-xs text-slate-500">{meetings.length} meeting{meetings.length !== 1 ? 's' : ''}</p>
+                    <p className="text-xs text-slate-500">
+                      {nextMeeting ? `Next: ${shortDate(nextMeeting)}` : 'No upcoming meetings'}
+                      {laterMeetings.length > 0 && ` · ${laterMeetings.length} more scheduled`}
+                    </p>
                   </div>
                 </div>
                 <span className="text-slate-600 font-semibold">
@@ -250,31 +326,60 @@ export default function LandingPage() {
               </button>
 
               {meetingsOpen && (
-                <div className="px-4 py-4 bg-white">
-                  {meetings.length === 0 ? (
-                    <p className="text-sm text-zinc-500">No meetings scheduled.</p>
+                <div className="px-4 py-4 bg-white space-y-4">
+                  {nextMeeting ? (
+                    <Link
+                      href={`/meeting/${nextMeeting.id}`}
+                      className="block rounded-lg border-2 border-blue-200 bg-blue-50 p-4 hover:bg-blue-100 transition"
+                    >
+                      <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Next meeting · {daysUntil(nextMeeting)}</p>
+                      <div className="mt-1 flex items-center justify-between gap-3">
+                        <span className="text-lg font-bold text-slate-900">{longDate(nextMeeting)}</span>
+                        <span className="text-sm font-semibold text-blue-700 whitespace-nowrap">Open →</span>
+                      </div>
+                      {nextMeeting.is_locked && <span className="mt-2 inline-block text-xs bg-red-100 text-red-700 rounded px-2 py-1">🔒 Locked</span>}
+                    </Link>
                   ) : (
-                    <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {meetings.map((m) => {
-                        const dateLabel = new Date(m.meeting_date).toLocaleDateString(
-                          'en-GB',
-                        );
-                        const isLocked = Boolean(m.is_locked);
+                    <p className="text-sm text-zinc-500">No upcoming meetings scheduled.</p>
+                  )}
 
-                        return (
-                          <Link
-                            key={m.id}
-                            href={`/meeting/${m.id}`}
-                            className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 p-3 hover:bg-slate-100 transition"
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-semibold text-slate-900">{dateLabel}</span>
-                              {isLocked && <span className="text-xs bg-red-100 text-red-700 rounded px-2 py-1">🔒 Locked</span>}
-                            </div>
-                            <span className="text-slate-400">→</span>
-                          </Link>
-                        );
-                      })}
+                  {laterMeetings.length > 0 && (
+                    <div>
+                      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Later meetings</h3>
+                      <div className="space-y-2 max-h-72 overflow-y-auto">
+                        {laterMeetings.map((m) => meetingRow(m))}
+                      </div>
+                    </div>
+                  )}
+
+                  {pastMeetings.length > 0 && (
+                    <div className="border-t border-slate-200 pt-3">
+                      <button
+                        onClick={() => setShowPastMeetings((s) => !s)}
+                        className="text-sm font-medium text-slate-600 hover:text-slate-900"
+                      >
+                        {showPastMeetings ? '▾' : '▸'} Past meetings ({pastMeetings.length})
+                      </button>
+                      {showPastMeetings && (
+                        <div className="mt-2 space-y-2 max-h-72 overflow-y-auto">
+                          {pastMeetings.map((m) => meetingRow(m, true))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {canSchedule && (
+                    <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 pt-3">
+                      <button
+                        onClick={scheduleNextYear}
+                        disabled={scheduling}
+                        className="rounded-md bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+                      >
+                        {scheduling ? 'Scheduling…' : 'Schedule next 12 months'}
+                      </button>
+                      <span className="text-xs text-slate-500">
+                        {scheduleMessage || 'Adds any missing second-Wednesday meetings for the next 12 months.'}
+                      </span>
                     </div>
                   )}
                 </div>
