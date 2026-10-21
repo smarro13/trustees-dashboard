@@ -1,104 +1,68 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
-import { User } from '@supabase/supabase-js';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
+import MembershipReportBody from '../../components/MembershipReportBody';
+import MembershipSummaryView from '../../components/MembershipSummaryView';
 import { canCurrentUserEditThisAgendaPage, PRESIDENT_EDIT_BLOCK_MESSAGE } from '../../lib/presidentPermissions';
+import { buildMembershipSummary, loadMembershipData, type MembershipSummary } from '../../lib/membershipSummary';
+
+// Membership agenda item. The figures come from /operations/membership (the
+// ClubControl export and the GMS player list); saving stores a snapshot of
+// them on membership_reports.summary, so the meeting keeps the numbers as they
+// were. The money received is typed in by hand until the ClubControl API is
+// connected. Older reports still show their LoveAdmin figures.
+
+const meetingLabel = (date: string) =>
+  new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
 export default function MembershipReportPage() {
   const [reports, setReports] = useState<any[]>([]);
   const [meetings, setMeetings] = useState<any[]>([]);
   const [meetingId, setMeetingId] = useState<string | null>(null);
-  const [numPeople, setNumPeople] = useState<string>('');
-  const [moneyTotal, setMoneyTotal] = useState<string>(''); // Bottomline only
-  const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
+  const [moneyReceived, setMoneyReceived] = useState('');
+  const [notes, setNotes] = useState('');
+  const [summary, setSummary] = useState<MembershipSummary | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
   const [canEdit, setCanEdit] = useState(true);
-  const [loveAdminNewSignups, setLoveAdminNewSignups] = useState<string>('');
-  const [loveAdminOutstandingTotal, setLoveAdminOutstandingTotal] = useState<string>('');
-  const [loveAdminCancellations, setLoveAdminCancellations] = useState<string>('');
-  const [loveAdminTotal, setLoveAdminTotal] = useState<string>(''); // LoveAdmin only
 
-  // New: outstanding payments by category
-  const outstandingCategories = [
-    'Child',
-    'Female Player',
-    'Girls',
-    'Male Player',
-    'Mini Winnies',
-    'Non Player (Social)',
-    'Non Player (Gym)',
-    'Student - Unemployed',
-    'Vets - Infrequent Player',
-    'Presidents Lotto',
-  ] as const;
-  type OutstandingCategory = (typeof outstandingCategories)[number];
+  const showNotice = (type: InlineNotice['type'], message: string) => setNotice({ type, message });
 
-  const [selectedOutstandingCategory, setSelectedOutstandingCategory] =
-    useState<OutstandingCategory | ''>('');
-
-  type OutstandingLine = {
-    id: number;
-    category: OutstandingCategory;
-    memberName: string;
-    amount: string;
-  };
-
-  const [outstandingLines, setOutstandingLines] = useState<OutstandingLine[]>(
-    [],
-  );
-
-  // New: cancellations by category – just number of people
-  const [selectedCancellationCategory, setSelectedCancellationCategory] =
-    useState<OutstandingCategory | ''>('');
-
-  type CancellationLine = {
-    id: number;
-    category: OutstandingCategory;
-    count: string;
-  };
-
-  const [cancellationLines, setCancellationLines] = useState<CancellationLine[]>(
-    [],
-  );
-
-  const showNotice = (type: InlineNotice['type'], message: string) => {
-    setNotice({ type, message });
-  };
-
-  // combined = Bottomline + LoveAdmin totals (only these two)
-  const combinedMoneyTotal = (() => {
-    const bottom = Number.isFinite(parseFloat(moneyTotal)) ? parseFloat(moneyTotal) : 0;
-    const la = Number.isFinite(parseFloat(loveAdminTotal)) ? parseFloat(loveAdminTotal) : 0;
-    const sum = bottom + la;
-    return sum === 0 && !moneyTotal && !loveAdminTotal ? '' : sum.toFixed(2);
-  })();
-
-  const loadData = async () => {
-    setLoading(true);
-
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
-    setUser(currentUser);
-
+  const loadReports = async () => {
     const { data } = await supabase
       .from('membership_reports')
       .select(`*, meetings ( meeting_date )`)
       .order('created_at', { ascending: false });
-
     if (data) setReports(data);
-
-    const { data: meetingsData } = await supabase
-      .from('meetings')
-      .select('id, meeting_date')
-      .order('meeting_date', { ascending: true });
-
-    if (meetingsData) setMeetings(meetingsData);
-    setLoading(false);
   };
 
   useEffect(() => {
-    loadData();
+    const load = async () => {
+      const { data: meetingsData } = await supabase
+        .from('meetings')
+        .select('id, meeting_date')
+        .order('meeting_date', { ascending: true });
+      if (meetingsData) {
+        setMeetings(meetingsData);
+        // Default to the next meeting (today counts).
+        const today = new Date().toISOString().slice(0, 10);
+        const next = meetingsData.find((m) => String(m.meeting_date).slice(0, 10) >= today);
+        if (next) setMeetingId(next.id);
+      }
+
+      await loadReports();
+
+      try {
+        setSummary(buildMembershipSummary(await loadMembershipData()));
+      } catch {
+        setSummaryError('The membership figures are only available to admins, trustees, directors and the Director of Rugby.');
+      }
+      setLoading(false);
+    };
+    void load();
   }, []);
 
   useEffect(() => {
@@ -108,12 +72,7 @@ export default function MembershipReportPage() {
   }, [notice]);
 
   useEffect(() => {
-    const loadCanEdit = async () => {
-      const allowed = await canCurrentUserEditThisAgendaPage();
-      setCanEdit(allowed);
-    };
-
-    void loadCanEdit();
+    void canCurrentUserEditThisAgendaPage().then(setCanEdit);
   }, []);
 
   const saveReport = async () => {
@@ -121,132 +80,63 @@ export default function MembershipReportPage() {
       showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
       return;
     }
-
-    if (!user) {
-      showNotice('error', 'You must be logged in to save.');
+    if (!summary) return;
+    if (!meetingId) {
+      showNotice('error', 'Choose the meeting this report is for.');
+      return;
+    }
+    const money = moneyReceived.trim() ? Number(moneyReceived) : null;
+    if (money != null && !Number.isFinite(money)) {
+      showNotice('error', 'Enter the money received as a number, e.g. 1250.50.');
       return;
     }
 
-    try {
-      const { data, error } = await supabase.from('membership_reports').insert({
-        meeting_id: meetingId,
-        bottom_line: null,
+    setSaving(true);
+    const { error } = await supabase.from('membership_reports').insert({
+      meeting_id: meetingId,
+      summary,
+      money_total: money,
+      notes: notes.trim() || null,
+    });
+    setSaving(false);
 
-        num_people: numPeople ? Number(numPeople) : null,
-
-        // Bottomline Total (£)
-        money_total: moneyTotal ? Number(moneyTotal) : null,
-
-        // LoveAdmin
-        loveadmin_total: loveAdminTotal ? Number(loveAdminTotal) : null,
-        loveadmin_new_signups: loveAdminNewSignups
-          ? Number(loveAdminNewSignups)
-          : null,
-        loveadmin_outstanding_total: loveAdminOutstandingTotal
-          ? Number(loveAdminOutstandingTotal)
-          : null,
-        loveadmin_cancellations: loveAdminCancellations
-          ? Number(loveAdminCancellations)
-          : null,
-
-        // Details (strip local id before saving)
-        outstanding_lines: outstandingLines.map(({ id, ...rest }) => rest),
-        cancellation_lines: cancellationLines.map(({ id, ...rest }) => rest),
-      });
-
-      if (error) {
-        console.error('Error saving membership report:', error);
-        showNotice('error', `Failed to save: ${error.message}`);
-        return;
-      }
-
-      showNotice('success', 'Membership report saved successfully.');
-      
-      setMeetingId(null);
-      setNumPeople('');
-      setMoneyTotal('');
-      setLoveAdminNewSignups('');
-      setLoveAdminOutstandingTotal('');
-      setLoveAdminCancellations('');
-      setLoveAdminTotal('');
-      setOutstandingLines([]);
-      setSelectedOutstandingCategory('');
-      setCancellationLines([]);
-      setSelectedCancellationCategory('');
-      loadData();
-    } catch (err) {
-      console.error('Unexpected error saving membership report:', err);
-      showNotice('error', 'An unexpected error occurred while saving.');
+    if (error) {
+      showNotice('error', `Failed to save: ${error.message}`);
+      return;
     }
+
+    setMoneyReceived('');
+    setNotes('');
+    showNotice('success', 'Membership report saved to the meeting.');
+    void loadReports();
   };
 
-  // helpers to manage outstandingLines for selected category
-  const addOutstandingLine = () => {
-    if (!selectedOutstandingCategory) return;
-    setOutstandingLines((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        category: selectedOutstandingCategory,
-        memberName: '',
-        amount: '',
-      },
-    ]);
-  };
-
-  const updateOutstandingLine = (
-    id: number,
-    field: 'memberName' | 'amount',
-    value: string,
-  ) => {
-    setOutstandingLines((prev) =>
-      prev.map((line) =>
-        line.id === id ? { ...line, [field]: value } : line,
-      ),
-    );
-  };
-
-  const linesForSelectedCategory = outstandingLines.filter(
-    (l) => l.category === selectedOutstandingCategory,
-  );
-
-  // New: helpers for cancellations
-  const addCancellationLine = () => {
-    if (!selectedCancellationCategory) return;
-    setCancellationLines((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        category: selectedCancellationCategory as OutstandingCategory,
-        count: '',
-      },
-    ]);
-  };
-
-  const updateCancellationLine = (id: number, value: string) => {
-    setCancellationLines((prev) =>
-      prev.map((line) => (line.id === id ? { ...line, count: value } : line)),
-    );
-  };
-
-  const cancellationsForSelectedCategory = cancellationLines.filter(
-    (l) => l.category === selectedCancellationCategory,
-  );
+  const detailedReportHref = `/operations/membership/report${meetingId ? `?meetingId=${meetingId}` : ''}`;
 
   return (
     <main className="min-h-screen">
       <div className="mx-auto w-full max-w-[1200px] px-4 py-10">
-        <header className="mb-8">
-          <Link href="/" className="mb-3 inline-block text-sm font-medium text-blue-600 hover:underline">
-            ← Back to dashboard
-          </Link>
-
-          <h1 className="text-3xl font-extrabold text-zinc-900">
-            Membership Report
-          </h1>
-          <p className="mt-1 text-zinc-600">
-            Membership updates from Bottomline and LoveAdmin
-          </p>
+        <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <Link href="/" className="mb-3 inline-block text-sm font-medium text-blue-600 hover:underline">
+              ← Back to dashboard
+            </Link>
+            <h1 className="text-3xl font-extrabold text-zinc-900">Membership Report</h1>
+            <p className="mt-1 text-zinc-600">
+              A summary from the{' '}
+              <Link href="/operations/membership" className="text-blue-600 hover:underline">Membership page</Link>, plus the money received.
+            </p>
+          </div>
+          {summary && (
+            <a
+              href={detailedReportHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+            >
+              📄 Generate detailed report
+            </a>
+          )}
         </header>
 
         <InlineNoticeBanner notice={notice} className="mb-6" />
@@ -257,242 +147,104 @@ export default function MembershipReportPage() {
           </div>
         )}
 
-        <fieldset disabled={!canEdit} className="disabled:opacity-70">
-
-        {/* Bottom line section */}
         <section className="mb-10 w-full rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
           <div className="border-b border-zinc-200 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
-            <h2 className="pc-name text-xl font-semibold">
-              Bottom line
-            </h2>
-          </div>
-
-          <div className="w-full px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6 space-y-4">
-            {/* Number of people */}
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-zinc-700">
-                Number of people
-              </label>
-              <input
-                type="number"
-                placeholder="Number of people"
-                value={numPeople}
-                onChange={(e) => setNumPeople(e.target.value)}
-                className="w-full rounded-md border border-zinc-300 px-3 py-2"
-                min={0}
-              />
-            </div>
-
-            {/* Bottomline Total (£) – bound ONLY to moneyTotal */}
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-zinc-700">
-                Bottomline Total (£)
-              </label>
-              <input
-                type="number"
-                placeholder="Total amount in pounds from Bottomline"
-                value={moneyTotal}
-                onChange={(e) => setMoneyTotal(e.target.value)}
-                className="w-full rounded-md border border-zinc-300 px-3 py-2"
-                min={0}
-                step="0.01"
-              />
-            </div>
-
-
-
-          </div>
-        </section>
-
-        {/* LoveAdmin block */}
-        <section className="mb-10 w-full rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
-          <div className="border-b border-zinc-200 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
-            <h2 className="pc-name text-xl font-semibold">LoveAdmin</h2>
-          </div>
-          <div className="w-full px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6 space-y-4">
-            {/* New sign ups */}
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-zinc-700">
-                New sign ups
-              </label>
-              <input
-                type="number"
-                min={0}
-                placeholder="Number of new sign ups"
-                value={loveAdminNewSignups}
-                onChange={(e) => setLoveAdminNewSignups(e.target.value)}
-                className="w-full rounded-md border border-zinc-300 px-3 py-2"
-              />
-            </div>
-
-            {/* LoveAdmin Total (£) – bound ONLY to loveAdminTotal */}
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-zinc-700">
-                LoveAdmin Total (£)
-              </label>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                placeholder="Total amount from LoveAdmin"
-                value={loveAdminTotal}
-                onChange={(e) => setLoveAdminTotal(e.target.value)}
-                className="w-full rounded-md border border-zinc-300 px-3 py-2"
-              />
-            </div>
-
-            {/* Outstanding payments total */}
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-zinc-700">
-                Outstanding payments total (£)
-              </label>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                placeholder="Outstanding payments total"
-                value={loveAdminOutstandingTotal}
-                onChange={(e) => setLoveAdminOutstandingTotal(e.target.value)}
-                className="w-full rounded-md border border-zinc-300 px-3 py-2"
-              />
-            </div>
-
-            {/* Number of cancellations (overall text field, keep) */}
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-zinc-700">
-                Number of cancellations
-              </label>
-              <input
-                type="number"
-                min={0}
-                placeholder="Total number of cancellations"
-                value={loveAdminCancellations}
-                onChange={(e) => setLoveAdminCancellations(e.target.value)}
-                className="w-full rounded-md border border-zinc-300 px-3 py-2"
-              />
-            </div>
-
-          </div>
-        </section>
-
-        {/* Money total summary section */}
-        <section className="mt-6 w-full rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
-          <div className="border-b border-zinc-200 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
-            <h2 className="pc-name text-lg font-semibold">
-              Money total
-            </h2>
-          </div>
-          <div className="w-full px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6 space-y-2">
-            <p className="text-sm text-zinc-600">
-              This total equals the sum of the Bottomline Total (£) and the LoveAdmin Total (£).
+            <h2 className="text-xl font-semibold">This month&rsquo;s figures</h2>
+            <p className="mt-0.5 text-sm text-zinc-500">
+              Worked out from the latest uploads. Saving keeps a copy with the meeting, so it won&rsquo;t change when new data is uploaded.
             </p>
-            <input
-              type="text"
-              readOnly
-              value={combinedMoneyTotal}
-              className="w-full rounded-md border border-zinc-300 px-3 py-2 bg-zinc-50 text-zinc-800"
-            />
           </div>
-        </section>
 
-        {/* Link to meeting */}
-        <section className="mt-6 w-full rounded-lg bg-white shadow-sm ring-1 ring-zinc-200">
-          <div className="border-b border-zinc-200 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
-            <h2 className="pc-name text-lg font-semibold">
-              Link to meeting
-            </h2>
-          </div>
-          <div className="w-full px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6">
-            <select
-              value={meetingId ?? ''}
-              onChange={(e) => setMeetingId(e.target.value || null)}
-              className="w-full rounded-md border border-zinc-300 px-3 py-2"
-            >
-              <option value="">Link to meeting (optional)</option>
-              {meetings.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {new Date(m.meeting_date).toLocaleDateString('en-GB', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                  })}
-                </option>
-              ))}
-            </select>
-          </div>
-        </section>
+          <div className="space-y-6 px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6">
+            {loading ? (
+              <p className="text-sm text-zinc-400">Loading the membership figures…</p>
+            ) : summaryError ? (
+              <p className="rounded-md border border-dashed border-zinc-300 p-4 text-sm text-zinc-500">{summaryError}</p>
+            ) : summary ? (
+              <MembershipSummaryView
+                summary={summary}
+                moneyReceived={moneyReceived.trim() && Number.isFinite(Number(moneyReceived)) ? Number(moneyReceived) : null}
+              />
+            ) : null}
 
-        {/* Global save button */}
-        <section className="mt-6 flex justify-end">
-          <button
-            onClick={saveReport}
-            disabled={!canEdit}
-            className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700"
-          >
-            Save membership report
-          </button>
-        </section>
+            {summary && (
+              <fieldset disabled={!canEdit || saving} className="space-y-4 border-t border-zinc-200 pt-5 disabled:opacity-70">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <label htmlFor="membership-money" className="block text-sm font-medium text-zinc-700">
+                      Money received (£)
+                    </label>
+                    <input
+                      id="membership-money"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      inputMode="decimal"
+                      placeholder="From ClubControl"
+                      value={moneyReceived}
+                      onChange={(e) => setMoneyReceived(e.target.value)}
+                      className="w-full rounded-md border border-zinc-300 px-3 py-2"
+                    />
+                    <p className="text-xs text-zinc-500">Typed in by hand for now, until the ClubControl API is connected.</p>
+                  </div>
 
-        </fieldset>
-
-        {/* Reports list */}
-        <section className="mt-10 space-y-4">
-          {loading && (
-            <p className="text-zinc-500 text-sm">Loading membership reports…</p>
-          )}
-          {!loading &&
-            reports.map((r) => (
-              <div key={r.id} className="player-card">
-                {r.meetings?.meeting_date && (
-                  <p className="pc-meta">
-                    Meeting: {new Date(r.meetings.meeting_date).toLocaleDateString('en-GB')}
-                  </p>
-                )}
-
-                <div className="mt-2 text-sm text-zinc-700 space-y-1">
-                  {r.num_people != null && (
-                    <p>
-                      <span className="font-semibold">Number of people from Bottomline:</span>{' '}
-                      {r.num_people}
-                    </p>
-                  )}
-                  {r.money_total != null && (
-                    <p>
-                      <span className="font-semibold">Bottomline Total (£):</span>{' '}
-                      {r.money_total}
-                    </p>
-                  )}
-                  {r.loveadmin_new_signups != null && (
-                    <p>
-                      <span className="font-semibold">LoveAdmin New sign ups:</span>{' '}
-                      {r.loveadmin_new_signups}
-                    </p>
-                  )}
-                  {r.loveadmin_total != null && (
-                    <p>
-                      <span className="font-semibold">LoveAdmin Total (£):</span>{' '}
-                      {r.loveadmin_total}
-                    </p>
-                  )}
-                  {r.loveadmin_outstanding_total != null && (
-                    <p>
-                      <span className="font-semibold">Outstanding payments total (£):</span>{' '}
-                      {r.loveadmin_outstanding_total}
-                    </p>
-                  )}
-                  {r.loveadmin_cancellations != null && (
-                    <p>
-                      <span className="font-semibold">Number of cancellations:</span>{' '}
-                      {r.loveadmin_cancellations}
-                    </p>
-                  )}
+                  <div className="space-y-1">
+                    <label htmlFor="membership-meeting" className="block text-sm font-medium text-zinc-700">
+                      Meeting
+                    </label>
+                    <select
+                      id="membership-meeting"
+                      value={meetingId ?? ''}
+                      onChange={(e) => setMeetingId(e.target.value || null)}
+                      className="w-full rounded-md border border-zinc-300 px-3 py-2"
+                    >
+                      <option value="">Choose a meeting</option>
+                      {meetings.map((m) => (
+                        <option key={m.id} value={m.id}>{meetingLabel(m.meeting_date)}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
-                <p className="mt-2 text-xs text-zinc-400">
-                  Added {new Date(r.created_at).toLocaleString('en-GB')}
-                </p>
-              </div>
-            ))}
+                <div className="space-y-1">
+                  <label htmlFor="membership-notes" className="block text-sm font-medium text-zinc-700">
+                    Notes (optional)
+                  </label>
+                  <textarea
+                    id="membership-notes"
+                    rows={3}
+                    placeholder="Anything to add for the meeting"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="w-full rounded-md border border-zinc-300 px-3 py-2"
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={saveReport}
+                    className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {saving ? 'Saving…' : 'Save to meeting'}
+                  </button>
+                </div>
+              </fieldset>
+            )}
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold text-zinc-900">Saved reports</h2>
+          {!loading && reports.length === 0 && <p className="text-sm text-zinc-500">No membership reports yet.</p>}
+          {reports.map((r) => (
+            <div key={r.id} className="player-card">
+              {r.meetings?.meeting_date && (
+                <p className="pc-meta mb-3">Meeting: {new Date(r.meetings.meeting_date).toLocaleDateString('en-GB')}</p>
+              )}
+              <MembershipReportBody report={r} />
+              <p className="mt-3 text-xs text-zinc-400">Added {new Date(r.created_at).toLocaleString('en-GB')}</p>
+            </div>
+          ))}
         </section>
       </div>
     </main>

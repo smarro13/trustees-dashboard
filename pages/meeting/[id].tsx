@@ -6,6 +6,7 @@ import { AGENDA_SECTIONS } from '../../components/agenda/agendaConfig';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 import { type DashboardRole, getCurrentUserRole, canRoleViewAgendaHref } from '../../lib/roles';
 import { getFileHref } from '../../lib/fileLinks';
+import MembershipReportBody from '../../components/MembershipReportBody';
 
 type CommercialAttachment = { name?: string; url?: string };
 
@@ -366,44 +367,7 @@ export default function MeetingPage() {
           <div className="space-y-3 text-sm">
             {membership.map((m) => (
               <div key={m.id} className="rounded-md border p-3">
-                <div className="space-y-1">
-                  {m.num_people != null && (
-                    <p>
-                      <span className="font-semibold">Number of people from Bottomline:</span>{' '}
-                      {m.num_people}
-                    </p>
-                  )}
-                  {m.money_total != null && (
-                    <p>
-                      <span className="font-semibold">Bottomline Total (£):</span>{' '}
-                      {m.money_total}
-                    </p>
-                  )}
-                  {m.loveadmin_new_signups != null && (
-                    <p>
-                      <span className="font-semibold">LoveAdmin New sign ups:</span>{' '}
-                      {m.loveadmin_new_signups}
-                    </p>
-                  )}
-                  {m.loveadmin_total != null && (
-                    <p>
-                      <span className="font-semibold">LoveAdmin Total (£):</span>{' '}
-                      {m.loveadmin_total}
-                    </p>
-                  )}
-                  {m.loveadmin_outstanding_total != null && (
-                    <p>
-                      <span className="font-semibold">Outstanding payments total (£):</span>{' '}
-                      {m.loveadmin_outstanding_total}
-                    </p>
-                  )}
-                  {m.loveadmin_cancellations != null && (
-                    <p>
-                      <span className="font-semibold">Number of cancellations:</span>{' '}
-                      {m.loveadmin_cancellations}
-                    </p>
-                  )}
-                </div>
+                <MembershipReportBody report={m} />
               </div>
             ))}
           </div>

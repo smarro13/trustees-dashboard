@@ -765,15 +765,27 @@ export default function MembershipPage() {
               </p>
             )}
           </div>
-          {canUpload && (
-            <button
-              type="button"
-              onClick={() => setShowUpload((v) => !v)}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              {showUpload ? 'Close upload' : '⬆ Upload data'}
-            </button>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {canView && !loading && (players.length > 0 || members.length > 0) && (
+              <a
+                href="/operations/membership/report"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
+              >
+                📄 Detailed report
+              </a>
+            )}
+            {canUpload && (
+              <button
+                type="button"
+                onClick={() => setShowUpload((v) => !v)}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                {showUpload ? 'Close upload' : '⬆ Upload data'}
+              </button>
+            )}
+          </div>
         </header>
 
         <InlineNoticeBanner notice={notice} className="mb-6" />
