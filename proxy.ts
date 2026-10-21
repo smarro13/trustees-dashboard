@@ -75,6 +75,12 @@ const getRequiredRoleForPath = (pathname: string): DashboardRole => {
     return 'president';
   }
 
+  // Members' personal data — admins, trustees and directors only. Matches the
+  // RLS policies in supabase/policies/membership.sql.
+  if (pathname === '/operations/membership') {
+    return 'director';
+  }
+
   return null;
 };
 
