@@ -5,8 +5,8 @@
 // Players come from the RFU GMS player list export, members from the
 // ClubControl export. A player's team comes from their date of birth and
 // gender (teamFromBirthDate). They count as paid when their name matches an
-// *active* ClubControl member; a match on an inactive member is "lapsed"; no
-// match at all is "not on ClubControl".
+// *active* ClubControl member (or a life member — see isPaidUp); a match on
+// anyone else is "lapsed"; no match at all is "not on ClubControl".
 
 export type TeamGroup = 'Seniors' | 'Juniors' | 'Girls';
 
@@ -80,6 +80,15 @@ export const ageOn = (isoDate: string | null, today = new Date()): number | null
   return dob ? ageOnDate(dob, today) : null;
 };
 
+// Emergency contacts are only shown for players aged 17 or younger today.
+// Without a date of birth we can't tell, so they're not shown.
+export const EMERGENCY_CONTACT_MAX_AGE = 17;
+
+export const showsEmergencyContact = (isoDate: string | null, today = new Date()) => {
+  const age = ageOn(isoDate, today);
+  return age !== null && age <= EMERGENCY_CONTACT_MAX_AGE;
+};
+
 // Each player's team, from their date of birth and gender. Age grades go by
 // age at the start of the season (the school year, as the RFU does): Under
 // 7s are those who were 6 on 31 August. Everyone moves up automatically each
@@ -108,6 +117,13 @@ export const teamFromBirthDate = (isoDate: string | null, gender: string | null,
   if (grade <= 18) return `Under ${grade}s`;
   return 'Men';
 };
+
+// Life members never pay again, so they count as paid up even when
+// ClubControl marks them inactive.
+export const LIFE_MEMBER_CATEGORY = 'Life Member';
+
+export const isPaidUp = (member: { active: boolean; categories: string[] }) =>
+  member.active || member.categories.includes(LIFE_MEMBER_CATEGORY);
 
 // ClubControl memberships for people who play, so should be registered on
 // GMS. Anyone with one of these who isn't in the GMS player list goes on the
