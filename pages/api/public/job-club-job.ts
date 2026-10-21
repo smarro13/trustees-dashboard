@@ -1,43 +1,28 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
+import {
+  buildDescription,
+  cleanValues,
+  findMatchingJobRows,
+  isValidValues,
+  parseJobMeta,
+  type ParsedJobMeta,
+} from '../../../lib/jobClubPosts';
+
+// Public Job Club (no login), used by /public and /public/job-club:
+//   POST  { area, job, status, priority, materials, submittedBy }  add a job
+//   PATCH { action: 'save', id, values }                           edit a job
+//   PATCH { action: 'close', id }                                  close a job
+// Closing marks the job Completed and hides it (is_active = false), the same
+// as "Close" on the trustee Job Club page, which can re-open it.
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-const JOB_META_PREFIX = 'JOB_META:';
-
-type JobStatus = 'Not Started' | 'Ongoing' | 'Completed';
-type JobPriority = 'High' | 'Medium' | 'Low';
-
-const isValidStatus = (value: unknown): value is JobStatus =>
-  value === 'Not Started' || value === 'Ongoing' || value === 'Completed';
-
-const isValidPriority = (value: unknown): value is JobPriority =>
-  value === 'High' || value === 'Medium' || value === 'Low';
-
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse,
-) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ ok: false, error: 'Method not allowed' });
-  }
-
-  const {
-    area,
-    job,
-    status,
-    priority,
-    materials,
-    submittedBy,
-    website,
-  } = req.body ?? {};
-
-  if (website) {
-    return res.status(200).json({ ok: true });
-  }
+async function addJob(req: NextApiRequest, res: NextApiResponse) {
+  const { area, job, status, priority, materials, submittedBy } = req.body ?? {};
 
   if (!area || typeof area !== 'string' || !area.trim()) {
     return res.status(400).json({ ok: false, error: 'Area is required' });
@@ -51,35 +36,16 @@ export default async function handler(
     return res.status(400).json({ ok: false, error: 'Materials are required' });
   }
 
-  if (!isValidStatus(status)) {
-    return res.status(400).json({ ok: false, error: 'Status is invalid' });
+  const values = { area, job, status, priority, materials };
+  if (!isValidValues(values)) {
+    return res.status(400).json({ ok: false, error: 'Status or priority is invalid' });
   }
 
-  if (!isValidPriority(priority)) {
-    return res.status(400).json({ ok: false, error: 'Priority is invalid' });
-  }
-
-  const metaPayload = {
-    area: area.trim(),
-    job: job.trim(),
-    status,
-    priority,
-    materials: materials.trim(),
-  };
-
-  const descriptionLines = [
-    `${JOB_META_PREFIX}${JSON.stringify(metaPayload)}`,
-    '',
-    `Area: ${metaPayload.area}`,
-    `Job: ${metaPayload.job}`,
-    `Status: ${metaPayload.status}`,
-    `Priority: ${metaPayload.priority}`,
-    `Materials: ${metaPayload.materials}`,
-  ];
+  const meta = cleanValues(values);
 
   const { error } = await supabaseAdmin.from('job_club_posts').insert({
-    title: `${metaPayload.area} - ${metaPayload.job}`,
-    description: descriptionLines.join('\n'),
+    title: `${meta.area} - ${meta.job}`,
+    description: buildDescription(meta),
     contact:
       typeof submittedBy === 'string' && submittedBy.trim().length > 0
         ? submittedBy.trim()
@@ -93,4 +59,64 @@ export default async function handler(
   }
 
   return res.status(200).json({ ok: true });
+}
+
+async function changeJob(req: NextApiRequest, res: NextApiResponse) {
+  const { action, id, values } = req.body ?? {};
+
+  if (!id || typeof id !== 'string') {
+    return res.status(400).json({ ok: false, error: 'Job id is required' });
+  }
+  if (action !== 'save' && action !== 'close') {
+    return res.status(400).json({ ok: false, error: 'Invalid action' });
+  }
+  if (action === 'save' && !isValidValues(values)) {
+    return res.status(400).json({ ok: false, error: 'Please fill in area, job and materials.' });
+  }
+
+  const match = await findMatchingJobRows(supabaseAdmin, id);
+  if ('error' in match) {
+    return res.status(match.status).json({ ok: false, error: match.error });
+  }
+
+  // Only Job Club jobs can be changed from the public page.
+  const jobRows = match.rows.filter((row) => parseJobMeta(row.description));
+  if (jobRows.length === 0) {
+    return res.status(404).json({ ok: false, error: 'Job not found' });
+  }
+
+  for (const row of jobRows) {
+    const current = parseJobMeta(row.description) as ParsedJobMeta;
+    const next: ParsedJobMeta =
+      action === 'save' ? cleanValues(values as ParsedJobMeta) : { ...current, status: 'Completed' };
+
+    const { error } = await supabaseAdmin
+      .from('job_club_posts')
+      .update({
+        title: `${next.area} - ${next.job}`,
+        description: buildDescription(next),
+        // Saving as Completed closes it too; otherwise an edit keeps it open.
+        is_active: next.status !== 'Completed',
+      })
+      .eq('id', row.id);
+
+    if (error) {
+      return res.status(500).json({ ok: false, error: error.message });
+    }
+  }
+
+  return res.status(200).json({ ok: true, updatedCount: jobRows.length });
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'POST' && req.method !== 'PATCH') {
+    return res.status(405).json({ ok: false, error: 'Method not allowed' });
+  }
+
+  // Honeypot: bots fill in the hidden "website" field.
+  if (req.body?.website) {
+    return res.status(200).json({ ok: true });
+  }
+
+  return req.method === 'POST' ? addJob(req, res) : changeJob(req, res);
 }

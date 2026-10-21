@@ -18,6 +18,15 @@ export default function AOBPage() {
   const [notice, setNotice] = useState<InlineNotice | null>(null);
   const [canEdit, setCanEdit] = useState(true);
 
+  // Editing an existing item in place
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editMeetingId, setEditMeetingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editAddToActionTracker, setEditAddToActionTracker] = useState(false);
+  const [editActionNotes, setEditActionNotes] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const showNotice = (type: InlineNotice['type'], message: string) => {
     setNotice({ type, message });
   };
@@ -94,6 +103,46 @@ export default function AOBPage() {
     setLoading(false);
     loadData();
     showNotice('success', 'AOB item saved successfully.');
+  };
+
+  const startEdit = (item: any) => {
+    setEditingId(item.id);
+    setEditMeetingId(item.meeting_id ?? null);
+    setEditTitle(item.title ?? '');
+    setEditDescription(item.description ?? '');
+    setEditAddToActionTracker(Boolean(item.add_to_action_tracker));
+    setEditActionNotes(item.action_notes ?? '');
+  };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+    if (!editTitle.trim() || !editMeetingId) return;
+
+    setSavingEdit(true);
+    const { error } = await supabase
+      .from('aob_items')
+      .update({
+        title: editTitle.trim(),
+        description: editDescription || null,
+        meeting_id: editMeetingId,
+        add_to_action_tracker: editAddToActionTracker,
+        action_notes: editAddToActionTracker ? editActionNotes : null,
+      })
+      .eq('id', editingId);
+    setSavingEdit(false);
+
+    if (error) {
+      showNotice('error', 'Failed to update AOB item: ' + error.message);
+      return;
+    }
+
+    setEditingId(null);
+    loadData();
+    showNotice('success', 'AOB item updated.');
   };
 
   return (
@@ -211,9 +260,93 @@ export default function AOBPage() {
           )}
 
           {!loading &&
-            items.map((i) => (
+            items.map((i) =>
+              editingId === i.id ? (
+              <div key={i.id} className="player-card space-y-3">
+                <select
+                  value={editMeetingId ?? ''}
+                  onChange={(e) => setEditMeetingId(e.target.value || null)}
+                  className="w-full rounded-md border px-3 py-2"
+                >
+                  <option value="">Select meeting (required)</option>
+                  {meetings.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {new Date(m.meeting_date).toLocaleDateString('en-GB', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                      })}
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  type="text"
+                  placeholder="AOB title"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full rounded-md border px-3 py-2"
+                />
+
+                <textarea
+                  placeholder="Details / notes"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  rows={4}
+                  className="w-full rounded-md border px-3 py-2"
+                />
+
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-4">
+                  <label className="flex items-center gap-2 text-sm font-medium text-amber-900">
+                    <input
+                      type="checkbox"
+                      checked={editAddToActionTracker}
+                      onChange={(e) => setEditAddToActionTracker(e.target.checked)}
+                    />
+                    Add to Action Tracker
+                  </label>
+
+                  {editAddToActionTracker && (
+                    <textarea
+                      placeholder="Action details"
+                      value={editActionNotes}
+                      onChange={(e) => setEditActionNotes(e.target.value)}
+                      rows={3}
+                      className="mt-2 w-full rounded-md border border-amber-300 px-3 py-2"
+                    />
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setEditingId(null)}
+                    disabled={savingEdit}
+                    className="rounded-md border border-zinc-300 px-4 py-2 font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveEdit}
+                    disabled={savingEdit || !editTitle.trim() || !editMeetingId}
+                    className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {savingEdit ? 'Saving…' : 'Save changes'}
+                  </button>
+                </div>
+              </div>
+              ) : (
               <div key={i.id} className="player-card">
-                <h3 className="pc-name text-lg">{i.title}</h3>
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="pc-name text-lg">{i.title}</h3>
+                  {canEdit && (
+                    <button
+                      onClick={() => startEdit(i)}
+                      className="shrink-0 text-sm font-medium text-blue-600 hover:underline"
+                    >
+                      Edit
+                    </button>
+                  )}
+                </div>
 
                 {i.meetings?.meeting_date && (
                   <p className="pc-meta">
@@ -239,7 +372,8 @@ export default function AOBPage() {
                   Added {new Date(i.created_at).toLocaleString('en-GB')}
                 </p>
               </div>
-            ))}
+              )
+            )}
         </section>
       </div>
     </main>

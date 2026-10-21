@@ -42,6 +42,9 @@ const getPriorityBadgeClasses = (priority: ClubRefreshJob['priority']) => {
 
 const getClubRefreshTaskLabel = (item: ClubRefreshJob) => `${item.area} - ${item.job}`;
 
+// A posted job plus the job_club_posts row it came from (needed to edit/close it).
+type PostedJob = ClubRefreshJob & { id: string };
+
 const fileToBase64 = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -60,7 +63,7 @@ const fileToBase64 = (file: File) =>
     reader.readAsDataURL(file);
   });
 
-const parsePostedJob = (row: JobClubPostRow): ClubRefreshJob | null => {
+const parsePostedJob = (row: JobClubPostRow): PostedJob | null => {
   if (!row?.description) return null;
 
   const firstLine = row.description.split('\n')[0]?.trim() || '';
@@ -76,6 +79,7 @@ const parsePostedJob = (row: JobClubPostRow): ClubRefreshJob | null => {
     if (!parsed.priority || !validPriorities.includes(parsed.priority)) return null;
 
     return {
+      id: row.id,
       area: parsed.area,
       job: parsed.job,
       status: parsed.status,
@@ -110,7 +114,7 @@ const parseTaskAssignmentNote = (row: JobClubNoteRow): TaskAssignmentSummary | n
 export default function PublicJobClubPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [submittedJobs, setSubmittedJobs] = useState<ClubRefreshJob[]>([]);
+  const [submittedJobs, setSubmittedJobs] = useState<PostedJob[]>([]);
   const [taskAssignments, setTaskAssignments] = useState<TaskAssignmentSummary[]>([]);
 
   const [jobAreaFilter, setJobAreaFilter] = useState('All areas');
@@ -131,6 +135,12 @@ export default function PublicJobClubPage() {
   const [taskAssignmentAttachmentsByJob, setTaskAssignmentAttachmentsByJob] = useState<Record<string, File[]>>({});
   const [taskAssignmentStatusByJob, setTaskAssignmentStatusByJob] = useState<Record<string, string | null>>({});
   const [submittingTaskAssignmentByJob, setSubmittingTaskAssignmentByJob] = useState<Record<string, boolean>>({});
+
+  // Editing / closing a job (one at a time)
+  const [editingJobId, setEditingJobId] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<ClubRefreshJob | null>(null);
+  const [savingJobId, setSavingJobId] = useState<string | null>(null);
+  const [jobChangeStatus, setJobChangeStatus] = useState<{ id: string; message: string; ok: boolean } | null>(null);
 
   const allJobClubJobs = useMemo(() => {
     const seen = new Set<string>();
@@ -171,7 +181,7 @@ export default function PublicJobClubPage() {
           const assignment = latestAssignmentsByTask.get(getClubRefreshTaskLabel(job));
           return assignment ? { job, assignment } : null;
         })
-        .filter((value): value is { job: ClubRefreshJob; assignment: TaskAssignmentSummary } => Boolean(value)),
+        .filter((value): value is { job: PostedJob; assignment: TaskAssignmentSummary } => Boolean(value)),
     [allJobClubJobs, latestAssignmentsByTask],
   );
 
@@ -249,7 +259,7 @@ export default function PublicJobClubPage() {
 
     const parsedJobs = jobsData
       .map((row) => parsePostedJob(row))
-      .filter((row): row is ClubRefreshJob => Boolean(row));
+      .filter((row): row is PostedJob => Boolean(row));
 
     const parsedAssignments = notesData
       .map((row) => parseTaskAssignmentNote(row))
@@ -398,16 +408,160 @@ export default function PublicJobClubPage() {
     setSubmittingTaskAssignmentByJob((current) => ({ ...current, [taskLabel]: false }));
   };
 
-  const renderTaskAssignmentDropdown = (item: ClubRefreshJob, compact = false) => {
+  const changeJob = async (item: PostedJob, body: Record<string, unknown>, doneMessage: string) => {
+    setSavingJobId(item.id);
+    setJobChangeStatus(null);
+
+    try {
+      const response = await fetch('/api/public/job-club-job', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, id: item.id, website: '' }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok || !payload.ok) {
+        setJobChangeStatus({ id: item.id, ok: false, message: payload.error || 'Unable to update this job right now.' });
+        setSavingJobId(null);
+        return;
+      }
+
+      setEditingJobId(null);
+      setEditValues(null);
+      setJobChangeStatus({ id: item.id, ok: true, message: doneMessage });
+      await loadData();
+    } catch {
+      setJobChangeStatus({ id: item.id, ok: false, message: 'Unable to update this job right now.' });
+    }
+
+    setSavingJobId(null);
+  };
+
+  const startEditJob = (item: PostedJob) => {
+    setEditingJobId(item.id);
+    setEditValues({ area: item.area, job: item.job, status: item.status, priority: item.priority, materials: item.materials });
+    setJobChangeStatus(null);
+  };
+
+  const saveJobEdit = (event: React.FormEvent<HTMLFormElement>, item: PostedJob) => {
+    event.preventDefault();
+    if (!editValues) return;
+    if (!editValues.area.trim() || !editValues.job.trim() || !editValues.materials.trim()) {
+      setJobChangeStatus({ id: item.id, ok: false, message: 'Please add area, job, and materials.' });
+      return;
+    }
+    void changeJob(item, { action: 'save', values: editValues }, 'Job updated.');
+  };
+
+  const closeJob = (item: PostedJob) => {
+    if (!window.confirm(`Close "${item.job}"? It will be marked Completed and removed from the Job Club list.`)) return;
+    void changeJob(item, { action: 'close' }, 'Job closed.');
+  };
+
+  const editFieldClasses =
+    'w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-xs outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100';
+
+  const renderJobEditForm = (item: PostedJob) => {
+    if (!editValues) return null;
+    const isSaving = savingJobId === item.id;
+    const set = (patch: Partial<ClubRefreshJob>) => setEditValues((current) => (current ? { ...current, ...patch } : current));
+
+    return (
+      <form className="mt-3 space-y-3" onSubmit={(event) => saveJobEdit(event, item)}>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor={`edit-area-${item.id}`}>Area</label>
+            <input id={`edit-area-${item.id}`} value={editValues.area} onChange={(event) => set({ area: event.target.value })} className={editFieldClasses} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor={`edit-status-${item.id}`}>Status</label>
+            <select id={`edit-status-${item.id}`} value={editValues.status} onChange={(event) => set({ status: event.target.value as ClubRefreshJob['status'] })} className={editFieldClasses}>
+              <option value="Not Started">Not Started</option>
+              <option value="Ongoing">Ongoing</option>
+              <option value="Completed">Completed</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor={`edit-job-${item.id}`}>Job</label>
+          <input id={`edit-job-${item.id}`} value={editValues.job} onChange={(event) => set({ job: event.target.value })} className={editFieldClasses} />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor={`edit-priority-${item.id}`}>Priority</label>
+          <select id={`edit-priority-${item.id}`} value={editValues.priority} onChange={(event) => set({ priority: event.target.value as ClubRefreshJob['priority'] })} className={editFieldClasses}>
+            <option value="High">High</option>
+            <option value="Medium">Medium</option>
+            <option value="Low">Low</option>
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor={`edit-materials-${item.id}`}>Rough materials required</label>
+          <textarea id={`edit-materials-${item.id}`} value={editValues.materials} onChange={(event) => set({ materials: event.target.value })} rows={3} className={editFieldClasses} />
+        </div>
+        {editValues.status === 'Completed' && (
+          <p className="text-xs text-zinc-600">Saving as Completed closes the job and removes it from the list.</p>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="inline-flex items-center rounded-full bg-red-700 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-red-300"
+          >
+            {isSaving ? 'Saving...' : 'Save changes'}
+          </button>
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={() => { setEditingJobId(null); setEditValues(null); }}
+            className="inline-flex items-center rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:border-red-300 hover:text-red-700"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    );
+  };
+
+  const renderTaskAssignmentDropdown = (item: PostedJob, compact = false) => {
     const taskLabel = getClubRefreshTaskLabel(item);
     const taskStatus = taskAssignmentStatusByJob[taskLabel];
     const taskAttachments = taskAssignmentAttachmentsByJob[taskLabel] || [];
     const isSubmittingTask = Boolean(submittingTaskAssignmentByJob[taskLabel]);
+    const isEditing = editingJobId === item.id;
+    const isSaving = savingJobId === item.id;
+    const changeStatus = jobChangeStatus?.id === item.id ? jobChangeStatus : null;
 
     return (
-      <details className={`mt-2 rounded-lg border border-zinc-200 bg-white ${compact ? 'p-2.5' : 'p-2'}`}>
+      <details open={isEditing || undefined} className={`mt-2 rounded-lg border border-zinc-200 bg-white ${compact ? 'p-2.5' : 'p-2'}`}>
         <summary className="cursor-pointer list-none text-xs font-semibold text-red-700">Actions</summary>
-        <p className="mt-2 text-xs font-medium text-zinc-600">Assign to me</p>
+
+        <div className="mt-2 flex flex-wrap gap-2">
+          {!isEditing && (
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={() => startEditJob(item)}
+              className="inline-flex items-center rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-700 transition hover:border-red-300 hover:text-red-700"
+            >
+              Edit job
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={() => closeJob(item)}
+            className="inline-flex items-center rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-700 transition hover:border-red-300 hover:text-red-700 disabled:opacity-50"
+          >
+            {isSaving && !isEditing ? 'Closing...' : 'Close job'}
+          </button>
+        </div>
+        {changeStatus && (
+          <p className={`mt-2 text-xs ${changeStatus.ok ? 'text-emerald-700' : 'text-rose-700'}`}>{changeStatus.message}</p>
+        )}
+
+        {isEditing ? renderJobEditForm(item) : (
+        <>
+        <p className="mt-3 text-xs font-medium text-zinc-600">Assign to me</p>
 
         <form className="mt-3 space-y-3" onSubmit={(event) => { void submitTaskAssignmentForJob(event, taskLabel); }}>
           <div>
@@ -465,6 +619,8 @@ export default function PublicJobClubPage() {
             {isSubmittingTask ? 'Submitting...' : 'Assign to me'}
           </button>
         </form>
+        </>
+        )}
       </details>
     );
   };

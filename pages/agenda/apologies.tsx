@@ -12,6 +12,12 @@ export default function ApologiesPage() {
   const [meetings, setMeetings] = useState<any[]>([]);
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [canEdit, setCanEdit] = useState(true);
+  // Editing an existing apology in place
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editNote, setEditNote] = useState('');
+  const [editMeetingId, setEditMeetingId] = useState<string | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
   const router = useRouter();
 
   const loadApologies = async (filterId?: string | null) => {
@@ -85,6 +91,44 @@ export default function ApologiesPage() {
     setMeetingId(null);
     loadApologies();
   };
+
+  const startEdit = (a: any) => {
+    setEditingId(a.id);
+    setEditName(a.name ?? '');
+    setEditNote(a.note ?? '');
+    setEditMeetingId(a.meeting_id ?? null);
+  };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      window.alert(PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+    if (!editName.trim()) return;
+
+    setSavingEdit(true);
+    const { error } = await supabase
+      .from('apologies')
+      .update({ name: editName.trim(), note: editNote, meeting_id: editMeetingId })
+      .eq('id', editingId);
+    setSavingEdit(false);
+
+    if (error) {
+      window.alert(`Could not update apology: ${error.message}`);
+      return;
+    }
+
+    setEditingId(null);
+    loadApologies(meetingId);
+  };
+
+  const formatMeeting = (date: string) =>
+    new Date(date).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
 
   return (
     <main className="min-h-screen">
@@ -190,9 +234,65 @@ export default function ApologiesPage() {
             <p className="text-zinc-500">No apologies recorded.</p>
           ) : (
             <div className="space-y-4">
-              {apologies.map((a) => (
+              {apologies.map((a) =>
+                editingId === a.id ? (
+                <div key={a.id} className="player-card space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Name"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full rounded-md border border-zinc-300 px-3 py-2"
+                  />
+                  <textarea
+                    placeholder="Optional note"
+                    value={editNote}
+                    onChange={(e) => setEditNote(e.target.value)}
+                    className="w-full rounded-md border border-zinc-300 px-3 py-2"
+                    rows={3}
+                  />
+                  <select
+                    value={editMeetingId ?? ''}
+                    onChange={(e) => setEditMeetingId(e.target.value || null)}
+                    className="w-full rounded-md border border-zinc-300 px-3 py-2"
+                  >
+                    <option value="">Not linked to a meeting</option>
+                    {meetings.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {formatMeeting(m.meeting_date)}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => setEditingId(null)}
+                      disabled={savingEdit}
+                      className="rounded-md border border-zinc-300 px-4 py-2 font-medium text-zinc-700 hover:bg-zinc-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={saveEdit}
+                      disabled={savingEdit || !editName.trim()}
+                      className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {savingEdit ? 'Saving…' : 'Save changes'}
+                    </button>
+                  </div>
+                </div>
+                ) : (
                 <div key={a.id} className="player-card">
-                  <h3 className="pc-name text-lg">{a.name}</h3>
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="pc-name text-lg">{a.name}</h3>
+                    {canEdit && (
+                      <button
+                        onClick={() => startEdit(a)}
+                        className="shrink-0 text-sm font-medium text-blue-600 hover:underline"
+                      >
+                        Edit
+                      </button>
+                    )}
+                  </div>
                   {a.note && <p className="pc-meta">{a.note}</p>}
                   {a.meetings?.meeting_date && (
                     <p className="mt-1 text-sm text-zinc-500">
@@ -214,7 +314,8 @@ export default function ApologiesPage() {
                     })}
                   </p>
                 </div>
-              ))}
+                )
+              )}
             </div>
           )}
         </section>

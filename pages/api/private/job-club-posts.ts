@@ -1,16 +1,13 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
-
-type JobStatus = 'Not Started' | 'Ongoing' | 'Completed';
-type JobPriority = 'High' | 'Medium' | 'Low';
-
-type ParsedJobMeta = {
-  area: string;
-  job: string;
-  status: JobStatus;
-  priority: JobPriority;
-  materials: string;
-};
+import {
+  buildDescription,
+  isValidValues,
+  normalizeTaskKey,
+  normalizeTitleKey,
+  parseJobMeta,
+  type ParsedJobMeta,
+} from '../../../lib/jobClubPosts';
 
 type SavePayload = {
   action: 'save';
@@ -24,15 +21,10 @@ type TogglePayload = {
   nextIsActive: boolean;
 };
 
-const JOB_META_PREFIX = 'JOB_META:';
-
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
-
-const VALID_STATUSES: JobStatus[] = ['Not Started', 'Ongoing', 'Completed'];
-const VALID_PRIORITIES: JobPriority[] = ['High', 'Medium', 'Low'];
 
 const getBearerToken = (authHeader: string | undefined) => {
   if (!authHeader || !authHeader.startsWith('Bearer ')) return '';
@@ -57,52 +49,6 @@ const ensureAuthorized = async (req: NextApiRequest, res: NextApiResponse) => {
   }
 
   return user;
-};
-
-const parseJobMeta = (description: string | null): ParsedJobMeta | null => {
-  if (!description) return null;
-  const firstLine = description.split('\n')[0]?.trim() ?? '';
-  if (!firstLine.startsWith(JOB_META_PREFIX)) return null;
-
-  try {
-    const parsed = JSON.parse(firstLine.replace(JOB_META_PREFIX, '').trim()) as Partial<ParsedJobMeta>;
-    if (!parsed.area || !parsed.job || !parsed.materials) return null;
-    if (!parsed.status || !VALID_STATUSES.includes(parsed.status)) return null;
-    if (!parsed.priority || !VALID_PRIORITIES.includes(parsed.priority)) return null;
-    return parsed as ParsedJobMeta;
-  } catch {
-    return null;
-  }
-};
-
-const buildDescription = (meta: ParsedJobMeta): string =>
-  [
-    `${JOB_META_PREFIX}${JSON.stringify(meta)}`,
-    '',
-    `Area: ${meta.area}`,
-    `Job: ${meta.job}`,
-    `Status: ${meta.status}`,
-    `Priority: ${meta.priority}`,
-    `Materials: ${meta.materials}`,
-  ].join('\n');
-
-const normalizeTaskKey = (meta: Pick<ParsedJobMeta, 'area' | 'job'>) =>
-  `${meta.area.trim().toLowerCase()}::${meta.job.trim().toLowerCase()}`;
-
-const normalizeTitleKey = (title: string | null | undefined) =>
-  (title || '').trim().toLowerCase();
-
-const isValidValues = (values: unknown): values is ParsedJobMeta => {
-  if (!values || typeof values !== 'object') return false;
-
-  const candidate = values as Partial<ParsedJobMeta>;
-  if (!candidate.area || typeof candidate.area !== 'string') return false;
-  if (!candidate.job || typeof candidate.job !== 'string') return false;
-  if (!candidate.materials || typeof candidate.materials !== 'string') return false;
-  if (!candidate.status || !VALID_STATUSES.includes(candidate.status)) return false;
-  if (!candidate.priority || !VALID_PRIORITIES.includes(candidate.priority)) return false;
-
-  return true;
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
