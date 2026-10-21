@@ -72,6 +72,11 @@ const OPERATIONS_PAGES: { title: string; description: string; href: string; comi
     description: 'What each clubhouse screen shows and where its content comes from.',
     href: '/operations/media-screens',
   },
+  {
+    title: '👥 Membership',
+    description: 'Who’s paid their membership, team by team, and who’s inactive.',
+    href: '/operations/membership',
+  },
 ];
 
 export default function LandingPage() {
