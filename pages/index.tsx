@@ -270,6 +270,63 @@ export default function LandingPage() {
     );
   }
 
+  // Director of Rugby: only the Rugby report and Membership pages (proxy.ts
+  // blocks everything else), so the home page is just those two links.
+  if (userRole === 'dor') {
+    const dorLinks = [
+      { href: '/agenda/rugby', icon: '🏉', title: 'Rugby report', text: 'Add and review the rugby reports for each meeting.' },
+      { href: '/operations/membership', icon: '👥', title: 'Membership', text: 'Players and members from ClubControl and the RFU GMS list.' },
+    ];
+    return (
+      <main className="min-h-screen">
+        <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+          <header className="mb-8 text-center">
+            {userEmail && (
+              <div className="mb-6 flex items-center justify-center gap-2 text-sm text-zinc-600">
+                <span>{userEmail}</span>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${roleBadgeClass(userRole)}`}>
+                  {roleLabel(userRole)}
+                </span>
+              </div>
+            )}
+            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-zinc-900">
+              Aldwinians RUFC – Management Dashboard
+            </h1>
+          </header>
+
+          {router.query.access === 'denied' && (
+            <p className="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              That page isn&rsquo;t available for the Director of Rugby role.
+            </p>
+          )}
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            {dorLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-slate-200 transition hover:ring-red-300 hover:shadow"
+              >
+                <span className="text-3xl" aria-hidden>{link.icon}</span>
+                <h2 className="mt-3 text-lg font-semibold text-slate-900">{link.title}</h2>
+                <p className="mt-1 text-sm text-slate-600">{link.text}</p>
+              </Link>
+            ))}
+          </div>
+
+          <div className="mt-12 flex justify-center">
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center gap-2 px-4 py-3 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors shadow-sm"
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen">
       <div className="mx-auto w-full max-w-screen-2xl px-4 sm:px-6 lg:px-8 py-4 sm:py-8 lg:py-10">

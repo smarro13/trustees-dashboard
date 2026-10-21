@@ -10,7 +10,7 @@ import { createClient } from '@supabase/supabase-js';
 
 // Kept local (not imported from lib/roles.ts) because this is a server-side
 // API route — see pages/api/private/prematch-meals-orders.ts.
-type DashboardRole = 'admin' | 'trustee' | 'director' | 'president' | 'safeguarding' | 'commercial' | null;
+type DashboardRole = 'admin' | 'trustee' | 'director' | 'president' | 'safeguarding' | 'commercial' | 'dor' | null;
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,6 +26,7 @@ const normalizeRole = (rawRole: unknown): DashboardRole => {
   if (value === 'president') return 'president';
   if (value === 'safeguarding') return 'safeguarding';
   if (value === 'commercial' || value === 'commerical') return 'commercial';
+  if (value === 'dor' || value === 'director of rugby' || value === 'director-of-rugby' || value === 'director_of_rugby') return 'dor';
   return null;
 };
 
@@ -33,7 +34,7 @@ const resolveRole = (user: any): DashboardRole =>
   normalizeRole(user?.app_metadata?.role) || normalizeRole(user?.user_metadata?.role);
 
 // Mirrors the read policies in membership.sql.
-const COMMENT_ROLES: DashboardRole[] = ['admin', 'trustee', 'director'];
+const COMMENT_ROLES: DashboardRole[] = ['admin', 'trustee', 'director', 'dor'];
 
 const MAX_NOTE_LENGTH = 2000;
 

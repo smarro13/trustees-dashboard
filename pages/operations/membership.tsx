@@ -82,7 +82,8 @@ type PlayersPreview = {
   perTeam: Record<string, number>;
 };
 
-const VIEW_ROLES = new Set(['admin', 'trustee', 'director']);
+// 'dor' = Director of Rugby (sees the players; can comment, can't upload or hide).
+const VIEW_ROLES = new Set(['admin', 'trustee', 'director', 'dor']);
 const PAGE_SIZE = 1000;
 
 const STATUS_STYLES: Record<PlayerStatus, { badge: string; bar: string }> = {

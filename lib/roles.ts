@@ -7,6 +7,7 @@ export type DashboardRole =
   | 'president'
   | 'safeguarding'
   | 'commercial'
+  | 'dor'
   | null;
 
 export const ROLE_RANK: Record<Exclude<DashboardRole, null>, number> = {
@@ -16,6 +17,7 @@ export const ROLE_RANK: Record<Exclude<DashboardRole, null>, number> = {
   president: 2,
   safeguarding: 2,
   commercial: 1,
+  dor: 1,
 };
 
 export const normalizeRole = (rawRole: unknown): DashboardRole => {
@@ -32,6 +34,7 @@ export const normalizeRole = (rawRole: unknown): DashboardRole => {
   if (value === 'president') return 'president';
   if (value === 'safeguarding') return 'safeguarding';
   if (value === 'commercial' || value === 'commerical') return 'commercial';
+  if (value === 'dor' || value === 'director of rugby' || value === 'director-of-rugby' || value === 'director_of_rugby') return 'dor';
 
   return null;
 };
@@ -70,6 +73,7 @@ export const getCurrentUserRole = async (): Promise<DashboardRole> => {
 
 export const roleLabel = (role: DashboardRole) => {
   if (!role) return 'No role';
+  if (role === 'dor') return 'Director of Rugby';
   return role.charAt(0).toUpperCase() + role.slice(1);
 };
 
@@ -80,12 +84,16 @@ export const roleBadgeClass = (role: DashboardRole) => {
   if (role === 'president') return 'bg-rose-100 text-rose-800';
   if (role === 'safeguarding') return 'bg-emerald-100 text-emerald-800';
   if (role === 'commercial') return 'bg-amber-100 text-amber-800';
+  if (role === 'dor') return 'bg-teal-100 text-teal-800';
   return 'bg-zinc-100 text-zinc-700';
 };
 
 // ── View access (what a role can SEE in the agenda menu, the full meeting
 // view, and when navigating directly to an agenda page) ──────────────────
 const SAFEGUARDING_HREF = '/agenda/safeguarding';
+// Director of Rugby: only the Rugby agenda page (plus /operations/membership,
+// which is outside the agenda; see DOR_PATHS in proxy.ts).
+const DOR_AGENDA_HREF = '/agenda/rugby';
 const COMMERCIAL_VIEW_HREFS = new Set([
   '/agenda/commercial-transformation',
   '/agenda/prematch-meals',
@@ -102,5 +110,6 @@ export const canRoleViewAgendaHref = (role: DashboardRole, href: string): boolea
   if (role === 'president') return href !== SAFEGUARDING_HREF;
   if (role === 'safeguarding') return href === SAFEGUARDING_HREF;
   if (role === 'commercial') return COMMERCIAL_VIEW_HREFS.has(href);
+  if (role === 'dor') return href === DOR_AGENDA_HREF;
   return false;
 };
