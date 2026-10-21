@@ -10,10 +10,12 @@ import {
   TEAM_BY_NAME,
   TEAM_GROUPS,
   ageOn,
+  isPaidUp,
   isSideCategory,
   monthsIntoSeason,
   nameKey,
   seasonStart,
+  showsEmergencyContact,
   teamFromBirthDate,
   type PlayerStatus,
   type TeamGroup,
@@ -115,6 +117,9 @@ const ukPhone = (value: string | null) => {
   return national.startsWith('07') ? `${national.slice(0, 5)} ${national.slice(5)}` : national;
 };
 
+// ClubControl leaves the renewal date blank ("-") for some lapsed members.
+const renewalText = (date: string | null) => (date ? `Renewal was due ${shortDate(date)}` : 'No renewal date');
+
 const byName = (a: string, b: string) => a.localeCompare(b, 'en-GB', { sensitivity: 'base' });
 
 const inputClass =
@@ -160,11 +165,13 @@ function CardHeading({ open, onToggle, title, children }: {
     <div className="min-w-0">
       <h2 className="text-lg font-semibold text-zinc-900">
         <button type="button" onClick={onToggle} aria-expanded={open} className="inline-flex items-center gap-2 text-left hover:text-zinc-600">
-          <span aria-hidden className={`inline-block text-xs text-zinc-400 transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
+          <svg aria-hidden viewBox="0 0 20 20" fill="currentColor" className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${open ? 'rotate-90' : ''}`}>
+            <path fillRule="evenodd" d="M7.2 4.2a.75.75 0 0 1 1.06 0l5.25 5.25a.75.75 0 0 1 0 1.06l-5.25 5.25a.75.75 0 1 1-1.06-1.06L11.92 10 7.2 5.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+          </svg>
           {title}
         </button>
       </h2>
-      {open && children && <div className="mt-0.5 pl-5 text-xs text-zinc-500">{children}</div>}
+      {open && children && <div className="mt-0.5 pl-6 text-xs text-zinc-500">{children}</div>}
     </div>
   );
 }
@@ -494,6 +501,15 @@ export default function MembershipPage() {
   const [notes, setNotes] = useState<Map<string, Note>>(new Map());
   const [view, setView] = useState<View>('report');
   const [openCards, setOpenCards] = useState<Record<Card, boolean>>(DEFAULT_OPEN);
+  // Player cards (phones) with their emergency contact showing.
+  const [openContacts, setOpenContacts] = useState<Set<string>>(new Set());
+  const toggleContact = (id: string) =>
+    setOpenContacts((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   useEffect(() => {
     try {
@@ -584,13 +600,13 @@ export default function MembershipPage() {
   const playersImport = imports.find((i) => i.kind === 'players');
 
   // Everyone in the ClubControl export, by name. Someone listed twice counts
-  // as active if either record is.
+  // as paid up if either record is.
   const membersByName = useMemo(() => {
     const map = new Map<string, Member>();
     for (const m of members) {
       const key = nameKey(m.first_name, m.last_name);
       const existing = map.get(key);
-      if (!existing || (!existing.active && m.active)) map.set(key, m);
+      if (!existing || (!isPaidUp(existing) && isPaidUp(m))) map.set(key, m);
     }
     return map;
   }, [members]);
@@ -603,7 +619,7 @@ export default function MembershipPage() {
           ...p,
           team: teamFromBirthDate(p.date_of_birth, p.gender),
           member,
-          status: !member ? 'missing' : member.active ? 'paid' : 'lapsed',
+          status: !member ? 'missing' : isPaidUp(member) ? 'paid' : 'lapsed',
         };
       }),
     [players, membersByName],
@@ -665,7 +681,7 @@ export default function MembershipPage() {
     return filteredPlayers
       .filter((p) => {
         if (statusFilter === 'unpaid' ? p.status === 'paid' : statusFilter !== 'all' && p.status !== statusFilter) return false;
-        if (q && !`${p.first_name} ${p.last_name} ${p.emergency_contact ?? ''}`.toLowerCase().includes(q)) return false;
+        if (q && !`${p.first_name} ${p.last_name} ${showsEmergencyContact(p.date_of_birth) ? p.emergency_contact ?? '' : ''}`.toLowerCase().includes(q)) return false;
         return true;
       })
       // By first name, then surname, ignoring case and accents.
@@ -683,7 +699,7 @@ export default function MembershipPage() {
   const inactiveMembers = useMemo(() => {
     const q = inactiveSearch.trim().toLowerCase();
     return members
-      .filter((m) => !m.active && !hiddenKeys.has(nameKey(m.first_name, m.last_name)))
+      .filter((m) => !isPaidUp(m) && !hiddenKeys.has(nameKey(m.first_name, m.last_name)))
       .map((m) => ({ ...m, teams: teamsByName.get(nameKey(m.first_name, m.last_name)) ?? [] }))
       .filter((m) => filter === 'all' || m.teams.some((t) => teamNamesInFilter.has(t)))
       .filter((m) => !q || `${m.first_name} ${m.last_name} ${m.email ?? ''}`.toLowerCase().includes(q))
@@ -720,7 +736,7 @@ export default function MembershipPage() {
         return {
           note: n,
           team: player?.team ?? null,
-          status: player ? STATUS_LABELS[player.status] : member ? (member.active ? 'Active member' : 'Inactive member') : 'Not in the latest uploads',
+          status: player ? STATUS_LABELS[player.status] : member ? (isPaidUp(member) ? 'Active member' : 'Inactive member') : 'Not in the latest uploads',
         };
       })
       .sort((a, b) => a.note.display_name.localeCompare(b.note.display_name));
@@ -845,7 +861,34 @@ export default function MembershipPage() {
               </section>
             ) : (
           <>
-            <section className="mb-6 space-y-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200">
+            {/* Phones: three quick buttons, then a dropdown for everything else. */}
+            <section className="mb-6 space-y-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200 sm:hidden">
+              <div className="flex flex-wrap gap-2">
+                <Chip active={filter === 'all'} onClick={() => setFilter('all')}>All teams</Chip>
+                <Chip active={filter === 'group:Seniors'} onClick={() => setFilter('group:Seniors')}>Seniors</Chip>
+                <Chip active={filter === 'group:Juniors'} onClick={() => setFilter('group:Juniors')}>Juniors</Chip>
+              </div>
+              <label className="block text-xs font-medium text-zinc-600">
+                <span className="sr-only">Choose a team</span>
+                <select
+                  className={`${inputClass} bg-white`}
+                  value={filter.startsWith('team:') || filter === 'group:Girls' ? filter : ''}
+                  onChange={(e) => setFilter(e.target.value || 'all')}
+                >
+                  <option value="">Choose a team…</option>
+                  <option value="group:Girls">All girls</option>
+                  {TEAM_GROUPS.map((g) => (
+                    <optgroup key={g} label={g}>
+                      {TEAMS.filter((t) => t.group === g).map((t) => (
+                        <option key={t.name} value={`team:${t.name}`}>{t.name}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </label>
+            </section>
+
+            <section className="mb-6 hidden space-y-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200 sm:block">
               <div className="flex flex-wrap gap-2">
                 <Chip active={filter === 'all'} onClick={() => setFilter('all')}>All teams</Chip>
                 {TEAM_GROUPS.map((g) => (
@@ -957,7 +1000,69 @@ export default function MembershipPage() {
                   {filteredPlayers.length === 0 ? 'No players uploaded for this selection yet.' : 'No players match.'}
                 </p>
               ) : (
-                <div className="relative overflow-x-auto">
+                <>
+                <ul className="divide-y divide-zinc-100 sm:hidden">
+                  {visiblePlayers.map((p) => {
+                    // On phones the emergency contact stays tucked away until
+                    // the 📞 button is tapped — and only 17s and under have one.
+                    const age = ageOn(p.date_of_birth);
+                    const showContact = showsEmergencyContact(p.date_of_birth);
+                    const contact = showContact ? firstEntry(p.emergency_contact) : null;
+                    const phone = showContact ? ukPhone(firstEntry(p.emergency_phone)) : null;
+                    const contactOpen = openContacts.has(p.id);
+                    return (
+                      <li key={p.id} className="flex items-start gap-2 px-4 py-3">
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <p className="text-sm font-medium text-zinc-900">{p.first_name} {p.last_name}</p>
+                            <StatusBadge status={p.status} />
+                          </div>
+                          <p className="text-xs text-zinc-500">
+                            {[singleTeam ? null : p.team, age !== null ? `Age ${age}` : null].filter(Boolean).join(' · ')}
+                          </p>
+                          <p className="text-xs text-zinc-600">
+                            {p.status === 'lapsed' ? renewalText(p.member?.renewal_date ?? null) : membershipType(p.member)}
+                          </p>
+                          {contactOpen && (
+                            <p id={`contact-${p.id}`} className="mt-1 rounded-md bg-zinc-50 px-2 py-1.5 text-xs text-zinc-700 ring-1 ring-zinc-200">
+                              <span className="text-zinc-500">Emergency contact: </span>
+                              {contact ?? 'No name'}
+                              {phone && (
+                                <>
+                                  {' · '}
+                                  <a href={`tel:${phone.replace(/\s/g, '')}`} className="font-medium text-blue-600 hover:underline">{phone}</a>
+                                </>
+                              )}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 items-start">
+                          {(contact || phone) && (
+                            <button
+                              type="button"
+                              onClick={() => toggleContact(p.id)}
+                              aria-expanded={contactOpen}
+                              aria-controls={`contact-${p.id}`}
+                              aria-label={`${contactOpen ? 'Hide' : 'Show'} emergency contact for ${p.first_name} ${p.last_name}`}
+                              className={`inline-flex h-8 w-8 items-center justify-center rounded-md text-base hover:bg-zinc-100 ${contactOpen ? 'bg-zinc-100' : ''}`}
+                            >
+                              <span aria-hidden>📞</span>
+                            </button>
+                          )}
+                          <NoteCell
+                            personKey={p.name_key}
+                            displayName={`${p.first_name} ${p.last_name}`}
+                            note={notes.get(p.name_key)}
+                            canHide={canUpload}
+                            onSaved={updateNote}
+                            setNotice={setNotice}
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="relative hidden overflow-x-auto sm:block">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-xs uppercase tracking-wide text-zinc-500">
@@ -978,10 +1083,10 @@ export default function MembershipPage() {
                           <td className="px-3 py-2 text-right tabular-nums text-zinc-600">{ageOn(p.date_of_birth) ?? '—'}</td>
                           <td className="px-3 py-2"><StatusBadge status={p.status} /></td>
                           <td className="px-3 py-2 text-zinc-600">
-                            {p.status === 'lapsed' ? `Renewal was due ${shortDate(p.member?.renewal_date ?? null)}` : membershipType(p.member)}
+                            {p.status === 'lapsed' ? renewalText(p.member?.renewal_date ?? null) : membershipType(p.member)}
                           </td>
                           <td className="px-3 py-2 text-zinc-600">
-                            {p.emergency_contact || p.emergency_phone ? (
+                            {showsEmergencyContact(p.date_of_birth) && (p.emergency_contact || p.emergency_phone) ? (
                               <>
                                 <p>{firstEntry(p.emergency_contact)}</p>
                                 <p className="text-xs text-zinc-400">{ukPhone(firstEntry(p.emergency_phone))}</p>
@@ -1003,6 +1108,7 @@ export default function MembershipPage() {
                     </tbody>
                   </table>
                 </div>
+                </>
               )}
               </>
               )}
@@ -1038,7 +1144,34 @@ export default function MembershipPage() {
                   {members.length === 0 || players.length === 0 ? 'Upload both the ClubControl export and the GMS player list to see this.' : 'Everyone with a playing membership is on GMS.'}
                 </p>
               ) : (
-                <div className="relative overflow-x-auto">
+                <>
+                <ul className="divide-y divide-zinc-100 sm:hidden">
+                  {notOnGms.map((m) => (
+                    <li key={m.id} className="flex items-start gap-2 px-4 py-3">
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <p className="text-sm font-medium text-zinc-900">{m.first_name} {m.last_name}</p>
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${isPaidUp(m) ? STATUS_STYLES.paid.badge : STATUS_STYLES.lapsed.badge}`}>
+                            {isPaidUp(m) ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-zinc-600">{membershipType(m)}</p>
+                        {m.email && (
+                          <a href={`mailto:${m.email}`} className="block break-all text-xs text-blue-600 hover:underline">{m.email}</a>
+                        )}
+                      </div>
+                      <NoteCell
+                        personKey={nameKey(m.first_name, m.last_name)}
+                        displayName={`${m.first_name} ${m.last_name}`}
+                        note={notes.get(nameKey(m.first_name, m.last_name))}
+                        canHide={canUpload}
+                        onSaved={updateNote}
+                        setNotice={setNotice}
+                      />
+                    </li>
+                  ))}
+                </ul>
+                <div className="relative hidden overflow-x-auto sm:block">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-xs uppercase tracking-wide text-zinc-500">
@@ -1055,8 +1188,8 @@ export default function MembershipPage() {
                           <td className="px-5 py-2 font-medium text-zinc-900">{m.first_name} {m.last_name}</td>
                           <td className="px-3 py-2 text-zinc-600">{membershipType(m)}</td>
                           <td className="whitespace-nowrap px-3 py-2">
-                            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${m.active ? STATUS_STYLES.paid.badge : STATUS_STYLES.lapsed.badge}`}>
-                              {m.active ? 'Active' : 'Inactive'}
+                            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${isPaidUp(m) ? STATUS_STYLES.paid.badge : STATUS_STYLES.lapsed.badge}`}>
+                              {isPaidUp(m) ? 'Active' : 'Inactive'}
                             </span>
                           </td>
                           <td className="px-3 py-2 text-zinc-600">
@@ -1077,13 +1210,14 @@ export default function MembershipPage() {
                     </tbody>
                   </table>
                 </div>
+                </>
               )}
             </section>
 
             <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-amber-200">
               <div className={`flex flex-wrap items-center justify-between gap-3 bg-amber-50 px-5 py-4 ${openCards.inactive ? 'border-b border-amber-200' : ''}`}>
                 <CardHeading open={openCards.inactive} onToggle={() => toggleCard('inactive')} title={`Inactive members (${inactiveMembers.length})`}>
-                  Marked inactive in ClubControl — they haven’t paid.
+                  Marked inactive in ClubControl — they haven’t paid. Life members always count as paid, so aren’t listed.
                   {filter !== 'all' && ` Showing only those on ${filterLabel}.`}
                 </CardHeading>
                 {openCards.inactive && (
@@ -1111,7 +1245,32 @@ export default function MembershipPage() {
                   {members.length === 0 ? 'No ClubControl export uploaded yet.' : 'No inactive members for this selection.'}
                 </p>
               ) : (
-                <div className="relative overflow-x-auto">
+                <>
+                <ul className="divide-y divide-zinc-100 sm:hidden">
+                  {inactiveMembers.map((m) => (
+                    <li key={m.id} className="flex items-start gap-2 px-4 py-3">
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <p className="text-sm font-medium text-zinc-900">{m.first_name} {m.last_name}</p>
+                        <p className="text-xs text-zinc-500">
+                          {[m.teams.length ? m.teams.join(', ') : null, renewalText(m.renewal_date)].filter(Boolean).join(' · ')}
+                        </p>
+                        <p className="text-xs text-zinc-600">{membershipType(m)}</p>
+                        {m.email && (
+                          <a href={`mailto:${m.email}`} className="block break-all text-xs text-blue-600 hover:underline">{m.email}</a>
+                        )}
+                      </div>
+                      <NoteCell
+                        personKey={nameKey(m.first_name, m.last_name)}
+                        displayName={`${m.first_name} ${m.last_name}`}
+                        note={notes.get(nameKey(m.first_name, m.last_name))}
+                        canHide={canUpload}
+                        onSaved={updateNote}
+                        setNotice={setNotice}
+                      />
+                    </li>
+                  ))}
+                </ul>
+                <div className="relative hidden overflow-x-auto sm:block">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-xs uppercase tracking-wide text-zinc-500">
@@ -1148,6 +1307,7 @@ export default function MembershipPage() {
                     </tbody>
                   </table>
                 </div>
+                </>
               )}
             </section>
           </>
