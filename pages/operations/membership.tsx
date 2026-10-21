@@ -115,6 +115,8 @@ const ukPhone = (value: string | null) => {
   return national.startsWith('07') ? `${national.slice(0, 5)} ${national.slice(5)}` : national;
 };
 
+const byName = (a: string, b: string) => a.localeCompare(b, 'en-GB', { sensitivity: 'base' });
+
 const inputClass =
   'w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none';
 
@@ -138,9 +140,9 @@ const fileToBase64 = async (file: File) => {
 
 function StatTile({ label, value, detail, tone }: { label: string; value: string; detail?: string; tone?: string }) {
   return (
-    <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-zinc-200">
+    <div className="min-w-0 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200 sm:p-5">
       <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
-      <p className={`mt-1 text-3xl font-extrabold tabular-nums ${tone ?? 'text-zinc-900'}`}>{value}</p>
+      <p className={`mt-1 text-2xl font-extrabold tabular-nums sm:text-3xl ${tone ?? 'text-zinc-900'}`}>{value}</p>
       {detail && <p className="mt-1 text-xs text-zinc-500">{detail}</p>}
     </div>
   );
@@ -660,11 +662,14 @@ export default function MembershipPage() {
 
   const visiblePlayers = useMemo(() => {
     const q = playerSearch.trim().toLowerCase();
-    return filteredPlayers.filter((p) => {
-      if (statusFilter === 'unpaid' ? p.status === 'paid' : statusFilter !== 'all' && p.status !== statusFilter) return false;
-      if (q && !`${p.first_name} ${p.last_name} ${p.emergency_contact ?? ''}`.toLowerCase().includes(q)) return false;
-      return true;
-    });
+    return filteredPlayers
+      .filter((p) => {
+        if (statusFilter === 'unpaid' ? p.status === 'paid' : statusFilter !== 'all' && p.status !== statusFilter) return false;
+        if (q && !`${p.first_name} ${p.last_name} ${p.emergency_contact ?? ''}`.toLowerCase().includes(q)) return false;
+        return true;
+      })
+      // By first name, then surname, ignoring case and accents.
+      .sort((a, b) => byName(a.first_name, b.first_name) || byName(a.last_name, b.last_name));
   }, [filteredPlayers, statusFilter, playerSearch]);
 
   // Inactive ClubControl members, with their team if they're on GMS. With a
@@ -802,7 +807,7 @@ export default function MembershipPage() {
                 {hiddenPeople.length === 0 ? (
                   <p className="px-5 py-6 text-sm text-zinc-400">Nobody is hidden.</p>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div className="relative overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="text-left text-xs uppercase tracking-wide text-zinc-500">
@@ -859,7 +864,7 @@ export default function MembershipPage() {
               ))}
             </section>
 
-            <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <section className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
               <StatTile label="Players" value={String(totals.people)} detail={filterLabel} />
               <StatTile
                 label="Paid"
@@ -952,7 +957,7 @@ export default function MembershipPage() {
                   {filteredPlayers.length === 0 ? 'No players uploaded for this selection yet.' : 'No players match.'}
                 </p>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="relative overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-xs uppercase tracking-wide text-zinc-500">
@@ -1033,7 +1038,7 @@ export default function MembershipPage() {
                   {members.length === 0 || players.length === 0 ? 'Upload both the ClubControl export and the GMS player list to see this.' : 'Everyone with a playing membership is on GMS.'}
                 </p>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="relative overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-xs uppercase tracking-wide text-zinc-500">
@@ -1106,7 +1111,7 @@ export default function MembershipPage() {
                   {members.length === 0 ? 'No ClubControl export uploaded yet.' : 'No inactive members for this selection.'}
                 </p>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="relative overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-xs uppercase tracking-wide text-zinc-500">
