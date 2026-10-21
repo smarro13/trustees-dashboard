@@ -16,6 +16,16 @@ export default function MattersArisingPage() {
   const [notice, setNotice] = useState<InlineNotice | null>(null);
   const [canEdit, setCanEdit] = useState(true);
 
+  // Editing an existing matter in place
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDetails, setEditDetails] = useState('');
+  const [editRaisedBy, setEditRaisedBy] = useState('');
+  const [editMeetingId, setEditMeetingId] = useState<string | null>(null);
+  const [editAddToActions, setEditAddToActions] = useState(false);
+  const [editWasOnActions, setEditWasOnActions] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const showNotice = (type: InlineNotice['type'], message: string) => {
     setNotice({ type, message });
   };
@@ -133,6 +143,68 @@ export default function MattersArisingPage() {
     showNotice('success', 'Matter arising saved successfully.');
   };
 
+  const startEdit = (m: any) => {
+    setEditingId(m.id);
+    setEditTitle(m.title ?? '');
+    setEditDetails(m.details ?? '');
+    setEditRaisedBy(m.raised_by ?? '');
+    setEditMeetingId(m.meeting_id ?? null);
+    setEditAddToActions(Boolean(m.add_to_actions));
+    setEditWasOnActions(Boolean(m.add_to_actions));
+  };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    if (!(await canCurrentUserEditThisAgendaPage())) {
+      showNotice('error', PRESIDENT_EDIT_BLOCK_MESSAGE);
+      return;
+    }
+    if (!editTitle.trim()) return;
+
+    setSavingEdit(true);
+    const { error } = await supabase
+      .from('matters_arising')
+      .update({
+        title: editTitle.trim(),
+        details: editDetails,
+        raised_by: editRaisedBy || null,
+        meeting_id: editMeetingId,
+        // Once on the Action Tracker it stays there; untick by closing the action.
+        add_to_actions: editAddToActions || editWasOnActions,
+      })
+      .eq('id', editingId);
+
+    if (error) {
+      setSavingEdit(false);
+      showNotice('error', 'Failed to update matter: ' + error.message);
+      return;
+    }
+
+    // Newly ticked: create the action, as when a matter is first saved.
+    if (editAddToActions && !editWasOnActions) {
+      const { error: actionError } = await supabase.from('action_items').insert({
+        title: editTitle.trim(),
+        description: editDetails || null,
+        meeting_id: editMeetingId,
+        source: 'Matters Arising',
+        status: 'Open',
+        created_by: editRaisedBy || null,
+      });
+      if (actionError) {
+        setSavingEdit(false);
+        setEditingId(null);
+        loadData();
+        showNotice('error', 'Matter updated, but the linked action could not be created: ' + actionError.message);
+        return;
+      }
+    }
+
+    setSavingEdit(false);
+    setEditingId(null);
+    loadData();
+    showNotice('success', 'Matter arising updated.');
+  };
+
   return (
     <main className="min-h-screen">
       <div className="mx-auto max-w-[800px] px-4 py-10">
@@ -214,9 +286,95 @@ export default function MattersArisingPage() {
             <p className="text-zinc-500 text-sm">No matters recorded yet.</p>
           )}
           {!loading &&
-            matters.map((m) => (
+            matters.map((m) =>
+              editingId === m.id ? (
+              <div key={m.id} className="player-card space-y-3">
+                <input
+                  type="text"
+                  placeholder="Topic title"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full rounded-md border px-3 py-2"
+                />
+
+                <textarea
+                  placeholder="Details / context"
+                  value={editDetails}
+                  onChange={(e) => setEditDetails(e.target.value)}
+                  rows={4}
+                  className="w-full rounded-md border px-3 py-2"
+                />
+
+                <input
+                  type="text"
+                  placeholder="Raised by (optional)"
+                  value={editRaisedBy}
+                  onChange={(e) => setEditRaisedBy(e.target.value)}
+                  className="w-full rounded-md border px-3 py-2"
+                />
+
+                <select
+                  value={editMeetingId ?? ''}
+                  onChange={(e) => setEditMeetingId(e.target.value || null)}
+                  className="w-full rounded-md border px-3 py-2"
+                >
+                  <option value="">Not linked to a meeting</option>
+                  {meetings.map((mt) => (
+                    <option key={mt.id} value={mt.id}>
+                      {new Date(mt.meeting_date).toLocaleDateString('en-GB', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                      })}
+                    </option>
+                  ))}
+                </select>
+
+                {editWasOnActions ? (
+                  <p className="text-xs text-blue-600">
+                    ✓ Already on the Action Tracker (edit or close it there)
+                  </p>
+                ) : (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={editAddToActions}
+                      onChange={(e) => setEditAddToActions(e.target.checked)}
+                    />
+                    Add to Action Tracker
+                  </label>
+                )}
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setEditingId(null)}
+                    disabled={savingEdit}
+                    className="rounded-md border border-zinc-300 px-4 py-2 font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveEdit}
+                    disabled={savingEdit || !editTitle.trim()}
+                    className="rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {savingEdit ? 'Saving…' : 'Save changes'}
+                  </button>
+                </div>
+              </div>
+              ) : (
               <div key={m.id} className="player-card">
-                <h3 className="pc-name text-lg">{m.title}</h3>
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="pc-name text-lg">{m.title}</h3>
+                  {canEdit && (
+                    <button
+                      onClick={() => startEdit(m)}
+                      className="shrink-0 text-sm font-medium text-blue-600 hover:underline"
+                    >
+                      Edit
+                    </button>
+                  )}
+                </div>
 
                 {m.meetings?.meeting_date && (
                   <p className="pc-meta">
@@ -246,7 +404,8 @@ export default function MattersArisingPage() {
                   Added {new Date(m.created_at).toLocaleString('en-GB')}
                 </p>
               </div>
-            ))}
+              )
+            )}
         </section>
       </div>
     </main>
