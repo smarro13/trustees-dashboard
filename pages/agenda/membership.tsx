@@ -10,8 +10,11 @@ import { buildMembershipSummary, loadMembershipData, type MembershipSummary } fr
 // Membership agenda item. The figures come from /operations/membership (the
 // ClubControl export and the GMS player list); saving stores a snapshot of
 // them on membership_reports.summary, so the meeting keeps the numbers as they
-// were. The money received is typed in by hand until the ClubControl API is
-// connected. Older reports still show their LoveAdmin figures.
+// were. The money is the total of the ClubControl export's Amount column,
+// worked out with the rest (no ClubControl API is needed). Older reports still
+// show the money that was typed in by hand, or their LoveAdmin figures.
+// pages/api/cron/membership-report.ts saves the summary automatically on
+// meeting day if nobody has.
 
 const meetingLabel = (date: string) =>
   new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -20,7 +23,6 @@ export default function MembershipReportPage() {
   const [reports, setReports] = useState<any[]>([]);
   const [meetings, setMeetings] = useState<any[]>([]);
   const [meetingId, setMeetingId] = useState<string | null>(null);
-  const [moneyReceived, setMoneyReceived] = useState('');
   const [notes, setNotes] = useState('');
   const [summary, setSummary] = useState<MembershipSummary | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -85,17 +87,13 @@ export default function MembershipReportPage() {
       showNotice('error', 'Choose the meeting this report is for.');
       return;
     }
-    const money = moneyReceived.trim() ? Number(moneyReceived) : null;
-    if (money != null && !Number.isFinite(money)) {
-      showNotice('error', 'Enter the money received as a number, e.g. 1250.50.');
-      return;
-    }
 
     setSaving(true);
     const { error } = await supabase.from('membership_reports').insert({
       meeting_id: meetingId,
       summary,
-      money_total: money,
+      // Also kept in money_total so it can be read without unpacking the summary.
+      money_total: summary.amountTotal ?? null,
       notes: notes.trim() || null,
     });
     setSaving(false);
@@ -105,7 +103,6 @@ export default function MembershipReportPage() {
       return;
     }
 
-    setMoneyReceived('');
     setNotes('');
     showNotice('success', 'Membership report saved to the meeting.');
     void loadReports();
@@ -124,7 +121,7 @@ export default function MembershipReportPage() {
             <h1 className="text-3xl font-extrabold text-zinc-900">Membership Report</h1>
             <p className="mt-1 text-zinc-600">
               A summary from the{' '}
-              <Link href="/operations/membership" className="text-blue-600 hover:underline">Membership page</Link>, plus the money received.
+              <Link href="/operations/membership" className="text-blue-600 hover:underline">Membership page</Link>.
             </p>
           </div>
           {summary && (
@@ -151,7 +148,7 @@ export default function MembershipReportPage() {
           <div className="border-b border-zinc-200 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
             <h2 className="text-xl font-semibold">This month&rsquo;s figures</h2>
             <p className="mt-0.5 text-sm text-zinc-500">
-              Worked out from the latest uploads. Saving keeps a copy with the meeting, so it won&rsquo;t change when new data is uploaded.
+              Worked out from the latest uploads. On the day of each meeting this is saved to the meeting automatically (early morning), unless it already has one. Save it yourself to add notes or to save it sooner. A saved copy doesn&rsquo;t change when new data is uploaded.
             </p>
           </div>
 
@@ -161,33 +158,12 @@ export default function MembershipReportPage() {
             ) : summaryError ? (
               <p className="rounded-md border border-dashed border-zinc-300 p-4 text-sm text-zinc-500">{summaryError}</p>
             ) : summary ? (
-              <MembershipSummaryView
-                summary={summary}
-                moneyReceived={moneyReceived.trim() && Number.isFinite(Number(moneyReceived)) ? Number(moneyReceived) : null}
-              />
+              <MembershipSummaryView summary={summary} />
             ) : null}
 
             {summary && (
               <fieldset disabled={!canEdit || saving} className="space-y-4 border-t border-zinc-200 pt-5 disabled:opacity-70">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <label htmlFor="membership-money" className="block text-sm font-medium text-zinc-700">
-                      Money received (£)
-                    </label>
-                    <input
-                      id="membership-money"
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      inputMode="decimal"
-                      placeholder="From ClubControl"
-                      value={moneyReceived}
-                      onChange={(e) => setMoneyReceived(e.target.value)}
-                      className="w-full rounded-md border border-zinc-300 px-3 py-2"
-                    />
-                    <p className="text-xs text-zinc-500">Typed in by hand for now, until the ClubControl API is connected.</p>
-                  </div>
-
                   <div className="space-y-1">
                     <label htmlFor="membership-meeting" className="block text-sm font-medium text-zinc-700">
                       Meeting

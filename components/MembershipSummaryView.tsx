@@ -1,9 +1,10 @@
 import { TEAM_GROUPS } from '../lib/membership';
 import { formatMoney, formatUploadDate, type MembershipSummary } from '../lib/membershipSummary';
 
-// The membership agenda item: figures from /operations/membership plus the
-// money received, which is entered by hand until the ClubControl API is
-// connected. Used on the agenda page, the meeting view and the detailed report.
+// The membership agenda item: figures from /operations/membership, including
+// the money paid by members (the ClubControl export's Amount column). Used on the agenda
+// page, the meeting view and the detailed report. moneyReceived is only for
+// snapshots saved before the money was worked out automatically.
 
 type Props = {
   summary: MembershipSummary;
@@ -51,11 +52,19 @@ export default function MembershipSummaryView({ summary, moneyReceived, notes, s
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat
-          label="Money received"
-          value={moneyReceived != null ? formatMoney(moneyReceived) : '—'}
-          detail="Entered by hand from ClubControl"
-        />
+        {summary.amountTotal != null ? (
+          <Stat
+            label="Money paid by members"
+            value={formatMoney(summary.amountTotal)}
+            detail={`From the ClubControl export · ${formatMoney(summary.amountActive ?? 0)} from active members`}
+          />
+        ) : (
+          <Stat
+            label="Money received"
+            value={moneyReceived != null ? formatMoney(moneyReceived) : '—'}
+            detail="Entered by hand from ClubControl"
+          />
+        )}
         <Stat label="Active members" value={String(summary.activeMembers)} detail="on ClubControl" />
         <Stat label="Inactive members" value={String(summary.inactiveMembers)} />
         <Stat label="Not on GMS" value={String(summary.notOnGms)} detail="playing members to register" />

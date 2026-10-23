@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from './supabaseClient';
 import {
   PLAYING_CATEGORIES,
@@ -30,6 +31,7 @@ export type MembershipMember = {
   categories: string[];
   renewal_date: string | null;
   active: boolean;
+  amount: number | null; // the export's Amount column: what the member has paid
 };
 
 export type MembershipPlayer = {
@@ -62,6 +64,11 @@ export type MembershipSummary = {
   activeMembers: number;
   inactiveMembers: number;
   notOnGms: number;
+  // Money paid by members: the total of the ClubControl export's Amount column (the same as the export's
+  // totals row), and the part of it from active members. Missing on snapshots
+  // saved before 23 Oct 2026, when the money was typed in by hand.
+  amountTotal?: number;
+  amountActive?: number;
 };
 
 export type PlayerDetail = { name: string; team: string; status: PlayerStatus };
@@ -85,9 +92,10 @@ async function loadAll<T>(query: (from: number, to: number) => PromiseLike<{ dat
   }
 }
 
-// Throws if the user's role can't read the membership tables.
-export async function loadMembershipData(): Promise<MembershipData> {
-  const imports = await supabase
+// Throws if the user's role can't read the membership tables. The meeting-day
+// job (pages/api/cron/membership-report.ts) passes a service-role client.
+export async function loadMembershipData(client: SupabaseClient = supabase): Promise<MembershipData> {
+  const imports = await client
     .from('membership_imports')
     .select('id, kind, uploaded_at')
     .order('uploaded_at', { ascending: false })
@@ -100,14 +108,14 @@ export async function loadMembershipData(): Promise<MembershipData> {
   const [members, players, notes] = await Promise.all([
     latestMembers
       ? loadAll<MembershipMember>((from, to) =>
-          supabase.from('membership_members').select('id, first_name, last_name, email, categories, renewal_date, active')
+          client.from('membership_members').select('id, first_name, last_name, email, categories, renewal_date, active, amount')
             .eq('import_id', latestMembers.id).order('id').range(from, to))
       : Promise.resolve([] as MembershipMember[]),
     loadAll<MembershipPlayer>((from, to) =>
-      supabase.from('membership_players').select('id, name_key, first_name, last_name, date_of_birth, gender')
+      client.from('membership_players').select('id, name_key, first_name, last_name, date_of_birth, gender')
         .order('last_name').order('first_name').order('id').range(from, to)),
     loadAll<{ person_key: string; hidden: boolean }>((from, to) =>
-      supabase.from('membership_notes').select('person_key, hidden').order('person_key').range(from, to)),
+      client.from('membership_notes').select('person_key, hidden').order('person_key').range(from, to)),
   ]);
 
   return {
@@ -207,6 +215,9 @@ export function buildMembershipSummary(data: MembershipData, today = new Date())
   // Active members counted once per person.
   const activeKeys = new Set(data.members.filter((m) => m.active).map((m) => nameKey(m.first_name, m.last_name)));
 
+  const sumAmount = (list: MembershipMember[]) =>
+    Math.round(list.reduce((sum, m) => sum + (Number(m.amount) || 0), 0) * 100) / 100;
+
   return {
     generatedAt: today.toISOString(),
     membersUploadedAt: data.membersUploadedAt,
@@ -218,6 +229,8 @@ export function buildMembershipSummary(data: MembershipData, today = new Date())
     activeMembers: activeKeys.size,
     inactiveMembers: inactiveList(data).length,
     notOnGms: notOnGmsMembers(data).length,
+    amountTotal: sumAmount(data.members),
+    amountActive: sumAmount(data.members.filter((m) => m.active)),
   };
 }
 
