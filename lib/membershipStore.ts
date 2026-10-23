@@ -1,0 +1,53 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { ImportedMember } from './importers/membershipImportParser';
+
+// Saving a ClubControl members export, shared by the manual upload
+// (pages/api/private/membership-import.ts) and the automatic fetch from
+// ClubControl (pages/api/private/clubcontrol-sync.ts). Server-side only:
+// takes a service-role client. Tables are in supabase/policies/membership.sql.
+
+const INSERT_BATCH = 500;
+
+export type SaveResult = { ok: true; total: number; inactive: number } | { ok: false; error: string };
+
+// Replaces the previous export: the new rows are written first, and the old
+// export is only removed once they're all in, so a failure leaves the
+// previous data in place.
+export async function saveMembersExport(
+  admin: SupabaseClient,
+  members: ImportedMember[],
+  fileName: string,
+  uploadedBy: string,
+): Promise<SaveResult> {
+  const { data: imported, error: importError } = await admin
+    .from('membership_imports')
+    .insert({ kind: 'members', file_name: fileName, row_count: members.length, uploaded_by: uploadedBy })
+    .select('id')
+    .single();
+  if (importError || !imported) return { ok: false, error: importError?.message ?? 'Save failed.' };
+
+  for (let i = 0; i < members.length; i += INSERT_BATCH) {
+    const batch = members.slice(i, i + INSERT_BATCH).map((m) => ({ ...m, import_id: imported.id }));
+    const { error } = await admin.from('membership_members').insert(batch);
+    if (error) {
+      // Leave the previous export in place rather than half of this one.
+      await admin.from('membership_imports').delete().eq('id', imported.id);
+      return { ok: false, error: `Save failed: ${error.message}` };
+    }
+  }
+  // Older exports (and their member rows, by cascade) are no longer needed.
+  await admin.from('membership_imports').delete().eq('kind', 'members').neq('id', imported.id);
+  return { ok: true, total: members.length, inactive: members.filter((m) => !m.active).length };
+}
+
+// Row count of the current members export, or null if there isn't one.
+export async function currentMembersCount(admin: SupabaseClient): Promise<number | null> {
+  const { data } = await admin
+    .from('membership_imports')
+    .select('row_count')
+    .eq('kind', 'members')
+    .order('uploaded_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data?.row_count ?? null;
+}
