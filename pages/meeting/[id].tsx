@@ -7,6 +7,8 @@ import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNo
 import { type DashboardRole, getCurrentUserRole, canRoleViewAgendaHref } from '../../lib/roles';
 import { getFileHref } from '../../lib/fileLinks';
 import MembershipReportBody from '../../components/MembershipReportBody';
+import MembershipSummaryView from '../../components/MembershipSummaryView';
+import { buildMembershipSummary, loadMembershipData, type MembershipSummary } from '../../lib/membershipSummary';
 
 type CommercialAttachment = { name?: string; url?: string };
 
@@ -55,6 +57,9 @@ export default function MeetingPage() {
   const [safeguarding, setSafeguarding] = useState<any[]>([]);
   const [events, setEvents] = useState<any[]>([]);
   const [membership, setMembership] = useState<any[]>([]);
+  // Live membership figures for an upcoming meeting with no saved report yet
+  // (the meeting-day job saves them; see pages/api/cron/membership-report.ts).
+  const [liveMembership, setLiveMembership] = useState<MembershipSummary | null>(null);
   const [trading, setTrading] = useState<any[]>([]);
   const [commercialReports, setCommercialReports] = useState<any[]>([]);
   const [gymReports, setGymReports] = useState<any[]>([]);
@@ -155,6 +160,14 @@ export default function MeetingPage() {
       setSafeguarding(safe.data ?? []);
       setEvents(ev.data ?? []);
       setMembership(mem.data ?? []);
+      setLiveMembership(null);
+      const upcoming = String(meetingData?.meeting_date ?? '').slice(0, 10) >= new Date().toISOString().slice(0, 10);
+      if (!(mem.data ?? []).length && upcoming) {
+        // Only roles that can read the membership tables get figures; others see the empty text.
+        loadMembershipData()
+          .then((data) => setLiveMembership(buildMembershipSummary(data)))
+          .catch(() => setLiveMembership(null));
+      }
       setTrading(trad.data ?? []);
       setCommercialReports(comm.data ?? []);
       setGymReports(gym.data ?? []);
@@ -362,6 +375,18 @@ export default function MeetingPage() {
         );
 
       case 'membership':
+        if (!membership.length && liveMembership) {
+          return (
+            <div className="space-y-3 text-sm">
+              <p className="rounded-md bg-sky-50 px-3 py-2 text-xs text-sky-800 ring-1 ring-sky-200">
+                Live figures from the Membership page. They&rsquo;re saved to this meeting automatically on the day.
+              </p>
+              <div className="rounded-md border p-3">
+                <MembershipSummaryView summary={liveMembership} />
+              </div>
+            </div>
+          );
+        }
         if (!membership.length) return empty(emptyText);
         return (
           <div className="space-y-3 text-sm">
