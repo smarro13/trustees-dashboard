@@ -1,5 +1,19 @@
 # Trustees dashboard: roadmap
 
+## In progress: automatic membership data (25 Oct 2026)
+
+- [x] **ClubControl members export** fetched automatically (live): every
+  Monday, on meeting days before the membership report, and by "Fetch from
+  ClubControl now" on /operations/membership. Logins in Vercel.
+- [ ] **GMS player list (WIP, merged but untested).** Built: England Rugby
+  sign-in, Player List read as JSON, saved like a manual upload. Waiting for
+  the dashboard's own GMS account (with access to the club's Player List).
+  Then: put GMS_EMAIL / GMS_PASSWORD in .env.local and ask Claude to run the
+  test (counts only), then add both to Vercel and press "Fetch from GMS now".
+  Until then it reports "not connected" and the manual upload still works.
+- [ ] Run  (the
+  page no longer uses emergency contacts; this deletes the stored ones).
+
 ## Digital Strategy 2026–2028: pencilled in (14 Oct 2026)
 
 From the club's *Digital Strategy 2026–2028 working draft*. The strategy puts
