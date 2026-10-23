@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { parseGmsPlayers, parseMembersCsv } from '../../../lib/importers/membershipImportParser';
 import { teamFromBirthDate } from '../../../lib/membership';
+import { saveMembersExport } from '../../../lib/membershipStore';
 // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
 import { parseLoveAdminInvoices } from '../../../lib/importers/loveAdminImportParser';
 
@@ -135,24 +136,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const summary = { total: members.length, inactive: members.filter((m) => !m.active).length };
     if (!apply) return res.status(200).json({ ok: true, preview: summary });
 
-    const { data: imported, error: importError } = await supabaseAdmin
-      .from('membership_imports')
-      .insert({ kind, file_name: filename, row_count: members.length, uploaded_by: uploadedBy })
-      .select('id')
-      .single();
-    if (importError || !imported) return res.status(500).json({ ok: false, error: importError?.message ?? 'Save failed.' });
-
-    for (let i = 0; i < members.length; i += INSERT_BATCH) {
-      const batch = members.slice(i, i + INSERT_BATCH).map((m) => ({ ...m, import_id: imported.id }));
-      const { error } = await supabaseAdmin.from('membership_members').insert(batch);
-      if (error) {
-        // Leave the previous export in place rather than half of this one.
-        await supabaseAdmin.from('membership_imports').delete().eq('id', imported.id);
-        return res.status(500).json({ ok: false, error: `Save failed: ${error.message}` });
-      }
-    }
-    // Older exports (and their member rows, by cascade) are no longer needed.
-    await supabaseAdmin.from('membership_imports').delete().eq('kind', 'members').neq('id', imported.id);
+    const saved = await saveMembersExport(supabaseAdmin, members, filename, uploadedBy);
+    if ('error' in saved) return res.status(500).json({ ok: false, error: saved.error });
     return res.status(200).json({ ok: true, saved: summary });
   }
 

@@ -1,17 +1,22 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
+import { syncMembersFromClubControl } from '../../../lib/clubcontrolSync';
 import { buildMembershipSummary, loadMembershipData } from '../../../lib/membershipSummary';
 
 // Meeting-day membership report. Runs once a day (vercel.json "crons"); on the
 // day of a management meeting it saves the membership summary to that meeting,
 // exactly as "Save to meeting" on /agenda/membership does, unless the meeting
-// already has one. On any other day it does nothing.
+// already has one. On any other day it does nothing. On meeting day it first
+// fetches the members export from ClubControl (lib/clubcontrolSync.ts).
 //
 // Protected by CRON_SECRET: Vercel Cron sends it as "Authorization: Bearer
 // <CRON_SECRET>". Any other scheduler can call it the same way. Uses the
 // service role, so it can read the membership tables without a user.
 //
 //   ?date=YYYY-MM-DD  run for another day (for testing); defaults to today in the UK.
+
+// Room for the ClubControl fetch as well as the report.
+export const config = { maxDuration: 60 };
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -54,6 +59,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({ ok: true, day, saved: [], message: 'No meeting today.' });
   }
 
+  // Fetch the latest members export from ClubControl first, so the meeting
+  // gets that day's figures (the routine fetch is only weekly). If it fails,
+  // the report still saves, from the last export.
+  let clubControl: string = 'not connected';
+  if (process.env.CLUBCONTROL_EMAIL && process.env.CLUBCONTROL_PASSWORD) {
+    const sync = await syncMembersFromClubControl(supabaseAdmin, 'ClubControl (meeting-day fetch)');
+    clubControl = 'error' in sync ? `fetch failed: ${sync.error}` : `fetched ${sync.total} members`;
+  }
+
   const summary = buildMembershipSummary(await loadMembershipData(supabaseAdmin));
 
   const saved: string[] = [];
@@ -82,5 +96,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     saved.push(meeting.id);
   }
 
-  return res.status(200).json({ ok: true, day, saved, skipped });
+  return res.status(200).json({ ok: true, day, clubControl, saved, skipped });
 }

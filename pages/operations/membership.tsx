@@ -580,6 +580,28 @@ export default function MembershipPage() {
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
   const [showUpload, setShowUpload] = useState(false);
+  const [fetchingClubControl, setFetchingClubControl] = useState(false);
+
+  // Fetches the members export straight from ClubControl (it also happens
+  // automatically every Monday morning and on meeting days; see
+  // pages/api/private/clubcontrol-sync.ts).
+  const fetchFromClubControl = async () => {
+    setFetchingClubControl(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const response = await fetch('/api/private/clubcontrol-sync', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${sessionData.session?.access_token ?? ''}` },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.ok) throw new Error(payload.error || 'Fetching from ClubControl failed.');
+      setNotice({ type: 'success', message: `Fetched ${payload.saved.total} members from ClubControl (${payload.saved.inactive} inactive).` });
+      await loadData();
+    } catch (error: any) {
+      setNotice({ type: 'error', message: error.message });
+    }
+    setFetchingClubControl(false);
+  };
 
   const [filter, setFilter] = useState<Filter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -874,6 +896,17 @@ export default function MembershipPage() {
               >
                 📄 Detailed report
               </a>
+            )}
+            {canUpload && (
+              <button
+                type="button"
+                onClick={fetchFromClubControl}
+                disabled={fetchingClubControl}
+                className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-60"
+                title="Also happens automatically every Monday and on meeting days"
+              >
+                {fetchingClubControl ? 'Fetching…' : '🔄 Fetch from ClubControl now'}
+              </button>
             )}
             {canUpload && (
               <button
