@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { parseGmsPlayers, parseMembersCsv } from '../../../lib/importers/membershipImportParser';
 import { teamFromBirthDate } from '../../../lib/membership';
-import { saveMembersExport } from '../../../lib/membershipStore';
+import { savePlayers, saveMembersExport } from '../../../lib/membershipStore';
 // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
 import { parseLoveAdminInvoices } from '../../../lib/importers/loveAdminImportParser';
 
@@ -46,8 +46,6 @@ const normalizeRole = (rawRole: unknown): DashboardRole => {
 
 const resolveRole = (user: any): DashboardRole =>
   normalizeRole(user?.app_metadata?.role) || normalizeRole(user?.user_metadata?.role);
-
-const INSERT_BATCH = 500;
 
 const playerKey = (p: { name_key: string; date_of_birth: string | null }) => `${p.name_key}|${p.date_of_birth ?? ''}`;
 
@@ -166,20 +164,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   };
   if (!apply) return res.status(200).json({ ok: true, preview: summary });
 
-  const now = new Date().toISOString();
-  for (let i = 0; i < players.length; i += INSERT_BATCH) {
-    const { error } = await supabaseAdmin
-      .from('membership_players')
-      .upsert(
-        players.slice(i, i + INSERT_BATCH).map((p) => ({ ...p, updated_at: now, updated_by: uploadedBy })),
-        { onConflict: 'name_key,date_of_birth' },
-      );
-    if (error) return res.status(500).json({ ok: false, error: `Save failed: ${error.message}` });
-  }
-
-  await supabaseAdmin
-    .from('membership_imports')
-    .insert({ kind, file_name: filename, row_count: players.length, uploaded_by: uploadedBy });
+  const saved = await savePlayers(supabaseAdmin, players, filename, uploadedBy);
+  if ('error' in saved) return res.status(500).json({ ok: false, error: saved.error });
 
   return res.status(200).json({ ok: true, saved: summary });
 }

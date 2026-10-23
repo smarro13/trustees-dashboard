@@ -15,7 +15,6 @@ import {
   monthsIntoSeason,
   nameKey,
   seasonStart,
-  showsEmergencyContact,
   teamFromBirthDate,
   type PlayerStatus,
   type TeamGroup,
@@ -46,8 +45,6 @@ type Player = {
   last_name: string;
   date_of_birth: string | null;
   gender: string | null;
-  emergency_contact: string | null;
-  emergency_phone: string | null;
 };
 
 type Import = { id: string; kind: 'members' | 'players' | 'loveadmin'; file_name: string; uploaded_at: string; uploaded_by: string | null };
@@ -115,21 +112,6 @@ const shortDate = (value: string | null) =>
 
 const membershipType = (member: Member | null) =>
   member ? member.categories.filter((c) => !isSideCategory(c)).join(', ') || '—' : '—';
-
-// GMS lists every emergency contact in one field ("Jo Bloggs, Sam Bloggs",
-// "07700 900123 / 07700 900456"); the table shows just the first.
-const firstEntry = (value: string | null) => value?.split(/[,/;]/)[0].trim() || null;
-
-// UK numbers as 07… — GMS often stores them as "44 7…" or "+44 7…".
-// Anything that isn't a UK number is shown as it was.
-const ukPhone = (value: string | null) => {
-  if (!value) return null;
-  const digits = value.replace(/[^\d+]/g, '').replace(/^\+/, '').replace(/^00/, '');
-  const national = digits.startsWith('44') ? `0${digits.slice(2).replace(/^0/, '')}` : digits;
-  if (!/^0\d{10}$/.test(national)) return value;
-  // Mobiles as "07700 900123"; landline area codes vary, so leave those unspaced.
-  return national.startsWith('07') ? `${national.slice(0, 5)} ${national.slice(5)}` : national;
-};
 
 // ClubControl leaves the renewal date blank ("-") for some lapsed members.
 const renewalText = (date: string | null) => (date ? `Renewal was due ${shortDate(date)}` : 'No renewal date');
@@ -548,15 +530,6 @@ export default function MembershipPage() {
   const [loveAdmin, setLoveAdmin] = useState<LoveAdminPayment[]>([]);
   const [view, setView] = useState<View>('report');
   const [openCards, setOpenCards] = useState<Record<Card, boolean>>(DEFAULT_OPEN);
-  // Player cards (phones) with their emergency contact showing.
-  const [openContacts, setOpenContacts] = useState<Set<string>>(new Set());
-  const toggleContact = (id: string) =>
-    setOpenContacts((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
 
   useEffect(() => {
     try {
@@ -580,27 +553,33 @@ export default function MembershipPage() {
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
   const [showUpload, setShowUpload] = useState(false);
-  const [fetchingClubControl, setFetchingClubControl] = useState(false);
+  const [fetching, setFetching] = useState<'clubcontrol' | 'gms' | null>(null);
 
-  // Fetches the members export straight from ClubControl (it also happens
+  // Fetches the latest data straight from ClubControl or GMS (both also happen
   // automatically every Monday morning and on meeting days; see
-  // pages/api/private/clubcontrol-sync.ts).
-  const fetchFromClubControl = async () => {
-    setFetchingClubControl(true);
+  // pages/api/private/clubcontrol-sync.ts and gms-sync.ts).
+  const fetchFrom = async (source: 'clubcontrol' | 'gms') => {
+    const name = source === 'gms' ? 'GMS' : 'ClubControl';
+    setFetching(source);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
-      const response = await fetch('/api/private/clubcontrol-sync', {
+      const response = await fetch(`/api/private/${source === 'gms' ? 'gms' : 'clubcontrol'}-sync`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${sessionData.session?.access_token ?? ''}` },
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok || !payload.ok) throw new Error(payload.error || 'Fetching from ClubControl failed.');
-      setNotice({ type: 'success', message: `Fetched ${payload.saved.total} members from ClubControl (${payload.saved.inactive} inactive).` });
+      if (!response.ok || !payload.ok) throw new Error(payload.error || `Fetching from ${name} failed.`);
+      setNotice({
+        type: 'success',
+        message: source === 'gms'
+          ? `Fetched ${payload.saved.players} players from GMS.`
+          : `Fetched ${payload.saved.total} members from ClubControl (${payload.saved.inactive} inactive).`,
+      });
       await loadData();
     } catch (error: any) {
       setNotice({ type: 'error', message: error.message });
     }
-    setFetchingClubControl(false);
+    setFetching(null);
   };
 
   const [filter, setFilter] = useState<Filter>('all');
@@ -633,7 +612,7 @@ export default function MembershipPage() {
                 .eq('import_id', latestMembers.id).order('id').range(from, to))
           : Promise.resolve([] as Member[]),
         loadAll<Player>((from, to) =>
-          supabase.from('membership_players').select('id, name_key, first_name, last_name, date_of_birth, gender, emergency_contact, emergency_phone')
+          supabase.from('membership_players').select('id, name_key, first_name, last_name, date_of_birth, gender')
             .order('last_name').order('first_name').order('id').range(from, to)),
         loadAll<Note>((from, to) =>
           supabase.from('membership_notes').select('*').order('person_key').range(from, to)),
@@ -766,7 +745,7 @@ export default function MembershipPage() {
     return filteredPlayers
       .filter((p) => {
         if (statusFilter === 'unpaid' ? p.status === 'paid' : statusFilter !== 'all' && p.status !== statusFilter) return false;
-        if (q && !`${p.first_name} ${p.last_name} ${showsEmergencyContact(p.date_of_birth) ? p.emergency_contact ?? '' : ''}`.toLowerCase().includes(q)) return false;
+        if (q && !`${p.first_name} ${p.last_name}`.toLowerCase().includes(q)) return false;
         return true;
       })
       // By first name, then surname, ignoring case and accents.
@@ -898,15 +877,20 @@ export default function MembershipPage() {
               </a>
             )}
             {canUpload && (
-              <button
-                type="button"
-                onClick={fetchFromClubControl}
-                disabled={fetchingClubControl}
-                className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-60"
-                title="Also happens automatically every Monday and on meeting days"
-              >
-                {fetchingClubControl ? 'Fetching…' : '🔄 Fetch from ClubControl now'}
-              </button>
+              <>
+                {(['clubcontrol', 'gms'] as const).map((source) => (
+                  <button
+                    key={source}
+                    type="button"
+                    onClick={() => fetchFrom(source)}
+                    disabled={fetching !== null}
+                    className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-60"
+                    title="Also happens automatically every Monday and on meeting days"
+                  >
+                    {fetching === source ? 'Fetching…' : `🔄 Fetch from ${source === 'gms' ? 'GMS' : 'ClubControl'} now`}
+                  </button>
+                ))}
+              </>
             )}
             {canUpload && (
               <button
@@ -1110,7 +1094,7 @@ export default function MembershipPage() {
                 {openCards.players && (
                 <input
                   type="search"
-                  placeholder="Search name or contact…"
+                  placeholder="Search name…"
                   className={`${inputClass} sm:w-64`}
                   value={playerSearch}
                   onChange={(e) => setPlayerSearch(e.target.value)}
@@ -1132,13 +1116,7 @@ export default function MembershipPage() {
                 <>
                 <ul className="divide-y divide-zinc-100 sm:hidden">
                   {visiblePlayers.map((p) => {
-                    // On phones the emergency contact stays tucked away until
-                    // the 📞 button is tapped — and only 17s and under have one.
                     const age = ageOn(p.date_of_birth);
-                    const showContact = showsEmergencyContact(p.date_of_birth);
-                    const contact = showContact ? firstEntry(p.emergency_contact) : null;
-                    const phone = showContact ? ukPhone(firstEntry(p.emergency_phone)) : null;
-                    const contactOpen = openContacts.has(p.id);
                     return (
                       <li key={p.id} className="flex items-start gap-2 px-4 py-3">
                         <div className="min-w-0 flex-1 space-y-0.5">
@@ -1153,32 +1131,8 @@ export default function MembershipPage() {
                           <p className="text-xs text-zinc-600">
                             {p.status === 'lapsed' ? renewalText(p.member?.renewal_date ?? null) : membershipType(p.member)}
                           </p>
-                          {contactOpen && (
-                            <p id={`contact-${p.id}`} className="mt-1 rounded-md bg-zinc-50 px-2 py-1.5 text-xs text-zinc-700 ring-1 ring-zinc-200">
-                              <span className="text-zinc-500">Emergency contact: </span>
-                              {contact ?? 'No name'}
-                              {phone && (
-                                <>
-                                  {' · '}
-                                  <a href={`tel:${phone.replace(/\s/g, '')}`} className="font-medium text-blue-600 hover:underline">{phone}</a>
-                                </>
-                              )}
-                            </p>
-                          )}
                         </div>
                         <div className="flex shrink-0 items-start">
-                          {(contact || phone) && (
-                            <button
-                              type="button"
-                              onClick={() => toggleContact(p.id)}
-                              aria-expanded={contactOpen}
-                              aria-controls={`contact-${p.id}`}
-                              aria-label={`${contactOpen ? 'Hide' : 'Show'} emergency contact for ${p.first_name} ${p.last_name}`}
-                              className={`inline-flex h-8 w-8 items-center justify-center rounded-md text-base hover:bg-zinc-100 ${contactOpen ? 'bg-zinc-100' : ''}`}
-                            >
-                              <span aria-hidden>📞</span>
-                            </button>
-                          )}
                           <NoteCell
                             personKey={p.name_key}
                             displayName={`${p.first_name} ${p.last_name}`}
@@ -1201,7 +1155,6 @@ export default function MembershipPage() {
                         <th className="px-3 py-2 text-right font-semibold">Age</th>
                         <th className="px-3 py-2 font-semibold">Status</th>
                         <th className="px-3 py-2 font-semibold">ClubControl</th>
-                        <th className="px-3 py-2 font-semibold">Emergency contact</th>
                         <th className="w-12 px-3 py-2"><span className="sr-only">Comment</span></th>
                       </tr>
                     </thead>
@@ -1219,14 +1172,6 @@ export default function MembershipPage() {
                           </td>
                           <td className="px-3 py-2 text-zinc-600">
                             {p.status === 'lapsed' ? renewalText(p.member?.renewal_date ?? null) : membershipType(p.member)}
-                          </td>
-                          <td className="px-3 py-2 text-zinc-600">
-                            {showsEmergencyContact(p.date_of_birth) && (p.emergency_contact || p.emergency_phone) ? (
-                              <>
-                                <p>{firstEntry(p.emergency_contact)}</p>
-                                <p className="text-xs text-zinc-400">{ukPhone(firstEntry(p.emergency_phone))}</p>
-                              </>
-                            ) : '—'}
                           </td>
                           <td className="w-12 px-3 py-1.5 text-center">
                             <NoteCell

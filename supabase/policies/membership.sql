@@ -20,10 +20,11 @@
 --   membership_imports / membership_members / membership_players / membership_notes
 --     SELECT   admin, trustee, director
 --
--- This is personal data, including children's dates of birth and emergency
--- contacts, so unlike most dashboard tables it is not readable by every
--- logged-in user. Only the fields the dashboard shows are stored — no
--- addresses or card numbers.
+-- This is personal data, including children's dates of birth (used to work
+-- out each player's team; the page shows their age, not the date), so unlike most dashboard tables
+-- it is not readable by every logged-in user. Only the fields the dashboard
+-- needs are stored — no addresses, card numbers, emergency contacts or
+-- medical details.
 --
 -- The predicate reads the role straight from the JWT, the same way
 -- fix_rls_role_model.sql does. Run once in the Supabase SQL editor.
@@ -67,8 +68,6 @@ create table if not exists public.membership_players (
   last_name text not null,
   date_of_birth date,
   gender text,
-  emergency_contact text,
-  emergency_phone text,
   gms_status text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
