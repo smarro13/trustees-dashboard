@@ -5,7 +5,8 @@ import { syncMembersFromClubControl } from '../../../lib/clubcontrolSync';
 // Fetches the members export from ClubControl and saves it (lib/clubcontrolSync.ts).
 //
 // Called two ways:
-//   * weekly by Vercel Cron (vercel.json), with "Authorization: Bearer <CRON_SECRET>"
+//   * with "Authorization: Bearer <CRON_SECRET>" (the weekly job itself is
+//     pages/api/cron/membership-sync.ts, which fetches GMS too)
 //   * by an admin's "Fetch from ClubControl now" button on /operations/membership,
 //     with their dashboard login
 // The meeting-day membership report also fetches first (pages/api/cron/membership-report.ts).

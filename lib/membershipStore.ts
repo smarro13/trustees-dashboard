@@ -1,9 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { ImportedMember } from './importers/membershipImportParser';
+import type { ImportedMember, ImportedPlayer } from './importers/membershipImportParser';
 
-// Saving a ClubControl members export, shared by the manual upload
-// (pages/api/private/membership-import.ts) and the automatic fetch from
-// ClubControl (pages/api/private/clubcontrol-sync.ts). Server-side only:
+// Saving a ClubControl members export or a GMS player list, shared by the
+// manual upload (pages/api/private/membership-import.ts) and the automatic
+// fetches (lib/clubcontrolSync.ts, lib/gmsSync.ts). Server-side only:
 // takes a service-role client. Tables are in supabase/policies/membership.sql.
 
 const INSERT_BATCH = 500;
@@ -46,6 +46,43 @@ export async function currentMembersCount(admin: SupabaseClient): Promise<number
     .from('membership_imports')
     .select('row_count')
     .eq('kind', 'members')
+    .order('uploaded_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data?.row_count ?? null;
+}
+
+// Saving a GMS player list, shared by the manual upload and the automatic
+// fetch from GMS (lib/gmsSync.ts). Adds new players and updates existing ones
+// (matched on name and date of birth); never removes anyone.
+export async function savePlayers(
+  admin: SupabaseClient,
+  players: ImportedPlayer[],
+  fileName: string,
+  uploadedBy: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const now = new Date().toISOString();
+  for (let i = 0; i < players.length; i += INSERT_BATCH) {
+    const { error } = await admin
+      .from('membership_players')
+      .upsert(
+        players.slice(i, i + INSERT_BATCH).map((p) => ({ ...p, updated_at: now, updated_by: uploadedBy })),
+        { onConflict: 'name_key,date_of_birth' },
+      );
+    if (error) return { ok: false, error: `Save failed: ${error.message}` };
+  }
+  await admin
+    .from('membership_imports')
+    .insert({ kind: 'players', file_name: fileName, row_count: players.length, uploaded_by: uploadedBy });
+  return { ok: true };
+}
+
+// Row count of the latest GMS player list, or null if there isn't one.
+export async function currentPlayersCount(admin: SupabaseClient): Promise<number | null> {
+  const { data } = await admin
+    .from('membership_imports')
+    .select('row_count')
+    .eq('kind', 'players')
     .order('uploaded_at', { ascending: false })
     .limit(1)
     .maybeSingle();

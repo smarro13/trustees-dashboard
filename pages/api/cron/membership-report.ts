@@ -1,13 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { syncMembersFromClubControl } from '../../../lib/clubcontrolSync';
+import { syncPlayersFromGms } from '../../../lib/gmsSync';
 import { buildMembershipSummary, loadMembershipData } from '../../../lib/membershipSummary';
 
 // Meeting-day membership report. Runs once a day (vercel.json "crons"); on the
 // day of a management meeting it saves the membership summary to that meeting,
 // exactly as "Save to meeting" on /agenda/membership does, unless the meeting
 // already has one. On any other day it does nothing. On meeting day it first
-// fetches the members export from ClubControl (lib/clubcontrolSync.ts).
+// fetches the members export from ClubControl and the player list from GMS
+// (lib/clubcontrolSync.ts, lib/gmsSync.ts).
 //
 // Protected by CRON_SECRET: Vercel Cron sends it as "Authorization: Bearer
 // <CRON_SECRET>". Any other scheduler can call it the same way. Uses the
@@ -67,6 +69,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const sync = await syncMembersFromClubControl(supabaseAdmin, 'ClubControl (meeting-day fetch)');
     clubControl = 'error' in sync ? `fetch failed: ${sync.error}` : `fetched ${sync.total} members`;
   }
+  let gms: string = 'not connected';
+  if (process.env.GMS_EMAIL && process.env.GMS_PASSWORD) {
+    const sync = await syncPlayersFromGms(supabaseAdmin, 'GMS (meeting-day fetch)');
+    gms = 'error' in sync ? `fetch failed: ${sync.error}` : `fetched ${sync.players} players`;
+  }
 
   const summary = buildMembershipSummary(await loadMembershipData(supabaseAdmin));
 
@@ -96,5 +103,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     saved.push(meeting.id);
   }
 
-  return res.status(200).json({ ok: true, day, clubControl, saved, skipped });
+  return res.status(200).json({ ok: true, day, clubControl, gms, saved, skipped });
 }

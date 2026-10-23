@@ -27,8 +27,6 @@ export type ImportedPlayer = {
   last_name: string;
   date_of_birth: string | null;
   gender: string | null;
-  emergency_contact: string | null;
-  emergency_phone: string | null;
   gms_status: string | null;
 };
 
@@ -216,8 +214,6 @@ export async function parseGmsPlayers(filename: string, bytes: Buffer): Promise<
       last_name: last,
       date_of_birth: cellDate(row.get('date of birth')),
       gender: row.get('gender') || null,
-      emergency_contact: row.get('emergency contact') || null,
-      emergency_phone: row.get('emergency contact phone') || null,
       gms_status: row.get('status') || null,
     };
     // A player with more than one registration is listed once per
