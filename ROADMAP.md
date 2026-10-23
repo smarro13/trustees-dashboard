@@ -11,7 +11,7 @@
   Then: put GMS_EMAIL / GMS_PASSWORD in .env.local and ask Claude to run the
   test (counts only), then add both to Vercel and press "Fetch from GMS now".
   Until then it reports "not connected" and the manual upload still works.
-- [ ] Run  (the
+- [ ] Run `supabase/policies/membership_no_emergency_contacts.sql` (the
   page no longer uses emergency contacts; this deletes the stored ones).
 
 ## Digital Strategy 2026–2028: pencilled in (14 Oct 2026)
