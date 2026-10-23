@@ -77,6 +77,11 @@ const OPERATIONS_PAGES: { title: string; description: string; href: string; comi
     description: 'Who’s paid their membership, team by team, and who’s inactive.',
     href: '/operations/membership',
   },
+  {
+    title: '🎆 Fireworks',
+    description: 'Fireworks night tasks: add, assign and close them. Volunteers see them with the access code.',
+    href: '/operations/fireworks',
+  },
 ];
 
 export default function LandingPage() {
