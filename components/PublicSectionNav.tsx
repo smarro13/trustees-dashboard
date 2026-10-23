@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 const NAV_ITEMS = [
   { href: '/public', label: 'Home' },
   { href: '/public/job-club', label: 'Job Club' },
+  { href: '/public/fireworks', label: 'Fireworks 🔒' },
   { href: '/public#raise-action', label: 'Raise an Action' },
   { href: '/public/actions', label: 'Actions' },
   { href: '/public/agm-questions', label: 'AGM Questions' },
