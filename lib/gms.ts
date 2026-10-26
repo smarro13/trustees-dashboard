@@ -152,6 +152,10 @@ function isoDate(value: unknown): string | null {
 
 const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : null);
 
+// GMS sends list values (gender, status) as { Value: 'MALEI', ListType, Display: 'Male' }.
+const listValue = (value: unknown) =>
+  value && typeof value === 'object' ? text((value as { Display?: unknown }).Display) : text(value);
+
 // Only the columns the import needs, plus GMS's default filter (leave out
 // inactive and rejected registrations).
 const gridColumns = () =>
@@ -175,11 +179,9 @@ export async function fetchGmsPlayers(): Promise<GmsFetch> {
   const jars: Jars = new Map();
   await logIn(jars, email, password);
 
-  // The Player List page, for its anti-forgery token (and to set the club context).
-  const tab = crypto.randomUUID();
-  const page = await follow(jars, `${GMS}/GMS/PlayerManagement/Home/PlayerList?Id=${PLAYERS_ORG_ID}&layout=DefaultLayout&GMSTab=${tab}`, {
-    headers: { 'X-Requested-With': 'XMLHttpRequest' },
-  });
+  // The full Player List page (not the section the browser loads into it,
+  // which has no form token): its anti-forgery token, and the club context.
+  const page = await follow(jars, `${GMS}/GMS/PlayerManagement/Home/PlayerList?Id=${PLAYERS_ORG_ID}`);
   if (page.res.status !== 200) throw new GmsError(`GMS's Player List returned ${page.res.status}. Does the account have access to the club?`);
   const token = antiForgeryToken(page.html);
   if (!token) throw new GmsError('GMS’s Player List page has changed (no form token).');
@@ -228,8 +230,8 @@ export async function fetchGmsPlayers(): Promise<GmsFetch> {
         first_name: first,
         last_name: last,
         date_of_birth: isoDate(row.DateOfBirth),
-        gender: text(row.Gender),
-        gms_status: text(row.Status),
+        gender: listValue(row.Gender),
+        gms_status: listValue(row.Status),
       };
       // A player with more than one registration is listed once per
       // registration; they count once (as in the manual upload).
