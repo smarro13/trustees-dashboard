@@ -5,12 +5,9 @@
 - [x] **ClubControl members export** fetched automatically (live): every
   Monday, on meeting days before the membership report, and by "Fetch from
   ClubControl now" on /operations/membership. Logins in Vercel.
-- [ ] **GMS player list (WIP, merged but untested).** Built: England Rugby
-  sign-in, Player List read as JSON, saved like a manual upload. Waiting for
-  the dashboard's own GMS account (with access to the club's Player List).
-  Then: put GMS_EMAIL / GMS_PASSWORD in .env.local and ask Claude to run the
-  test (counts only), then add both to Vercel and press "Fetch from GMS now".
-  Until then it reports "not connected" and the manual upload still works.
+- [x] **GMS player list** fetched automatically (tested 26 Oct: 389 players).
+  Same schedule as ClubControl. Needs GMS_EMAIL / GMS_PASSWORD in Vercel,
+  then "Fetch from GMS now" on /operations/membership to load it straight away.
 - [ ] Run `supabase/policies/membership_no_emergency_contacts.sql` (the
   page no longer uses emergency contacts; this deletes the stored ones).
 
