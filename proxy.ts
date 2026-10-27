@@ -83,12 +83,6 @@ const getRequiredRoleForPath = (pathname: string): DashboardRole => {
     return 'director';
   }
 
-  // Job applicants' personal data — same roles as membership. Matches
-  // supabase/policies/vacancies.sql.
-  if (pathname === '/operations/vacancies') {
-    return 'director';
-  }
-
   return null;
 };
 

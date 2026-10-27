@@ -78,11 +78,6 @@ const OPERATIONS_PAGES: { title: string; description: string; href: string; comi
     href: '/operations/membership',
   },
   {
-    title: '💼 Vacancies & Applicants',
-    description: 'Jobs posted on Indeed and who has applied: shortlist, interviews and notes.',
-    href: '/operations/vacancies',
-  },
-  {
     title: '🎆 Fireworks',
     description: 'Fireworks night tasks: add, assign and close them. Volunteers see them with the access code.',
     href: '/operations/fireworks',

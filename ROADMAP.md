@@ -1,12 +1,5 @@
 # Trustees dashboard: roadmap
 
-## New: vacancies & applicants (27 Oct 2026)
-
-- [ ] Run `supabase/policies/vacancies.sql` in Supabase, then add the Indeed
-  job on /operations/vacancies and upload Indeed's candidate export (.csv).
-  Indeed has no applicant API for direct employers, so the export is the feed;
-  re-upload it to pick up new applicants (stages and notes are kept).
-
 ## In progress: automatic membership data (25 Oct 2026)
 
 - [x] **ClubControl members export** fetched automatically (live): every
