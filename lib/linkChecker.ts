@@ -9,14 +9,18 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export const DEFAULT_SITE_URL = 'https://www.aldwinians.co.uk/';
 
 const MAX_PAGES = 300;
-const CONCURRENCY = 8;
+// Everything checked is on the one site, so keep it gentle: Squarespace answers
+// 429 "Too many requests" if it's asked for too much at once.
+const CONCURRENCY = 4;
+const MAX_RETRIES = 3;
+const MAX_RETRY_WAIT_MS = 10_000;
 const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_FOUND_ON = 10;
 const USER_AGENT = 'AldwiniansDashboardLinkChecker/1.0 (+https://dashboard.aldwinians.co.uk)';
 
 // 'broken': the link is dead (404, 410, 5xx, no such host).
-// 'blocked': the page refused an automated check (401/403/429), e.g. a
-// password-protected page. Usually fine in a browser, so it's listed separately.
+// 'blocked': the page refused an automated check (401/403, or 429 even after
+// waiting and retrying), e.g. a password-protected page. Usually fine in a browser, so it's listed separately.
 export type LinkProblemKind = 'broken' | 'blocked';
 
 export type LinkProblem = {
@@ -68,7 +72,22 @@ const normalise = (raw: string, base: string): string | null => {
   }
 };
 
-const fetchWithTimeout = async (url: string, method: 'GET' | 'HEAD') => {
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// When the site answers 429, every request waits until this time, so the
+// whole check slows down rather than each request hammering on its own.
+let pausedUntil = 0;
+
+// Retry-After is either seconds or an HTTP date.
+const retryAfterMs = (res: Response, attempt: number) => {
+  const header = res.headers.get('retry-after');
+  const seconds = header ? Number(header) : NaN;
+  const fromHeader = Number.isFinite(seconds) ? seconds * 1000 : header ? Date.parse(header) - Date.now() : NaN;
+  const wait = Number.isFinite(fromHeader) && fromHeader > 0 ? fromHeader : 2000 * 2 ** attempt;
+  return Math.min(wait, MAX_RETRY_WAIT_MS);
+};
+
+const fetchOnce = async (url: string, method: 'GET' | 'HEAD') => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
@@ -80,6 +99,17 @@ const fetchWithTimeout = async (url: string, method: 'GET' | 'HEAD') => {
     });
   } finally {
     clearTimeout(timer);
+  }
+};
+
+const fetchWithTimeout = async (url: string, method: 'GET' | 'HEAD') => {
+  for (let attempt = 0; ; attempt++) {
+    const wait = pausedUntil - Date.now();
+    if (wait > 0) await sleep(wait);
+    const res = await fetchOnce(url, method);
+    if (res.status !== 429 || attempt >= MAX_RETRIES) return res;
+    res.body?.cancel().catch(() => {});
+    pausedUntil = Math.max(pausedUntil, Date.now() + retryAfterMs(res, attempt));
   }
 };
 

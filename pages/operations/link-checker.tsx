@@ -40,6 +40,7 @@ const pagePath = (url: string) => {
 const problemLabel = (p: LinkProblem) => {
   if (p.status === 404) return '404 Not found';
   if (p.status === 410) return '410 Gone';
+  if (p.status === 429) return 'Too many requests';
   if (p.status !== null) return `Error ${p.status}`;
   return p.error || 'No response';
 };
