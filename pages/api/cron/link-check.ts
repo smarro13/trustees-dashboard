@@ -4,7 +4,7 @@ import { runAndSaveLinkCheck } from '../../../lib/linkChecker';
 
 // Weekly broken link check of the club website (vercel.json "crons").
 // Protected by CRON_SECRET ("Authorization: Bearer …"). Results show on
-// /admin/link-checker, where admins can also run it any time.
+// /operations/link-checker, where admins can also run it any time.
 
 export const config = { maxDuration: 60 };
 

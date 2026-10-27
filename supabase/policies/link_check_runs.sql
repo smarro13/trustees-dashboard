@@ -1,7 +1,7 @@
 -- Website broken link checks
 --
 -- One row per run of the link checker (lib/linkChecker.ts): weekly from
--- pages/api/cron/link-check.ts, or "Check now" on /admin/link-checker.
+-- pages/api/cron/link-check.ts, or "Check now" on /operations/link-checker.
 -- `problems` holds every broken or blocked link with the pages it's on.
 --
 --   link_check_runs : no access for anon or authenticated users. Admins read

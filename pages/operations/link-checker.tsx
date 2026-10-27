@@ -4,7 +4,7 @@ import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNo
 import { authJsonHeaders } from '../../lib/authHeaders';
 import type { LinkProblem } from '../../lib/linkChecker';
 
-// Admin only (proxy.ts guards /admin/*, the API checks the role again).
+// Admin only (proxy.ts requires admin for this page, the API checks the role again).
 // Broken links on the club website, found by the weekly link check
 // (lib/linkChecker.ts, pages/api/cron/link-check.ts) or "Check now".
 

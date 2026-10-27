@@ -1,7 +1,7 @@
 // Broken link checker for the club website. Reads the site's sitemap, crawls
 // its pages (same site only), then checks every link and image on them —
 // internal and external. Run weekly by pages/api/cron/link-check.ts and on
-// demand from /admin/link-checker; results are saved to link_check_runs
+// demand from /operations/link-checker; results are saved to link_check_runs
 // (supabase/policies/link_check_runs.sql).
 
 import type { SupabaseClient } from '@supabase/supabase-js';
