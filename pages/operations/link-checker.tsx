@@ -6,12 +6,15 @@ import type { LinkProblem } from '../../lib/linkChecker';
 
 // Admin only (proxy.ts requires admin for this page, the API checks the role again).
 // Broken links on the club website, found by the weekly link check
-// (lib/linkChecker.ts, pages/api/cron/link-check.ts) or "Check now".
+// (lib/linkChecker.ts, pages/api/cron/link-check.ts) or "Check now". A check
+// runs in the background, a step at a time; while one is running this page
+// shows its progress and refreshes.
 
 type RunSummary = {
   id: number;
   started_at: string;
-  finished_at: string;
+  finished_at: string | null;
+  updated_at: string;
   triggered_by: string;
   pages_checked: number;
   links_checked: number;
@@ -23,6 +26,8 @@ type RunSummary = {
 type Run = RunSummary & { site_url: string; problems: LinkProblem[] };
 
 type Filter = 'broken' | 'blocked' | 'all';
+
+const REFRESH_WHILE_RUNNING_MS = 10_000;
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -60,7 +65,8 @@ export default function LinkCheckerPage() {
   const [latest, setLatest] = useState<Run | null>(null);
   const [history, setHistory] = useState<RunSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [running, setRunning] = useState(false);
+  const [inProgress, setInProgress] = useState<RunSummary | null>(null);
+  const [starting, setStarting] = useState(false);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
   const [filter, setFilter] = useState<Filter>('broken');
 
@@ -69,8 +75,8 @@ export default function LinkCheckerPage() {
     const body = await res.json().catch(() => ({}));
     if (!res.ok || !body.ok) throw new Error(body.error || `Request failed (${res.status})`);
     setLatest(body.latest);
+    setInProgress(body.running);
     setHistory(body.history);
-    return body.latest as Run | null;
   };
 
   useEffect(() => {
@@ -79,21 +85,24 @@ export default function LinkCheckerPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Refresh while a check is running, so its progress and then its results show.
+  useEffect(() => {
+    if (!inProgress) return;
+    const timer = setTimeout(() => {
+      load('GET').catch(() => {});
+    }, REFRESH_WHILE_RUNNING_MS);
+    return () => clearTimeout(timer);
+  }, [inProgress]);
+
   const checkNow = async () => {
-    setRunning(true);
-    setNotice({ type: 'info', message: 'Checking the website… this takes up to a minute.' });
+    setStarting(true);
+    setNotice(null);
     try {
-      const run = await load('POST');
-      setNotice({
-        type: run && run.broken_count ? 'error' : 'success',
-        message: run
-          ? `Checked ${run.pages_checked} pages and ${run.links_checked} links: ${run.broken_count} broken.`
-          : 'Check finished.',
-      });
+      await load('POST');
     } catch (err: any) {
       setNotice({ type: 'error', message: `Link check failed: ${err.message}` });
     } finally {
-      setRunning(false);
+      setStarting(false);
     }
   };
 
@@ -119,20 +128,33 @@ export default function LinkCheckerPage() {
           <button
             type="button"
             onClick={checkNow}
-            disabled={running}
+            disabled={starting || Boolean(inProgress)}
             className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-800 disabled:opacity-60"
           >
-            {running ? 'Checking…' : 'Check now'}
+            {starting || inProgress ? 'Checking…' : 'Check now'}
           </button>
         </header>
 
         <InlineNoticeBanner notice={notice} className="mb-6" />
 
+        {inProgress && (
+          <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            <p className="font-semibold">
+              Checking the website… {inProgress.pages_checked} pages and {inProgress.links_checked} links so far
+              {inProgress.broken_count ? `, ${inProgress.broken_count} broken` : ''}.
+            </p>
+            <p className="mt-0.5 text-xs">
+              Started {formatDate(inProgress.started_at)} by {inProgress.triggered_by}. It checks one link at a time so
+              the website isn&rsquo;t overloaded, which can take a few minutes. It carries on if you leave this page.
+            </p>
+          </div>
+        )}
+
         {loading ? (
           <p className="text-sm text-zinc-400">Loading…</p>
         ) : !latest ? (
           <p className="rounded-2xl bg-white px-5 py-6 text-sm text-zinc-500 shadow-sm ring-1 ring-zinc-200">
-            No checks yet. Press &ldquo;Check now&rdquo; to run the first one.
+            {inProgress ? 'The first check is running; its results will show here.' : <>No checks yet. Press &ldquo;Check now&rdquo; to run the first one.</>}
           </p>
         ) : (
           <>
@@ -150,12 +172,12 @@ export default function LinkCheckerPage() {
                 tone={latest.blocked_count ? 'warn' : undefined}
               />
               <StatTile label="Pages checked" value={String(latest.pages_checked)} detail={`${latest.links_checked} links in total`} />
-              <StatTile label="Last checked" value={new Date(latest.finished_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} detail={`${formatDate(latest.finished_at)} · ${latest.triggered_by}`} />
+              <StatTile label="Last checked" value={new Date(latest.finished_at ?? latest.updated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} detail={`${formatDate(latest.finished_at ?? latest.updated_at)} · ${latest.triggered_by}`} />
             </section>
 
             {latest.truncated && (
               <p className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                The last check ran out of time before reaching every link, so some may not have been checked.
+                The website has more than 300 pages, so only the first 300 were checked.
               </p>
             )}
 
@@ -163,7 +185,7 @@ export default function LinkCheckerPage() {
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-5 py-4">
                 <div>
                   <h2 className="text-lg font-semibold text-zinc-900">Problems found</h2>
-                  <p className="mt-0.5 text-xs text-zinc-500">From the check on {formatDate(latest.finished_at)}</p>
+                  <p className="mt-0.5 text-xs text-zinc-500">From the check on {formatDate(latest.finished_at ?? latest.updated_at)}</p>
                 </div>
                 <div className="flex gap-1 rounded-lg bg-zinc-100 p-1 text-xs font-medium">
                   {([
@@ -249,7 +271,7 @@ export default function LinkCheckerPage() {
                       <tr key={run.id}>
                         <td className="py-2 pr-4 text-zinc-900">
                           {formatDate(run.started_at)}
-                          {run.truncated && <span className="ml-1 text-xs text-amber-700">(partial)</span>}
+                          {run.truncated && <span className="ml-1 text-xs text-amber-700">(first 300 pages)</span>}
                         </td>
                         <td className="py-2 pr-4 text-zinc-600">{run.triggered_by}</td>
                         <td className="py-2 pr-4 text-right tabular-nums text-zinc-600">{run.pages_checked}</td>

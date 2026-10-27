@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/link-check",
-      "schedule": "15 4 * * 1"
+      "schedule": "15 4 * * *"
     }
   ]
 }

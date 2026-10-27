@@ -1,17 +1,18 @@
 // Broken link checker for the club website. Reads the site's sitemap, crawls
 // its pages, then checks every link and image on them that points to the
-// club website itself (links to other websites are ignored). Run weekly by pages/api/cron/link-check.ts and on
-// demand from /operations/link-checker; results are saved to link_check_runs
-// (supabase/policies/link_check_runs.sql).
-
-import type { SupabaseClient } from '@supabase/supabase-js';
+// club website itself (links to other websites are ignored).
+//
+// There's no rush, so it asks for one thing at a time with a pause between
+// requests, and gives each request up to 10 seconds. A whole check takes
+// longer than one serverless call, so the work is done in steps: each call
+// advances a saved LinkCheckState until the time runs out, and the next call
+// carries on (lib/linkCheckRun.ts saves it and starts the next step).
 
 export const DEFAULT_SITE_URL = 'https://www.aldwinians.co.uk/';
 
 const MAX_PAGES = 300;
-// Everything checked is on the one site, so keep it gentle: Squarespace answers
-// 429 "Too many requests" if it's asked for too much at once.
-const CONCURRENCY = 4;
+// Squarespace answers 429 "Too many requests" if it's asked for too much at once.
+const GAP_BETWEEN_REQUESTS_MS = 500;
 const MAX_RETRIES = 3;
 const MAX_RETRY_WAIT_MS = 10_000;
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -20,7 +21,8 @@ const USER_AGENT = 'AldwiniansDashboardLinkChecker/1.0 (+https://dashboard.aldwi
 
 // 'broken': the link is dead (404, 410, 5xx, no such host).
 // 'blocked': the page refused an automated check (401/403, or 429 even after
-// waiting and retrying), e.g. a password-protected page. Usually fine in a browser, so it's listed separately.
+// waiting and retrying), e.g. a password-protected page. Usually fine in a
+// browser, so it's listed separately.
 export type LinkProblemKind = 'broken' | 'blocked';
 
 export type LinkProblem = {
@@ -33,6 +35,15 @@ export type LinkProblem = {
   found_on: string[];
 };
 
+/** Where a check has got to, saved between steps. */
+export type LinkCheckState = {
+  sitemap_read: boolean;
+  to_crawl: string[];
+  queued: string[];
+  links: Record<string, { text: string; found_on: string[] }>;
+  results: Record<string, { status: number | null; error: string | null }>;
+};
+
 export type LinkCheckResult = {
   site_url: string;
   pages_checked: number;
@@ -42,8 +53,6 @@ export type LinkCheckResult = {
   problems: LinkProblem[];
   truncated: boolean;
 };
-
-type FoundLink = { url: string; text: string; foundOn: Set<string> };
 
 const SKIP_SCHEMES = /^(mailto:|tel:|sms:|javascript:|data:|#)/i;
 
@@ -74,9 +83,14 @@ const normalise = (raw: string, base: string): string | null => {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// When the site answers 429, every request waits until this time, so the
-// whole check slows down rather than each request hammering on its own.
+// Thrown when there isn't time left in this step for another request. The
+// request is left undone, and the next step makes it.
+class OutOfTime extends Error {}
+
+// When the site answers 429 every request waits until this time; otherwise
+// requests are spaced GAP_BETWEEN_REQUESTS_MS apart.
 let pausedUntil = 0;
+let lastRequestAt = 0;
 
 // Retry-After is either seconds or an HTTP date.
 const retryAfterMs = (res: Response, attempt: number) => {
@@ -87,9 +101,15 @@ const retryAfterMs = (res: Response, attempt: number) => {
   return Math.min(wait, MAX_RETRY_WAIT_MS);
 };
 
-const fetchOnce = async (url: string, method: 'GET' | 'HEAD') => {
+const fetchOnce = async (url: string, method: 'GET' | 'HEAD', deadline: number) => {
+  // Only start a request that can have its full 10 seconds in this step.
+  const wait = Math.max(pausedUntil, lastRequestAt + GAP_BETWEEN_REQUESTS_MS) - Date.now();
+  if (Date.now() + Math.max(wait, 0) + REQUEST_TIMEOUT_MS > deadline) throw new OutOfTime();
+  if (wait > 0) await sleep(wait);
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  lastRequestAt = Date.now();
   try {
     return await fetch(url, {
       method,
@@ -102,11 +122,9 @@ const fetchOnce = async (url: string, method: 'GET' | 'HEAD') => {
   }
 };
 
-const fetchWithTimeout = async (url: string, method: 'GET' | 'HEAD') => {
+const politeFetch = async (url: string, method: 'GET' | 'HEAD', deadline: number) => {
   for (let attempt = 0; ; attempt++) {
-    const wait = pausedUntil - Date.now();
-    if (wait > 0) await sleep(wait);
-    const res = await fetchOnce(url, method);
+    const res = await fetchOnce(url, method, deadline);
     if (res.status !== 429 || attempt >= MAX_RETRIES) return res;
     res.body?.cancel().catch(() => {});
     pausedUntil = Math.max(pausedUntil, Date.now() + retryAfterMs(res, attempt));
@@ -126,24 +144,6 @@ const describeError = (err: unknown) => {
     return cause?.message || err.message;
   }
   return String(err);
-};
-
-// Runs `work` over `items`, `limit` at a time, until done or the deadline passes.
-const runPool = async <T>(items: T[], limit: number, deadline: number, work: (item: T) => Promise<void>) => {
-  let next = 0;
-  let stoppedEarly = false;
-  const worker = async () => {
-    while (next < items.length) {
-      if (Date.now() > deadline) {
-        stoppedEarly = true;
-        return;
-      }
-      const item = items[next++];
-      await work(item);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return stoppedEarly;
 };
 
 const extractLinks = (html: string, pageUrl: string) => {
@@ -172,37 +172,38 @@ const readSitemap = async (siteUrl: URL, deadline: number): Promise<string[]> =>
   const pages: string[] = [];
   const queue = [new URL('/sitemap.xml', siteUrl).toString()];
   const seen = new Set<string>();
-  while (queue.length && Date.now() < deadline && pages.length < MAX_PAGES) {
+  while (queue.length && pages.length < MAX_PAGES) {
     const sitemapUrl = queue.shift()!;
     if (seen.has(sitemapUrl)) continue;
     seen.add(sitemapUrl);
     try {
-      const res = await fetchWithTimeout(sitemapUrl, 'GET');
+      const res = await politeFetch(sitemapUrl, 'GET', deadline);
       if (!res.ok) continue;
       const xml = await res.text();
       const locs = Array.from(xml.matchAll(/<loc>\s*([^<]+?)\s*<\/loc>/gi), (m) => decodeEntities(m[1]));
       // A sitemap index lists other sitemaps; a plain sitemap lists pages.
       if (/<sitemapindex/i.test(xml)) queue.push(...locs);
       else pages.push(...locs);
-    } catch {
+    } catch (err) {
+      if (err instanceof OutOfTime) throw err;
       // No sitemap: the crawl starts from the homepage instead.
     }
   }
   return pages;
 };
 
-export async function checkSiteLinks(siteUrlRaw: string, timeBudgetMs: number): Promise<LinkCheckResult> {
-  const deadline = Date.now() + timeBudgetMs;
-  // Leave ~40% of the time for checking the links once the pages are read.
-  const crawlDeadline = Date.now() + timeBudgetMs * 0.6;
-  const siteUrl = new URL(siteUrlRaw);
+export const newLinkCheckState = (siteUrlRaw: string): LinkCheckState => {
+  const start = new URL(siteUrlRaw).toString();
+  return { sitemap_read: false, to_crawl: [start], queued: [start], links: {}, results: {} };
+};
 
-  const links = new Map<string, FoundLink>();
-  const pageStatus = new Map<string, number | null>();
-  const pageError = new Map<string, string>();
-  const queued = new Set<string>();
-  let queue: string[] = [];
-  let truncated = false;
+/**
+ * Carries on the check in `state` (changing it in place) until it's finished
+ * or `deadline` (ms since epoch) is reached. Returns true when finished.
+ */
+export async function advanceLinkCheck(siteUrlRaw: string, state: LinkCheckState, deadline: number): Promise<boolean> {
+  const siteUrl = new URL(siteUrlRaw);
+  const queued = new Set(state.queued);
 
   const enqueue = (url: string) => {
     const u = new URL(url);
@@ -210,120 +211,112 @@ export async function checkSiteLinks(siteUrlRaw: string, timeBudgetMs: number): 
     // Squarespace files (/s/…) and images aren't pages to crawl.
     if (/\.(pdf|jpe?g|png|gif|webp|svg|docx?|xlsx?|pptx?|zip|mp4|mp3)$/i.test(u.pathname) || u.pathname.startsWith('/s/')) return;
     queued.add(url);
-    queue.push(url);
+    state.queued.push(url);
+    state.to_crawl.push(url);
   };
 
   const addLink = (url: string, text: string, foundOn: string) => {
     if (!sameSite(new URL(url), siteUrl)) return;
-    const existing = links.get(url);
-    if (existing) {
-      existing.foundOn.add(foundOn);
-      if (!existing.text && text) existing.text = text;
-    } else {
-      links.set(url, { url, text, foundOn: new Set([foundOn]) });
+    const existing = state.links[url];
+    if (!existing) {
+      state.links[url] = { text, found_on: [foundOn] };
+      return;
     }
+    if (!existing.found_on.includes(foundOn) && existing.found_on.length < MAX_FOUND_ON) existing.found_on.push(foundOn);
+    if (!existing.text && text) existing.text = text;
   };
 
-  enqueue(siteUrl.toString());
-  for (const page of await readSitemap(siteUrl, crawlDeadline)) {
-    const url = normalise(page, siteUrl.toString());
-    if (url) enqueue(url);
-  }
+  try {
+    if (!state.sitemap_read) {
+      for (const page of await readSitemap(siteUrl, deadline)) {
+        const url = normalise(page, siteUrl.toString());
+        if (url) enqueue(url);
+      }
+      state.sitemap_read = true;
+    }
 
-  // Crawl in waves: each wave's pages can add more pages to the next.
-  while (queue.length) {
-    const wave = queue;
-    queue = [];
-    const stopped = await runPool(wave, CONCURRENCY, crawlDeadline, async (pageUrl) => {
+    // Read every page first, collecting the links on them…
+    while (state.to_crawl.length) {
+      const pageUrl = state.to_crawl[0];
       try {
-        const res = await fetchWithTimeout(pageUrl, 'GET');
-        pageStatus.set(pageUrl, res.status);
+        const res = await politeFetch(pageUrl, 'GET', deadline);
+        state.results[pageUrl] = { status: res.status, error: null };
         const type = res.headers.get('content-type') || '';
-        if (!res.ok || !type.includes('text/html')) return;
         const finalUrl = res.url || pageUrl;
-        if (!sameSite(new URL(finalUrl), siteUrl)) return;
-        const html = await res.text();
-        for (const { url, text } of extractLinks(html, finalUrl)) {
-          addLink(url, text, pageUrl);
-          enqueue(url);
+        if (res.ok && type.includes('text/html') && sameSite(new URL(finalUrl), siteUrl)) {
+          const html = await res.text();
+          for (const { url, text } of extractLinks(html, finalUrl)) {
+            addLink(url, text, pageUrl);
+            enqueue(url);
+          }
+        } else {
+          res.body?.cancel().catch(() => {});
         }
       } catch (err) {
-        pageStatus.set(pageUrl, null);
-        pageError.set(pageUrl, describeError(err));
+        if (err instanceof OutOfTime) throw err;
+        state.results[pageUrl] = { status: null, error: describeError(err) };
       }
-    });
-    if (stopped) {
-      truncated = true;
-      break;
+      state.to_crawl.shift();
     }
-  }
-  if (queued.size >= MAX_PAGES) truncated = true;
 
-  // Pages already fetched during the crawl don't need fetching again.
-  const results = new Map<string, { status: number | null; error: string | null }>();
-  for (const [url, status] of pageStatus) results.set(url, { status, error: pageError.get(url) ?? null });
-
-  const toCheck = Array.from(links.keys()).filter((url) => !results.has(url));
-  const checkStopped = await runPool(toCheck, CONCURRENCY, deadline, async (url) => {
-    try {
-      let res = await fetchWithTimeout(url, 'HEAD');
-      // Plenty of sites don't answer HEAD properly; try a real GET before calling it broken.
-      if (res.status >= 400) {
+    // …then check each link that wasn't one of those pages.
+    for (const url of Object.keys(state.links)) {
+      if (state.results[url]) continue;
+      try {
+        let res = await politeFetch(url, 'HEAD', deadline);
+        // Some servers don't answer HEAD properly; try a real GET before calling it broken.
+        if (res.status >= 400) {
+          res.body?.cancel().catch(() => {});
+          res = await politeFetch(url, 'GET', deadline);
+        }
         res.body?.cancel().catch(() => {});
-        res = await fetchWithTimeout(url, 'GET');
+        state.results[url] = { status: res.status, error: null };
+      } catch (err) {
+        if (err instanceof OutOfTime) throw err;
+        state.results[url] = { status: null, error: describeError(err) };
       }
-      res.body?.cancel().catch(() => {});
-      results.set(url, { status: res.status, error: null });
-    } catch (err) {
-      results.set(url, { status: null, error: describeError(err) });
     }
-  });
-  if (checkStopped) truncated = true;
+    return true;
+  } catch (err) {
+    if (err instanceof OutOfTime) return false;
+    throw err;
+  }
+}
 
+/** The totals and problem list for `state` (so far, if it isn't finished). */
+export function summariseLinkCheck(siteUrlRaw: string, state: LinkCheckState): LinkCheckResult {
+  const siteUrl = new URL(siteUrlRaw);
   const problems: LinkProblem[] = [];
-  for (const link of links.values()) {
-    const result = results.get(link.url);
+  for (const [url, link] of Object.entries(state.links)) {
+    const result = state.results[url];
     if (!result) continue;
     const { status, error } = result;
     if (status !== null && status < 400) continue;
     const blocked = status === 401 || status === 403 || status === 429;
     problems.push({
-      url: link.url,
+      url,
       status,
       error,
       kind: blocked ? 'blocked' : 'broken',
-      internal: sameSite(new URL(link.url), siteUrl),
+      internal: sameSite(new URL(url), siteUrl),
       text: link.text,
-      found_on: Array.from(link.foundOn).slice(0, MAX_FOUND_ON),
+      found_on: link.found_on,
     });
   }
   problems.sort((a, b) => (a.kind === b.kind ? a.url.localeCompare(b.url) : a.kind === 'broken' ? -1 : 1));
 
+  const crawled = state.queued.filter((page) => !state.to_crawl.includes(page));
   return {
     site_url: siteUrl.toString(),
-    pages_checked: Array.from(pageStatus.values()).filter((s) => s !== null && s < 400).length,
-    links_checked: results.size,
+    pages_checked: crawled.filter((page) => {
+      const r = state.results[page];
+      return r && r.status !== null && r.status < 400;
+    }).length,
+    links_checked: Object.keys(state.results).length,
     broken_count: problems.filter((p) => p.kind === 'broken').length,
     blocked_count: problems.filter((p) => p.kind === 'blocked').length,
     problems,
-    truncated,
+    // The site has more pages than MAX_PAGES, so some weren't read.
+    truncated: state.queued.length >= MAX_PAGES,
   };
-}
-
-/** Runs a check of the club website and saves it as a link_check_runs row. */
-export async function runAndSaveLinkCheck(supabaseAdmin: SupabaseClient, triggeredBy: string, timeBudgetMs: number) {
-  const siteUrl = process.env.LINK_CHECK_SITE_URL || DEFAULT_SITE_URL;
-  const startedAt = new Date().toISOString();
-  try {
-    const result = await checkSiteLinks(siteUrl, timeBudgetMs);
-    const { data, error } = await supabaseAdmin
-      .from('link_check_runs')
-      .insert({ ...result, started_at: startedAt, finished_at: new Date().toISOString(), triggered_by: triggeredBy })
-      .select('id')
-      .single();
-    if (error) return { error: `Checked the site but couldn't save the results: ${error.message}` };
-    return { id: data.id as number, ...result };
-  } catch (err) {
-    return { error: describeError(err) };
-  }
 }

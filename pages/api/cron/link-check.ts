@@ -1,12 +1,18 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
-import { runAndSaveLinkCheck } from '../../../lib/linkChecker';
-import { emailAdminsAboutBrokenLinks } from '../../../lib/linkCheckEmail';
+import { WEEKLY_TRIGGER, baseUrlOf, runLinkCheckStep, startNextStep } from '../../../lib/linkCheckRun';
 
-// Weekly broken link check of the club website (vercel.json "crons").
-// Protected by CRON_SECRET ("Authorization: Bearer …"). Results show on
-// /operations/link-checker, where admins can also run it any time. When it
-// finds broken links, every admin is emailed (lib/linkCheckEmail.ts).
+// Broken link check of the club website, a step at a time (lib/linkCheckRun.ts).
+// Protected by CRON_SECRET ("Authorization: Bearer …").
+//
+//   * The daily cron (vercel.json "crons") starts a new check on Mondays, and
+//     on other days carries on any check left unfinished.
+//   * Each step calls this route again with ?step=N to do the next one, until
+//     the check is finished.
+//
+// Results show on /operations/link-checker, where admins can also start a
+// check any time. When a weekly check finds broken links, every admin is
+// emailed (lib/linkCheckEmail.ts).
 
 export const config = { maxDuration: 60 };
 
@@ -24,24 +30,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ ok: false, error: 'Unauthorized' });
   }
 
-  const r = await runAndSaveLinkCheck(supabaseAdmin, 'Weekly check', 50_000);
+  const step = Number(req.query.step) || 0;
+  const isMonday = new Date().getUTCDay() === 1;
+  const r = await runLinkCheckStep(supabaseAdmin, step === 0 && isMonday ? WEEKLY_TRIGGER : undefined);
   if ('error' in r) return res.status(502).json({ ok: false, error: r.error });
 
-  // The check itself is saved either way; an email problem is only reported.
-  let email: string;
-  try {
-    const e = await emailAdminsAboutBrokenLinks(supabaseAdmin, r);
-    email = e.skipped ? `not sent: ${e.skipped}` : `sent to ${e.sent.length} admin(s)`;
-  } catch (err) {
-    email = `failed: ${err instanceof Error ? err.message : String(err)}`;
-  }
-
-  return res.status(200).json({
-    ok: true,
-    pages: r.pages_checked,
-    links: r.links_checked,
-    broken: r.broken_count,
-    blocked: r.blocked_count,
-    email,
-  });
+  if ('done' in r && !r.done) await startNextStep(baseUrlOf(req.headers.host), step + 1);
+  return res.status(200).json({ ok: true, ...r });
 }

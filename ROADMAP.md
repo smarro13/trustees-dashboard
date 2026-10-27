@@ -7,7 +7,11 @@
   dead links and images on the club site (other websites aren't checked)
   with the pages they're on. Emails every admin when the weekly check finds
   broken links (uses the Lotto email setup in Resend).
-- [ ] Run `supabase/policies/link_check_runs.sql` in Supabase, then press
+  Checks one link at a time (up to 10 seconds each, half a second apart), so
+  a check runs in background steps of ~45 seconds that hand over to each
+  other; the daily cron picks up any check left unfinished.
+- [ ] Run `supabase/policies/link_check_runs.sql` in Supabase (re-run it if
+  you ran an earlier version: it adds columns), then press
   "Check now" for the first report.
 
 ## In progress: automatic membership data (25 Oct 2026)

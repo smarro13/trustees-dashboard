@@ -3,6 +3,9 @@
 -- One row per run of the link checker (lib/linkChecker.ts): weekly from
 -- pages/api/cron/link-check.ts, or "Check now" on /operations/link-checker.
 -- `problems` holds every broken or blocked link with the pages it's on.
+-- A check runs in steps (lib/linkCheckRun.ts): while `status` is 'running',
+-- `state` holds where it has got to and `locked_until` stops two steps
+-- working on it at once.
 --
 --   link_check_runs : no access for anon or authenticated users. Admins read
 --                     it through /api/admin/link-check, which checks the
@@ -25,6 +28,16 @@ create table if not exists public.link_check_runs (
   truncated boolean not null default false,
   problems jsonb not null default '[]'::jsonb
 );
+
+-- Added for checks that run in steps. Safe if the table already exists.
+alter table public.link_check_runs add column if not exists status text not null default 'done';
+alter table public.link_check_runs add column if not exists state jsonb;
+alter table public.link_check_runs add column if not exists updated_at timestamptz not null default now();
+alter table public.link_check_runs add column if not exists locked_until timestamptz;
+alter table public.link_check_runs alter column finished_at drop not null;
+
+create index if not exists link_check_runs_status_idx
+  on public.link_check_runs (status, started_at desc);
 
 create index if not exists link_check_runs_started_at_idx
   on public.link_check_runs (started_at desc);

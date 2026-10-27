@@ -4,7 +4,7 @@
 //
 // Env: RESEND_API_KEY, and LINK_CHECK_EMAIL_FROM (falls back to LOTTO_EMAIL_FROM).
 
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient, User } from '@supabase/supabase-js';
 import type { LinkCheckResult } from './linkChecker';
 import { resolveRoleFromUser } from './roles';
 
@@ -19,7 +19,7 @@ const shortUrl = (url: string) => url.replace(/^https?:\/\/(www\.)?/, '').replac
 const adminEmails = async (supabaseAdmin: SupabaseClient) => {
   const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
   if (error) throw new Error(`Couldn't list admins: ${error.message}`);
-  return data.users.filter((u) => u.email && resolveRoleFromUser(u) === 'admin').map((u) => u.email!);
+  return (data.users as User[]).filter((u) => u.email && resolveRoleFromUser(u) === 'admin').map((u) => u.email!);
 };
 
 /** Emails the admins about the broken links in `result`. Returns who it was sent to, or why it wasn't. */
