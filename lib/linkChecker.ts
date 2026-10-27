@@ -1,6 +1,6 @@
 // Broken link checker for the club website. Reads the site's sitemap, crawls
-// its pages (same site only), then checks every link and image on them —
-// internal and external. Run weekly by pages/api/cron/link-check.ts and on
+// its pages, then checks every link and image on them that points to the
+// club website itself (links to other websites are ignored). Run weekly by pages/api/cron/link-check.ts and on
 // demand from /operations/link-checker; results are saved to link_check_runs
 // (supabase/policies/link_check_runs.sql).
 
@@ -15,8 +15,8 @@ const MAX_FOUND_ON = 10;
 const USER_AGENT = 'AldwiniansDashboardLinkChecker/1.0 (+https://dashboard.aldwinians.co.uk)';
 
 // 'broken': the link is dead (404, 410, 5xx, no such host).
-// 'blocked': the other site refused an automated check (401/403/429, LinkedIn's
-// 999). Usually fine in a browser, so it's listed separately.
+// 'blocked': the page refused an automated check (401/403/429), e.g. a
+// password-protected page. Usually fine in a browser, so it's listed separately.
 export type LinkProblemKind = 'broken' | 'blocked';
 
 export type LinkProblem = {
@@ -184,6 +184,7 @@ export async function checkSiteLinks(siteUrlRaw: string, timeBudgetMs: number): 
   };
 
   const addLink = (url: string, text: string, foundOn: string) => {
+    if (!sameSite(new URL(url), siteUrl)) return;
     const existing = links.get(url);
     if (existing) {
       existing.foundOn.add(foundOn);
@@ -255,7 +256,7 @@ export async function checkSiteLinks(siteUrlRaw: string, timeBudgetMs: number): 
     if (!result) continue;
     const { status, error } = result;
     if (status !== null && status < 400) continue;
-    const blocked = status === 401 || status === 403 || status === 429 || status === 999;
+    const blocked = status === 401 || status === 403 || status === 429;
     problems.push({
       url: link.url,
       status,

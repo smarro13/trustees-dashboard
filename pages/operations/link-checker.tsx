@@ -40,7 +40,6 @@ const pagePath = (url: string) => {
 const problemLabel = (p: LinkProblem) => {
   if (p.status === 404) return '404 Not found';
   if (p.status === 410) return '410 Gone';
-  if (p.status === 999) return 'Blocked (LinkedIn)';
   if (p.status !== null) return `Error ${p.status}`;
   return p.error || 'No response';
 };
@@ -113,7 +112,7 @@ export default function LinkCheckerPage() {
             <h1 className="text-3xl font-extrabold text-zinc-900">🔗 Website Link Checker</h1>
             <p className="mt-1 text-zinc-600">
               Every page of {latest ? shortUrl(latest.site_url) : 'the club website'} is checked for dead links and
-              images each Monday. Admins only.
+              images each Monday. Links to other websites aren&rsquo;t checked. Admins only.
             </p>
           </div>
           <button
@@ -146,7 +145,7 @@ export default function LinkCheckerPage() {
               <StatTile
                 label="Couldn't check"
                 value={String(latest.blocked_count)}
-                detail="Sites that block automated checks"
+                detail="Password-protected or blocked pages"
                 tone={latest.blocked_count ? 'warn' : undefined}
               />
               <StatTile label="Pages checked" value={String(latest.pages_checked)} detail={`${latest.links_checked} links in total`} />
@@ -185,7 +184,7 @@ export default function LinkCheckerPage() {
 
               {problems.length === 0 ? (
                 <p className="px-5 py-6 text-sm text-zinc-500">
-                  {filter === 'blocked' ? 'Every external site answered the check.' : '✅ No broken links found.'}
+                  {filter === 'blocked' ? 'Every page answered the check.' : '✅ No broken links found.'}
                 </p>
               ) : (
                 <ul className="divide-y divide-zinc-100">
@@ -204,9 +203,6 @@ export default function LinkCheckerPage() {
                           {p.text && <p className="mt-0.5 text-xs text-zinc-500">Link text: &ldquo;{p.text}&rdquo;</p>}
                         </div>
                         <div className="flex shrink-0 gap-1.5">
-                          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">
-                            {p.internal ? 'Our site' : 'External'}
-                          </span>
                           <span
                             className={`rounded-full px-2 py-0.5 text-xs font-semibold ${p.kind === 'broken' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}
                           >
