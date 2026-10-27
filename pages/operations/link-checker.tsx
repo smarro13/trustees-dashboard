@@ -112,7 +112,7 @@ export default function LinkCheckerPage() {
             <h1 className="text-3xl font-extrabold text-zinc-900">🔗 Website Link Checker</h1>
             <p className="mt-1 text-zinc-600">
               Every page of {latest ? shortUrl(latest.site_url) : 'the club website'} is checked for dead links and
-              images each Monday. Links to other websites aren&rsquo;t checked. Admins only.
+              images each Monday, and admins are emailed if any are broken. Links to other websites aren&rsquo;t checked. Admins only.
             </p>
           </div>
           <button

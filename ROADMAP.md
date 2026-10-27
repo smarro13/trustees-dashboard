@@ -4,7 +4,9 @@
 
 - [x] **Broken link checker** (`/operations/link-checker`, admins only). Crawls
   aldwinians.co.uk every Monday at 04:15 UTC (and on "Check now") and lists
-  dead links and images on the club site (other websites aren't checked) with the pages they're on.
+  dead links and images on the club site (other websites aren't checked)
+  with the pages they're on. Emails every admin when the weekly check finds
+  broken links (uses the Lotto email setup in Resend).
 - [ ] Run `supabase/policies/link_check_runs.sql` in Supabase, then press
   "Check now" for the first report.
 
