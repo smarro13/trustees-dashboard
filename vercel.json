@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/membership-report",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/link-check",
+      "schedule": "15 4 * * 1"
     }
   ]
 }

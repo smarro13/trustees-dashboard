@@ -46,7 +46,7 @@ const SHAREABLE_PAGES = [
   },
 ];
 
-const OPERATIONS_PAGES: { title: string; description: string; href: string; comingSoon?: boolean }[] = [
+const OPERATIONS_PAGES: { title: string; description: string; href: string; comingSoon?: boolean; adminOnly?: boolean }[] = [
   {
     title: '📰 Matchday Programme',
     description: 'How many times the matchday programme is opened each week.',
@@ -81,6 +81,12 @@ const OPERATIONS_PAGES: { title: string; description: string; href: string; comi
     title: '🎆 Fireworks',
     description: 'Fireworks night tasks: add, assign and close them. Volunteers see them with the access code.',
     href: '/operations/fireworks',
+  },
+  {
+    title: '🔗 Website Link Checker',
+    description: 'Broken links and images on the club website, checked every Monday.',
+    href: '/operations/link-checker',
+    adminOnly: true,
   },
 ];
 
@@ -697,7 +703,7 @@ export default function LandingPage() {
               </div>
 
               <div className="grid gap-4 px-4 py-4 md:grid-cols-2">
-                {OPERATIONS_PAGES.map((page) => (
+                {OPERATIONS_PAGES.filter((page) => !page.adminOnly || userRole === 'admin').map((page) => (
                   <Link
                     key={page.href}
                     href={page.href}

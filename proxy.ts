@@ -48,7 +48,7 @@ const getHighestRoleFromList = (values: unknown[]): DashboardRole => {
 };
 
 const getRequiredRoleForPath = (pathname: string): DashboardRole => {
-  if (pathname === '/admin/roles' || pathname.startsWith('/admin/')) {
+  if (pathname === '/admin/roles' || pathname.startsWith('/admin/') || pathname === '/operations/link-checker') {
     return 'admin';
   }
 

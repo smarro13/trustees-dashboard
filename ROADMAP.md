@@ -1,5 +1,13 @@
 # Trustees dashboard: roadmap
 
+## Website link checker (27 Oct 2026)
+
+- [x] **Broken link checker** (`/operations/link-checker`, admins only). Crawls
+  aldwinians.co.uk every Monday at 04:15 UTC (and on "Check now") and lists
+  dead links and images with the pages they're on.
+- [ ] Run `supabase/policies/link_check_runs.sql` in Supabase, then press
+  "Check now" for the first report.
+
 ## In progress: automatic membership data (25 Oct 2026)
 
 - [x] **ClubControl members export** fetched automatically (live): every
