@@ -39,7 +39,12 @@ export default function AgendaMenu() {
 
   if (userRole === 'admin') {
     const aobIndex = items.findIndex((item) => item.href === '/agenda/aob');
-    items.splice(aobIndex === -1 ? items.length : aobIndex, 0, { label: '🔐 Admin Roles', href: '/admin/roles' });
+    items.splice(
+      aobIndex === -1 ? items.length : aobIndex,
+      0,
+      { label: '🔐 Admin Roles', href: '/admin/roles' },
+      { label: '🔗 Link Checker', href: '/admin/link-checker' },
+    );
   }
 
   return (
