@@ -7,6 +7,11 @@
 // CLUBCONTROL_PASSWORD), reads the Reports page to find the members export's
 // download button, downloads the CSV, then logs out. It only ever reads:
 // the login and logout forms are the only things it submits.
+//
+// The export has no payment details, so while logged in it also reads each
+// member's "Billing Method" from the Members list (e.g. "Direct Debit:
+// Active"), a page at a time. If that part fails the export still comes back,
+// without billing methods.
 
 const BASE = 'https://www.clubcontrolhub.co.uk';
 const TIMEOUT_MS = 30000;
@@ -64,7 +69,54 @@ function membersExportPath(reportsHtml: string): string {
   return `/reports/members?${new URLSearchParams({ [name]: value })}`;
 }
 
-export type ClubControlExport = { csv: string; fileName: string };
+// Every member's "Billing Method" from the Members list (/members), by
+// ClubControl's member id (the export's "Id" column). Pages are read a few at
+// a time. Values seen: "Direct Debit: Active", "Direct Debit: Pending",
+// "Card", "Inactive".
+const PAGES_AT_ONCE = 5;
+const MAX_PAGES = 200;
+
+const cellText = (html: string) => decodeHtml(html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+
+function readMembersPage(html: string, column: number, into: Map<string, string>) {
+  for (const row of html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const id = row[1].match(/\/members\/(\d+)\//)?.[1];
+    if (!id) continue;
+    const cells = [...row[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map((m) => cellText(m[1]));
+    if (cells[column]) into.set(id, cells[column]);
+  }
+}
+
+async function readBillingMethods(jar: Jar): Promise<Map<string, string>> {
+  const first = await request(jar, '/members');
+  if (first.status !== 200) throw new ClubControlError(`ClubControl's Members page returned ${first.status}.`);
+  const html = await first.text();
+  const headings = [...html.matchAll(/<th[^>]*>([\s\S]*?)<\/th>/gi)].map((m) => cellText(m[1]).toLowerCase());
+  const column = headings.indexOf('billing method');
+  if (column < 0) throw new ClubControlError('The Members page no longer has a Billing Method column.');
+  const lastPage = Math.min(
+    MAX_PAGES,
+    Math.max(1, ...[...html.matchAll(/[?&]page=(\d+)/g)].map((m) => Number(m[1]))),
+  );
+
+  const billing = new Map<string, string>();
+  readMembersPage(html, column, billing);
+  for (let page = 2; page <= lastPage; page += PAGES_AT_ONCE) {
+    const batch = [];
+    for (let p = page; p < page + PAGES_AT_ONCE && p <= lastPage; p++) batch.push(p);
+    const pages = await Promise.all(batch.map(async (p) => {
+      const res = await request(jar, `/members?page=${p}`);
+      if (res.status !== 200) throw new ClubControlError(`ClubControl's Members page ${p} returned ${res.status}.`);
+      return res.text();
+    }));
+    for (const pageHtml of pages) readMembersPage(pageHtml, column, billing);
+  }
+  return billing;
+}
+
+// billingById: each member's Billing Method by member id, or null if the
+// Members list couldn't be read.
+export type ClubControlExport = { csv: string; fileName: string; billingById: Map<string, string> | null };
 
 export async function fetchMembersExport(): Promise<ClubControlExport> {
   const email = process.env.CLUBCONTROL_EMAIL || '';
@@ -107,9 +159,17 @@ export async function fetchMembersExport(): Promise<ClubControlExport> {
     }
     const csv = await exported.text();
     const fileName = disposition.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)?.[1] ?? 'clubcontrol-members.csv';
-    return { csv, fileName: `${decodeURIComponent(fileName)} (fetched automatically)` };
+
+    // 4. Billing methods from the Members list.
+    let billingById: Map<string, string> | null = null;
+    try {
+      billingById = await readBillingMethods(jar);
+    } catch (error) {
+      console.error('ClubControl billing methods not read:', error instanceof Error ? error.message : error);
+    }
+    return { csv, fileName: `${decodeURIComponent(fileName)} (fetched automatically)`, billingById };
   } finally {
-    // 4. Log out (best effort).
+    // 5. Log out (best effort).
     if (logoutToken) {
       await request(jar, '/logout', {
         method: 'POST',

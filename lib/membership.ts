@@ -143,3 +143,23 @@ export const splitCategories = (value: string): string[] => {
   }
   return out;
 };
+
+// ClubControl billing methods (the Members list's "Billing Method" column,
+// read by the automatic fetch: lib/clubcontrol.ts). An active direct debit
+// means the person really pays through ClubControl; being "active" alone
+// doesn't, as everyone was brought across from LoveAdmin as active.
+export const DIRECT_DEBIT_ACTIVE = 'Direct Debit: Active';
+
+const billingRank = (b: string | null | undefined) =>
+  b === DIRECT_DEBIT_ACTIVE ? 3 : b?.startsWith('Direct Debit') ? 2 : b === 'Card' ? 1 : 0;
+
+// Each name's billing method. Someone listed twice gets their best one (an
+// active direct debit wins), as with paid-up status.
+export const billingByName = (members: { first_name: string; last_name: string; billing_method?: string | null }[]) => {
+  const map = new Map<string, string | null>();
+  for (const m of members) {
+    const key = nameKey(m.first_name, m.last_name);
+    if (!map.has(key) || billingRank(m.billing_method) > billingRank(map.get(key))) map.set(key, m.billing_method ?? null);
+  }
+  return map;
+};

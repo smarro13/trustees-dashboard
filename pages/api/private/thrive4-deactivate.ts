@@ -1,8 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { type Thrive4BillingPerson, Thrive4Error, fetchThrive4Billing, makeThrive4Inactive } from '../../../lib/thrive4';
-import { loadMembershipData } from '../../../lib/membershipSummary';
-import { isPaidUp, nameKey } from '../../../lib/membership';
+import { DIRECT_DEBIT_ACTIVE, billingByName, nameKey } from '../../../lib/membership';
 
 // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
 // Makes people inactive on Thrive4 (lib/thrive4.ts makeThrive4Inactive), which
@@ -10,9 +9,9 @@ import { isPaidUp, nameKey } from '../../../lib/membership';
 // inactive" buttons on /operations/membership. Admins only.
 //
 // Only people who've moved can be made inactive: each one is checked again
-// here, and must still be billed by Thrive4 AND be active in the latest
-// ClubControl export. Anyone else in the request is refused, whatever the page
-// sent. Every attempt is logged in thrive4_deactivations
+// here, and must still be billed by Thrive4 AND have an active direct debit in
+// the latest ClubControl fetch. Anyone else in the request is refused,
+// whatever the page sent. Every attempt is logged in thrive4_deactivations
 // (supabase/policies/membership_loveadmin.sql).
 
 export const config = { maxDuration: 60 };
@@ -50,17 +49,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } catch (e) {
     return res.status(502).json({ ok: false, error: e instanceof Thrive4Error ? e.message : 'Checking Thrive4 failed.' });
   }
-  const { members } = await loadMembershipData(supabaseAdmin);
-  const activeNames = new Set(members.filter(isPaidUp).map((m) => nameKey(m.first_name, m.last_name)));
+  // Moved = an active direct debit in the latest ClubControl export (being
+  // "active" there isn't enough: everyone was brought across as active).
+  const { data: latest } = await supabaseAdmin
+    .from('membership_imports')
+    .select('id')
+    .eq('kind', 'members')
+    .order('uploaded_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!latest) return res.status(409).json({ ok: false, error: 'There’s no ClubControl data yet. Fetch from ClubControl first.' });
+  const { data: members, error: membersError } = await supabaseAdmin
+    .from('membership_members')
+    .select('first_name, last_name, billing_method')
+    .eq('import_id', latest.id)
+    .range(0, 9999);
+  if (membersError) {
+    return res.status(500).json({
+      ok: false,
+      error: /billing_method/.test(membersError.message)
+        ? 'Direct debit status isn’t stored yet: run supabase/policies/membership_billing_method.sql, then fetch from ClubControl.'
+        : membersError.message,
+    });
+  }
+  const billingNames = billingByName(members ?? []);
   const billedByGuid = new Map(billing.map((p) => [p.person_guid, p]));
 
   const allowed = requested.filter((g) => {
     const p = billedByGuid.get(g);
-    return p && activeNames.has(nameKey(p.name, ''));
+    return p && billingNames.get(nameKey(p.name, '')) === DIRECT_DEBIT_ACTIVE;
   });
   const refused = requested.length - allowed.length;
   if (allowed.length === 0) {
-    return res.status(409).json({ ok: false, error: 'None of them are both billed on Thrive4 and active in ClubControl any more. Check Thrive4 again.' });
+    return res.status(409).json({ ok: false, error: 'None of them are both billed on Thrive4 and on an active ClubControl direct debit. Fetch from ClubControl, then check Thrive4 again.' });
   }
 
   let results;

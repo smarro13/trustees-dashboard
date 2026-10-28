@@ -29,14 +29,16 @@ last month matters.
 
 **Thrive4 billing** card (on `/operations/membership`, **Check Thrive4**): lists,
 live, everyone Thrive4 invoiced this month and the subscriptions that will
-raise next month's invoices. Anyone active in ClubControl is flagged
-**Active: close on Thrive4**: they have moved but Thrive4 is still billing
-them. Checking stores nothing and changes nothing in Thrive4.
+raise next month's invoices. Anyone with an **active direct debit in
+ClubControl** is flagged: they have moved but are still open on Thrive4.
+(Being "active" in ClubControl isn't enough: everyone was brought across as
+active.) The direct debit status is ClubControl's "Billing Method", read by
+the automatic ClubControl fetch (`supabase/policies/membership_billing_method.sql`). Checking stores nothing and changes nothing in Thrive4.
 
 Admins also get **Make inactive** (per person) and **Make all N inactive**. This
 does what Thrive4's own "make inactive" does, which drops the person's Thrive4
 subscriptions so no more invoices are raised. Each person is checked again on
-the server first (still billed on Thrive4 and active in ClubControl), and every
+the server first (still billed on Thrive4 and on an active ClubControl direct debit), and every
 attempt is logged in `thrive4_deactivations`. Undo it in Thrive4 if needed.
 The fetch also stores each person's Thrive4 id (`person_guid`), so two people
 with the same name are kept apart. Uploading the report by hand still works.

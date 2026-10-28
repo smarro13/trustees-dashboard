@@ -35,6 +35,12 @@ export async function syncMembersFromClubControl(admin: SupabaseClient, uploaded
   }
   if (members.length === 0) return { ok: false, status: 502, error: 'ClubControl’s export had no members in it.' };
 
+  // Each member's billing method (e.g. "Direct Debit: Active"), matched on
+  // ClubControl's own member id.
+  if (exported.billingById) {
+    for (const m of members) m.billing_method = (m.external_id && exported.billingById.get(m.external_id)) || null;
+  }
+
   const previous = await currentMembersCount(admin);
   if (previous && members.length < previous / 2) {
     return {

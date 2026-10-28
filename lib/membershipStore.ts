@@ -30,7 +30,12 @@ export async function saveMembersExport(
 
   for (let i = 0; i < members.length; i += INSERT_BATCH) {
     const batch = members.slice(i, i + INSERT_BATCH).map((m) => ({ ...m, import_id: imported.id }));
-    const { error } = await admin.from('membership_members').insert(batch);
+    let { error } = await admin.from('membership_members').insert(batch);
+    // Before supabase/policies/membership_billing_method.sql has been run
+    // there's no billing_method column: save without it rather than fail.
+    if (error && /billing_method/.test(error.message)) {
+      ({ error } = await admin.from('membership_members').insert(batch.map(({ billing_method, ...rest }) => rest)));
+    }
     if (error) {
       // Leave the previous export in place rather than half of this one.
       await admin.from('membership_imports').delete().eq('id', imported.id);

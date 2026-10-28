@@ -7,6 +7,9 @@ import { nameKey, splitCategories } from '../membership';
 
 export type ImportedMember = {
   external_id: string | null;
+  // ClubControl's "Billing Method", e.g. "Direct Debit: Active". Only the
+  // automatic fetch has it (lib/clubcontrol.ts); null from an uploaded export.
+  billing_method?: string | null;
   first_name: string;
   last_name: string;
   email: string | null;

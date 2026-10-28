@@ -11,6 +11,8 @@ import {
   TEAM_BY_NAME,
   TEAM_GROUPS,
   ageOn,
+  DIRECT_DEBIT_ACTIVE,
+  billingByName,
   isPaidUp,
   isSideCategory,
   monthsIntoSeason,
@@ -37,6 +39,8 @@ type Member = {
   categories: string[];
   renewal_date: string | null;
   active: boolean;
+  // ClubControl's billing method, e.g. "Direct Debit: Active" (automatic fetch only).
+  billing_method?: string | null;
 };
 
 type Player = {
@@ -139,6 +143,22 @@ async function loadAll<T>(query: (from: number, to: number) => PromiseLike<{ dat
   }
 }
 
+// The members export's rows, with ClubControl's billing method when the
+// column exists (supabase/policies/membership_billing_method.sql); without it
+// until that has been run.
+const MEMBER_COLUMNS = 'id, first_name, last_name, email, categories, renewal_date, active';
+async function loadMembers(importId: string): Promise<Member[]> {
+  const load = (columns: string) =>
+    loadAll<Member>((from, to) =>
+      supabase.from('membership_members').select(columns).eq('import_id', importId).order('id').range(from, to) as any);
+  try {
+    return await load(`${MEMBER_COLUMNS}, billing_method`);
+  } catch (error: any) {
+    if (!/billing_method/.test(error?.message ?? '')) throw error;
+    return load(MEMBER_COLUMNS);
+  }
+}
+
 const fileToBase64 = async (file: File) => {
   const bytes = new Uint8Array(await file.arrayBuffer());
   let binary = '';
@@ -181,9 +201,9 @@ function CardHeading({ open, onToggle, title, children }: {
 
 // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
 // What Thrive4 (LoveAdmin) has invoiced this month and will invoice next, per
-// person, checked live (pages/api/private/thrive4-billing.ts). Anyone already
-// active in ClubControl is flagged: they've moved but Thrive4 is still billing
-// them, so their Thrive4 subscription needs closing.
+// person, checked live (pages/api/private/thrive4-billing.ts). Anyone with an
+// active direct debit in ClubControl is flagged: they've moved but are still
+// open on Thrive4, so need making inactive there.
 type Thrive4BillingPerson = {
   person_guid: string;
   name: string;
@@ -194,10 +214,12 @@ type Thrive4BillingPerson = {
 
 const sumAmounts = (items: { amount: number | null }[]) => items.reduce((t, i) => t + (i.amount ?? 0), 0);
 
-function Thrive4BillingCard({ open, onToggle, membersByName, canClose, setNotice }: {
+function Thrive4BillingCard({ open, onToggle, membersByName, billing, canClose, setNotice }: {
   open: boolean;
   onToggle: () => void;
   membersByName: Map<string, Member>;
+  // Each name's ClubControl billing method (billingByName in lib/membership.ts).
+  billing: Map<string, string | null>;
   // Admins: "Make inactive" buttons (pages/api/private/thrive4-deactivate.ts).
   canClose: boolean;
   setNotice: (n: InlineNotice) => void;
@@ -231,14 +253,19 @@ function Thrive4BillingCard({ open, onToggle, membersByName, canClose, setNotice
     () =>
       (people ?? [])
         .map((p) => {
-          const member = membersByName.get(nameKey(p.name, '')) ?? null;
-          const clubControl = !member ? 'Not on ClubControl' : isPaidUp(member) ? 'Active' : 'Inactive';
-          return { ...p, clubControl, moved: clubControl === 'Active' };
+          // Moved = an active direct debit in ClubControl. Being active there
+          // isn't enough: everyone was brought across from LoveAdmin as active.
+          const key = nameKey(p.name, '');
+          const member = membersByName.get(key) ?? null;
+          const method = billing.get(key) ?? null;
+          const clubControl = !member ? 'Not on ClubControl' : method ?? (isPaidUp(member) ? 'Active, billing not known' : 'Inactive');
+          return { ...p, clubControl, moved: method === DIRECT_DEBIT_ACTIVE };
         })
         .sort((a, b) => Number(b.moved) - Number(a.moved) || a.name.localeCompare(b.name)),
-    [people, membersByName],
+    [people, membersByName, billing],
   );
   const moved = rows.filter((r) => r.moved);
+  const billingKnown = [...billing.values()].some((b) => b !== null);
   const movedDue = moved.reduce((t, r) => t + sumAmounts(r.upcoming), 0);
   const shown = onlyMoved ? moved : rows;
 
@@ -258,7 +285,7 @@ function Thrive4BillingCard({ open, onToggle, membersByName, canClose, setNotice
       const failed: { name: string; error?: string }[] = payload.failed ?? [];
       const parts = [`Made ${done.length} ${done.length === 1 ? 'person' : 'people'} inactive on Thrive4.`];
       if (failed.length) parts.push(`${failed.length} failed: ${failed.map((f) => f.name).join(', ')}.`);
-      if (payload.refused) parts.push(`${payload.refused} skipped: no longer both billed on Thrive4 and active in ClubControl.`);
+      if (payload.refused) parts.push(`${payload.refused} skipped: no longer both billed on Thrive4 and on an active ClubControl direct debit.`);
       setNotice({ type: failed.length ? 'error' : 'success', message: parts.join(' ') });
       setConfirming(null);
       await check();
@@ -273,8 +300,8 @@ function Thrive4BillingCard({ open, onToggle, membersByName, canClose, setNotice
     <section className="mb-8 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-violet-200">
       <div className={`flex flex-wrap items-center justify-between gap-3 bg-violet-50 px-5 py-4 ${open ? 'border-b border-violet-200' : ''}`}>
         <CardHeading open={open} onToggle={onToggle} title={people ? `Thrive4 billing (${moved.length} moved, still billed)` : 'Thrive4 billing'}>
-          What Thrive4 (LoveAdmin) invoiced this month and will invoice next, checked live. Anyone active in ClubControl has
-          moved but is still being billed on Thrive4, so their Thrive4 subscription needs closing.
+          What Thrive4 (LoveAdmin) invoiced this month and will invoice next, checked live. Anyone with an active direct debit
+          in ClubControl has moved but is still open on Thrive4, so needs making inactive there.
         </CardHeading>
         {open && (
           <div className="flex flex-wrap items-center gap-3">
@@ -314,9 +341,14 @@ function Thrive4BillingCard({ open, onToggle, membersByName, canClose, setNotice
         <p className="px-5 py-6 text-sm text-zinc-500">Press Check Thrive4 to see who it’s still billing.</p>
       ) : (
         <>
+          {!billingKnown && (
+            <p className="px-5 pt-4 text-sm text-amber-700">
+              Direct debit status from ClubControl isn’t loaded yet, so nobody is flagged. An admin needs to press “Fetch from ClubControl now”.
+            </p>
+          )}
           <p className="px-5 pt-4 text-sm text-zinc-700">
             {moved.length === 0
-              ? 'Nobody who’s active in ClubControl has a Thrive4 subscription or invoice this month.'
+              ? 'Nobody with an active ClubControl direct debit has a Thrive4 subscription or invoice this month.'
               : `${moved.length} ${moved.length === 1 ? 'person has' : 'people have'} moved to ClubControl but ${moved.length === 1 ? 'is' : 'are'} still on Thrive4${movedDue ? `: ${money(movedDue)} due to be invoiced next` : ''}.`}
             {' '}<span className="text-zinc-500">Thrive4 is billing {rows.length} people in all.</span>
           </p>
@@ -363,7 +395,7 @@ function Thrive4BillingCard({ open, onToggle, membersByName, canClose, setNotice
                         {r.moved
                           ? (
                             <div className="flex flex-col items-start gap-1">
-                              <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-800 ring-1 ring-rose-200">Active: close on Thrive4</span>
+                              <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-800 ring-1 ring-rose-200">Direct debit active: close on Thrive4</span>
                               {canClose && (
                                 <button
                                   type="button"
@@ -389,7 +421,7 @@ function Thrive4BillingCard({ open, onToggle, membersByName, canClose, setNotice
       <ConfirmDialog
         open={confirming !== null}
         title="Make inactive on Thrive4?"
-        description={confirming ? `This makes ${confirming.label} inactive on Thrive4, which stops their Thrive4 subscriptions so no more invoices are raised. Each one is checked again first: only people still billed on Thrive4 and active in ClubControl are changed. Undo it in Thrive4 if needed.` : ''}
+        description={confirming ? `This makes ${confirming.label} inactive on Thrive4, which stops their Thrive4 subscriptions so no more invoices are raised. Each one is checked again first: only people still billed on Thrive4 and on an active ClubControl direct debit are changed. Undo it in Thrive4 if needed.` : ''}
         confirmLabel={closing ? 'Making inactive…' : 'Make inactive'}
         tone="danger"
         loading={closing}
@@ -839,9 +871,7 @@ export default function MembershipPage() {
       const latestLoveAdmin = importRows.find((i) => i.kind === 'loveadmin');
       const [memberRows, playerRows, noteRows, loveAdminRows] = await Promise.all([
         latestMembers
-          ? loadAll<Member>((from, to) =>
-              supabase.from('membership_members').select('id, first_name, last_name, email, categories, renewal_date, active')
-                .eq('import_id', latestMembers.id).order('id').range(from, to))
+          ? loadMembers(latestMembers.id)
           : Promise.resolve([] as Member[]),
         loadAll<Player>((from, to) =>
           supabase.from('membership_players').select('id, name_key, first_name, last_name, date_of_birth, gender')
@@ -896,6 +926,9 @@ export default function MembershipPage() {
 
   // Everyone in the ClubControl export, by name. Someone listed twice counts
   // as paid up if either record is.
+  // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+  const billingNames = useMemo(() => billingByName(members), [members]);
+
   const membersByName = useMemo(() => {
     const map = new Map<string, Member>();
     for (const m of members) {
@@ -1606,7 +1639,7 @@ export default function MembershipPage() {
             )}
 
             {/* LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md. */}
-            <Thrive4BillingCard open={openCards.thrive4} onToggle={() => toggleCard('thrive4')} membersByName={membersByName} canClose={canUpload} setNotice={setNotice} />
+            <Thrive4BillingCard open={openCards.thrive4} onToggle={() => toggleCard('thrive4')} membersByName={membersByName} billing={billingNames} canClose={canUpload} setNotice={setNotice} />
 
             <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-amber-200">
               <div className={`flex flex-wrap items-center justify-between gap-3 bg-amber-50 px-5 py-4 ${openCards.inactive ? 'border-b border-amber-200' : ''}`}>
