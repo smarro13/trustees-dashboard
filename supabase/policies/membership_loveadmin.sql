@@ -50,4 +50,26 @@ create policy "governance read membership_loveadmin"
   using (lower(coalesce(auth.jwt() -> 'app_metadata' ->> 'role', auth.jwt() -> 'user_metadata' ->> 'role'))
     in ('admin', 'trustee', 'director', 'directors', 'management', 'mangement'));
 
+
+-- Who was made inactive on Thrive4 from the dashboard, and by whom (28 Oct
+-- 2026). Written only by pages/api/private/thrive4-deactivate.ts using the
+-- service role; admins can read it.
+create table if not exists public.thrive4_deactivations (
+  id uuid primary key default gen_random_uuid(),
+  person_guid text not null,
+  name text not null,
+  done_by text not null,
+  done_at timestamptz not null default now(),
+  ok boolean not null,
+  error text
+);
+alter table public.thrive4_deactivations enable row level security;
+revoke all on public.thrive4_deactivations from anon;
+drop policy if exists "admin read thrive4_deactivations" on public.thrive4_deactivations;
+create policy "admin read thrive4_deactivations"
+  on public.thrive4_deactivations
+  for select
+  to authenticated
+  using (lower(coalesce(auth.jwt() -> 'app_metadata' ->> 'role', auth.jwt() -> 'user_metadata' ->> 'role')) = 'admin');
+
 commit;

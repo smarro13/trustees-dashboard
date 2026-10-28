@@ -31,7 +31,13 @@ last month matters.
 live, everyone Thrive4 invoiced this month and the subscriptions that will
 raise next month's invoices. Anyone active in ClubControl is flagged
 **Active: close on Thrive4**: they have moved but Thrive4 is still billing
-them. Nothing is stored, and nothing in Thrive4 is changed.
+them. Checking stores nothing and changes nothing in Thrive4.
+
+Admins also get **Make inactive** (per person) and **Make all N inactive**. This
+does what Thrive4's own "make inactive" does, which drops the person's Thrive4
+subscriptions so no more invoices are raised. Each person is checked again on
+the server first (still billed on Thrive4 and active in ClubControl), and every
+attempt is logged in `thrive4_deactivations`. Undo it in Thrive4 if needed.
 The fetch also stores each person's Thrive4 id (`person_guid`), so two people
 with the same name are kept apart. Uploading the report by hand still works.
 
@@ -43,7 +49,7 @@ Every temporary piece is marked `LoveAdmin migration (temporary)`, so
 1. **Delete these files:**
    - `lib/importers/loveAdminImportParser.ts`
    - `lib/thrive4.ts`, `lib/thrive4Sync.ts`, `pages/api/private/thrive4-sync.ts` and
-     `pages/api/private/thrive4-billing.ts`
+     `pages/api/private/thrive4-billing.ts`, `pages/api/private/thrive4-deactivate.ts`
    - `supabase/policies/membership_loveadmin.sql`
    - `LOVEADMIN_MIGRATION.md` (this file)
 2. **`pages/api/private/membership-import.ts`:** remove the
@@ -79,6 +85,7 @@ Every temporary piece is marked `LoveAdmin migration (temporary)`, so
    ```sql
    begin;
    drop table if exists public.membership_loveadmin;
+   drop table if exists public.thrive4_deactivations;
    delete from public.membership_imports where kind = 'loveadmin';
    alter table public.membership_imports drop constraint if exists membership_imports_kind_check;
    alter table public.membership_imports

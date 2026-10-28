@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { hasMembershipFlag, resolveRoleFromUser } from '../../lib/roles';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import {
   PLAYING_CATEGORIES,
   STATUS_LABELS,
@@ -193,15 +194,21 @@ type Thrive4BillingPerson = {
 
 const sumAmounts = (items: { amount: number | null }[]) => items.reduce((t, i) => t + (i.amount ?? 0), 0);
 
-function Thrive4BillingCard({ open, onToggle, membersByName }: {
+function Thrive4BillingCard({ open, onToggle, membersByName, canClose, setNotice }: {
   open: boolean;
   onToggle: () => void;
   membersByName: Map<string, Member>;
+  // Admins: "Make inactive" buttons (pages/api/private/thrive4-deactivate.ts).
+  canClose: boolean;
+  setNotice: (n: InlineNotice) => void;
 }) {
   const [people, setPeople] = useState<Thrive4BillingPerson[] | null>(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [onlyMoved, setOnlyMoved] = useState(true);
+  // Who the "Make inactive" confirmation is for: one person, or everyone who's moved.
+  const [confirming, setConfirming] = useState<{ guids: string[]; label: string } | null>(null);
+  const [closing, setClosing] = useState(false);
 
   const check = async () => {
     setChecking(true);
@@ -235,6 +242,33 @@ function Thrive4BillingCard({ open, onToggle, membersByName }: {
   const movedDue = moved.reduce((t, r) => t + sumAmounts(r.upcoming), 0);
   const shown = onlyMoved ? moved : rows;
 
+  const close = async () => {
+    if (!confirming) return;
+    setClosing(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const response = await fetch('/api/private/thrive4-deactivate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.session?.access_token ?? ''}` },
+        body: JSON.stringify({ personGuids: confirming.guids }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok && !payload.done?.length) throw new Error(payload.error || 'Making them inactive failed.');
+      const done: string[] = payload.done ?? [];
+      const failed: { name: string; error?: string }[] = payload.failed ?? [];
+      const parts = [`Made ${done.length} ${done.length === 1 ? 'person' : 'people'} inactive on Thrive4.`];
+      if (failed.length) parts.push(`${failed.length} failed: ${failed.map((f) => f.name).join(', ')}.`);
+      if (payload.refused) parts.push(`${payload.refused} skipped: no longer both billed on Thrive4 and active in ClubControl.`);
+      setNotice({ type: failed.length ? 'error' : 'success', message: parts.join(' ') });
+      setConfirming(null);
+      await check();
+    } catch (e: any) {
+      setNotice({ type: 'error', message: e.message });
+      setConfirming(null);
+    }
+    setClosing(false);
+  };
+
   return (
     <section className="mb-8 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-violet-200">
       <div className={`flex flex-wrap items-center justify-between gap-3 bg-violet-50 px-5 py-4 ${open ? 'border-b border-violet-200' : ''}`}>
@@ -249,6 +283,19 @@ function Thrive4BillingCard({ open, onToggle, membersByName }: {
                 <input type="checkbox" checked={onlyMoved} onChange={(e) => setOnlyMoved(e.target.checked)} className="h-4 w-4 rounded border-zinc-300" />
                 Only people who’ve moved
               </label>
+            )}
+            {canClose && people && moved.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setConfirming({
+                  guids: moved.map((r) => r.person_guid),
+                  label: `all ${moved.length} people who’ve moved${movedDue ? ` (${money(movedDue)} due to be invoiced next)` : ''}`,
+                })}
+                disabled={closing || checking}
+                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
+              >
+                Make all {moved.length} inactive
+              </button>
             )}
             <button
               type="button"
@@ -314,7 +361,21 @@ function Thrive4BillingCard({ open, onToggle, membersByName }: {
                       </td>
                       <td className="whitespace-nowrap px-3 py-2">
                         {r.moved
-                          ? <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-800 ring-1 ring-rose-200">Active: close on Thrive4</span>
+                          ? (
+                            <div className="flex flex-col items-start gap-1">
+                              <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-800 ring-1 ring-rose-200">Active: close on Thrive4</span>
+                              {canClose && (
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirming({ guids: [r.person_guid], label: r.name })}
+                                  disabled={closing || checking}
+                                  className="text-xs font-semibold text-rose-700 underline-offset-2 hover:underline disabled:opacity-60"
+                                >
+                                  Make inactive
+                                </button>
+                              )}
+                            </div>
+                          )
                           : <span className="text-zinc-600">{r.clubControl}</span>}
                       </td>
                     </tr>
@@ -325,6 +386,16 @@ function Thrive4BillingCard({ open, onToggle, membersByName }: {
           )}
         </>
       )}
+      <ConfirmDialog
+        open={confirming !== null}
+        title="Make inactive on Thrive4?"
+        description={confirming ? `This makes ${confirming.label} inactive on Thrive4, which stops their Thrive4 subscriptions so no more invoices are raised. Each one is checked again first: only people still billed on Thrive4 and active in ClubControl are changed. Undo it in Thrive4 if needed.` : ''}
+        confirmLabel={closing ? 'Making inactive…' : 'Make inactive'}
+        tone="danger"
+        loading={closing}
+        onConfirm={close}
+        onCancel={() => !closing && setConfirming(null)}
+      />
     </section>
   );
 }
@@ -1535,7 +1606,7 @@ export default function MembershipPage() {
             )}
 
             {/* LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md. */}
-            <Thrive4BillingCard open={openCards.thrive4} onToggle={() => toggleCard('thrive4')} membersByName={membersByName} />
+            <Thrive4BillingCard open={openCards.thrive4} onToggle={() => toggleCard('thrive4')} membersByName={membersByName} canClose={canUpload} setNotice={setNotice} />
 
             <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-amber-200">
               <div className={`flex flex-wrap items-center justify-between gap-3 bg-amber-50 px-5 py-4 ${openCards.inactive ? 'border-b border-amber-200' : ''}`}>

@@ -244,3 +244,32 @@ export async function fetchThrive4Billing(): Promise<Thrive4BillingPerson[]> {
   }
   return [...people.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
+
+// ── Making someone inactive on Thrive4 (the "Make inactive" buttons) ──
+
+// Does what Thrive4's own "make inactive" does for a person (the one an
+// invoice is for, not the payer): their outstanding subscriptions are dropped,
+// so no more invoices are raised. Thrive4 sends this as a DELETE with
+// inactive: true. It is ALWAYS sent with inactive: true here; the same call
+// without it may delete the person outright.
+//
+// One request per person, so one failure doesn't stop the rest.
+export async function makeThrive4Inactive(personGuids: string[]): Promise<{ person_guid: string; ok: boolean; error?: string }[]> {
+  const session = await signIn();
+  const results: { person_guid: string; ok: boolean; error?: string }[] = [];
+  for (const guid of personGuids) {
+    const response = await call(
+      `${THRIVE4}/services/registration/person`,
+      {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ personGuids: [guid], inactive: true }),
+      },
+      session,
+    ).catch((e: Error) => e);
+    if (response instanceof Error) results.push({ person_guid: guid, ok: false, error: response.message });
+    else if (!response.ok) results.push({ person_guid: guid, ok: false, error: `Thrive4 said no (${response.status}).` });
+    else results.push({ person_guid: guid, ok: true });
+  }
+  return results;
+}
