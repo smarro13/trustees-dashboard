@@ -2,7 +2,7 @@ import { nameKey } from './membership';
 import type { ImportedPlayer } from './importers/membershipImportParser';
 
 // Fetches the club's player list from RFU GMS, the same list an admin exports
-// from Player Management → Player List and uploads on /operations/membership.
+// from Player Management → Player List and used to upload on /operations/membership.
 // Server-side only (lib/gmsSync.ts).
 //
 // GMS has no public API. Logging in: GMS hands over to the England Rugby
@@ -119,7 +119,7 @@ async function logIn(jars: Jars, email: string, password: string) {
   if (submitted.status < 300 || submitted.status >= 400) {
     const html = await submitted.text();
     if (/captcha/i.test(html) && /(data-captcha|captcha-container|ulp-captcha)/i.test(html)) {
-      throw new GmsError('The England Rugby sign-in asked for a captcha, so the automatic login was refused. Upload the player list by hand this time.');
+      throw new GmsError('The England Rugby sign-in asked for a captcha, so the automatic login was refused. The last player list is still in use; try fetching again later.');
     }
     throw new GmsError('The England Rugby sign-in rejected the login. Check GMS_EMAIL and GMS_PASSWORD.');
   }
@@ -234,7 +234,7 @@ export async function fetchGmsPlayers(): Promise<GmsFetch> {
         gms_status: listValue(row.Status),
       };
       // A player with more than one registration is listed once per
-      // registration; they count once (as in the manual upload).
+      // registration; they count once (as the old manual upload did).
       players.set(`${player.name_key}|${player.date_of_birth ?? ''}`, player);
     }
   }

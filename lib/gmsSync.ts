@@ -3,7 +3,7 @@ import { GmsError, fetchGmsPlayers } from './gms';
 import { currentPlayersCount, savePlayers } from './membershipStore';
 
 // Fetch the player list from RFU GMS (lib/gms.ts) and save it exactly as a
-// manual upload on /operations/membership would: new players are added and
+// manual upload on /operations/membership used to: new players are added and
 // existing ones updated; nobody is removed. Used by the weekly fetch and the
 // "Fetch from GMS now" button (pages/api/private/gms-sync.ts), and by the
 // meeting-day membership report (pages/api/cron/membership-report.ts).
@@ -31,7 +31,7 @@ export async function syncPlayersFromGms(admin: SupabaseClient, uploadedBy: stri
     return {
       ok: false,
       status: 409,
-      error: `GMS returned ${players.length} players, against ${previous} last time, so nothing was saved. Check GMS, or upload the player list by hand.`,
+      error: `GMS returned ${players.length} players, against ${previous} last time, so nothing was saved and the last list is still in use. Check GMS, then fetch again.`,
     };
   }
 

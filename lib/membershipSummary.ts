@@ -14,7 +14,7 @@ import {
 
 // The membership figures for the agenda (pages/agenda/membership.tsx) and the
 // printable detailed report (pages/operations/membership/report.tsx), worked
-// out from the same uploads and rules as /operations/membership: hidden people
+// out from the same fetched data and rules as /operations/membership: hidden people
 // are left out, a player is paid when their name matches an active
 // ClubControl member, and someone listed twice in GMS counts once in totals.
 //
@@ -261,4 +261,4 @@ export const formatMoney = (value: number) =>
   value.toLocaleString('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: value % 1 ? 2 : 0 });
 
 export const formatUploadDate = (value: string | null) =>
-  value ? new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'not uploaded';
+  value ? new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'not fetched yet';

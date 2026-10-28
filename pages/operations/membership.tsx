@@ -24,13 +24,15 @@ import {
   type TeamGroup,
 } from '../../lib/membership';
 
-// Who's paid their membership, team by team. Players come from the RFU GMS
-// player list, payments from the ClubControl members export — both uploaded here
-// by admins via pages/api/private/membership-import.ts. Tables and access
-// rules are in supabase/policies/membership.sql: admins, trustees and
-// directors can view and comment; only admins can upload, and hide people
-// from the report (they then appear on the admins' Hidden tab). Comments
-// are saved by pages/api/private/membership-note.ts.
+// Who's paid their membership, team by team. All of it is fetched live and
+// automatically (every Monday, on meeting days, or by an admin's "Fetch …
+// now" button): players from the RFU GMS player list, payments from the
+// ClubControl members export, and LoveAdmin payments from Thrive4. Nothing
+// is uploaded by hand. Tables and access rules are in
+// supabase/policies/membership.sql: admins, trustees and directors can view
+// and comment; only admins can fetch, and hide people from the report (they
+// then appear on the admins' Hidden tab). Comments are saved by
+// pages/api/private/membership-note.ts.
 
 type Member = {
   id: string;
@@ -97,15 +99,8 @@ type Card = 'byTeam' | 'players' | 'notOnGms' | 'loveAdmin' | 'thrive4' | 'inact
 const DEFAULT_OPEN: Record<Card, boolean> = { byTeam: true, players: true, notOnGms: false, loveAdmin: false, thrive4: false, inactive: false };
 const OPEN_CARDS_KEY = 'membership-open-cards';
 
-type MembersPreview = { total: number; inactive: number };
-type PlayersPreview = {
-  total: number;
-  added: number;
-  updated: number;
-  perTeam: Record<string, number>;
-};
 
-// 'dor' = Director of Rugby (sees the players; can comment, can't upload or hide).
+// 'dor' = Director of Rugby (sees the players; can comment, can't fetch or hide).
 // Anyone else given the membership switch on /admin/roles gets the same access.
 const VIEW_ROLES = new Set(['admin', 'trustee', 'director', 'dor']);
 const PAGE_SIZE = 1000;
@@ -160,12 +155,6 @@ async function loadMembers(importId: string): Promise<Member[]> {
   }
 }
 
-const fileToBase64 = async (file: File) => {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(binary);
-};
 
 function StatTile({ label, value, detail, tone }: { label: string; value: string; detail?: string; tone?: string }) {
   return (
@@ -718,128 +707,6 @@ function NoteCell({
   );
 }
 
-function UploadPanel({ onSaved, setNotice }: { onSaved: () => Promise<void>; setNotice: (n: InlineNotice) => void }) {
-  const [kind, setKind] = useState<'members' | 'players'>('members');
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<MembersPreview | PlayersPreview | null>(null);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [inputKey, setInputKey] = useState(0);
-
-  const reset = () => {
-    setFile(null); setPreview(null); setError(''); setInputKey((k) => k + 1);
-  };
-
-  const send = async (selected: File, apply: boolean) => {
-    setBusy(true);
-    setError('');
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const response = await fetch('/api/private/membership-import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.session?.access_token ?? ''}` },
-        body: JSON.stringify({
-          kind,
-          filename: selected.name,
-          contentBase64: await fileToBase64(selected),
-          apply,
-        }),
-      });
-      const body = await response.json();
-      if (!response.ok || !body.ok) { setError(body.error ?? 'Upload failed.'); return; }
-      if (!apply) {
-        setPreview(body.preview);
-        return;
-      }
-      setNotice({
-        type: 'success',
-        message: kind === 'members'
-          ? `ClubControl export saved — ${body.saved.total} members.`
-          : `GMS player list saved — ${body.saved.added} added, ${body.saved.updated} updated.`,
-      });
-      reset();
-      await onSaved();
-    } catch {
-      setError('Upload failed. Check your connection and try again.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const playersPreview = kind === 'players' ? (preview as PlayersPreview | null) : null;
-  const membersPreview = kind === 'members' ? (preview as MembersPreview | null) : null;
-
-  return (
-    <section className="mb-8 rounded-2xl bg-white shadow-sm ring-1 ring-blue-200">
-      <div className="border-b border-blue-200 bg-blue-50 px-5 py-3">
-        <h2 className="text-lg font-semibold text-zinc-900">Upload data</h2>
-        <p className="text-xs text-zinc-600">Nothing is saved until you check the summary and press Apply.</p>
-      </div>
-      <div className="space-y-4 px-5 py-4">
-        <div className="flex flex-wrap gap-2">
-          <Chip active={kind === 'members'} onClick={() => { setKind('members'); reset(); }}>ClubControl members export</Chip>
-          <Chip active={kind === 'players'} onClick={() => { setKind('players'); reset(); }}>GMS player list</Chip>
-        </div>
-        <p className="text-sm text-zinc-600">
-          {kind === 'members'
-            ? 'The members .csv from ClubControl. It replaces the previous export.'
-            : 'The player list from GMS (.xlsx or .csv). New players are added and existing ones updated — nobody is removed. Teams come from each player’s date of birth and gender.'}
-        </p>
-        <input
-          key={inputKey}
-          type="file"
-          accept={kind === 'members' ? '.csv' : '.xlsx,.csv'}
-          disabled={busy}
-          className="block w-full text-sm text-zinc-700 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
-          onChange={(e) => {
-            const selected = e.target.files?.[0] ?? null;
-            setFile(selected); setPreview(null);
-            if (selected) void send(selected, false);
-          }}
-        />
-
-        {busy && !preview && <p className="text-sm text-zinc-400">Reading file…</p>}
-        {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
-
-        {membersPreview && (
-          <div className="rounded-lg bg-zinc-50 p-4 text-sm ring-1 ring-zinc-200">
-            <p className="font-medium text-zinc-900">{membersPreview.total} members, {membersPreview.inactive} inactive.</p>
-            <p className="mt-1 text-zinc-600">This replaces the current ClubControl data.</p>
-          </div>
-        )}
-
-        {playersPreview && (
-          <div className="space-y-3 rounded-lg bg-zinc-50 p-4 text-sm ring-1 ring-zinc-200">
-            <p className="font-medium text-zinc-900">
-              {playersPreview.total} players: {playersPreview.added} new, {playersPreview.updated} already uploaded.
-            </p>
-            <ul className="flex flex-wrap gap-1.5">
-              {[...TEAMS.map((t) => t.name), 'No date of birth']
-                .filter((name) => playersPreview.perTeam[name])
-                .map((name) => (
-                  <li key={name} className="rounded-md bg-white px-2 py-1 text-xs text-zinc-700 ring-1 ring-zinc-200">
-                    {name} <span className="font-semibold tabular-nums">{playersPreview.perTeam[name]}</span>
-                  </li>
-                ))}
-            </ul>
-          </div>
-        )}
-
-        {preview && file && (
-          <div className="flex justify-end gap-2">
-            <button type="button" onClick={reset} disabled={busy} className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50">
-              Cancel
-            </button>
-            <button type="button" onClick={() => void send(file, true)} disabled={busy} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-              {busy ? 'Working…' : 'Apply'}
-            </button>
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
 export default function MembershipPage() {
   const [role, setRole] = useState<string | null>(null);
   const [checkedRole, setCheckedRole] = useState(false);
@@ -874,7 +741,6 @@ export default function MembershipPage() {
     });
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
-  const [showUpload, setShowUpload] = useState(false);
   const [fetching, setFetching] = useState<FetchSource | null>(null);
 
   // Fetches the latest data straight from ClubControl, GMS or Thrive4 (all
@@ -1153,7 +1019,7 @@ export default function MembershipPage() {
         return {
           note: n,
           team: player?.team ?? null,
-          status: player ? STATUS_LABELS[player.status] : member ? (paidAnywhere(member) ? 'Active member' : 'Inactive member') : 'Not in the latest uploads',
+          status: player ? STATUS_LABELS[player.status] : member ? (paidAnywhere(member) ? 'Active member' : 'Inactive member') : 'Not in the latest data',
         };
       })
       .sort((a, b) => a.note.display_name.localeCompare(b.note.display_name));
@@ -1192,8 +1058,8 @@ export default function MembershipPage() {
             <p className="mt-1 text-zinc-600">Who’s paid their membership, team by team.</p>
             {canView && !loading && (
               <p className="mt-1 text-xs text-zinc-500">
-                ClubControl export: {membersImport ? shortDate(membersImport.uploaded_at) : 'not uploaded yet'}
-                {' · '}GMS player list: {playersImport ? shortDate(playersImport.uploaded_at) : 'not uploaded yet'}
+                ClubControl: {membersImport ? shortDate(membersImport.uploaded_at) : 'not fetched yet'}
+                {' · '}GMS: {playersImport ? shortDate(playersImport.uploaded_at) : 'not fetched yet'}
                 {/* LoveAdmin migration (temporary) */}
                 {' · '}Thrive4 (LoveAdmin): {loveAdminImport ? shortDate(loveAdminImport.uploaded_at) : 'not fetched yet'}
               </p>
@@ -1226,21 +1092,11 @@ export default function MembershipPage() {
                 ))}
               </>
             )}
-            {canUpload && (
-              <button
-                type="button"
-                onClick={() => setShowUpload((v) => !v)}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                {showUpload ? 'Close upload' : '⬆ Upload data'}
-              </button>
-            )}
           </div>
         </header>
 
         <InlineNoticeBanner notice={notice} className="mb-6" />
 
-        {canUpload && showUpload && <UploadPanel onSaved={loadData} setNotice={setNotice} />}
 
         {!checkedRole || loading ? (
           <p className="text-sm text-zinc-400">Loading…</p>
@@ -1444,7 +1300,7 @@ export default function MembershipPage() {
               </div>
               {visiblePlayers.length === 0 ? (
                 <p className="px-5 py-6 text-sm text-zinc-400">
-                  {filteredPlayers.length === 0 ? 'No players uploaded for this selection yet.' : 'No players match.'}
+                  {filteredPlayers.length === 0 ? 'No players for this selection yet.' : 'No players match.'}
                 </p>
               ) : (
                 <>
@@ -1555,7 +1411,7 @@ export default function MembershipPage() {
               </div>
               {!openCards.notOnGms ? null : notOnGms.length === 0 ? (
                 <p className="px-5 py-6 text-sm text-zinc-400">
-                  {members.length === 0 || players.length === 0 ? 'Upload both the ClubControl export and the GMS player list to see this.' : 'Everyone with a playing membership is on GMS.'}
+                  {members.length === 0 || players.length === 0 ? 'This needs both ClubControl and GMS data: fetch them to see it.' : 'Everyone with a playing membership is on GMS.'}
                 </p>
               ) : (
                 <>
@@ -1741,7 +1597,7 @@ export default function MembershipPage() {
               </div>
               {!openCards.inactive ? null : inactiveMembers.length === 0 ? (
                 <p className="px-5 py-6 text-sm text-zinc-400">
-                  {members.length === 0 ? 'No ClubControl export uploaded yet.' : 'No inactive members for this selection.'}
+                  {members.length === 0 ? 'No ClubControl data yet.' : 'No inactive members for this selection.'}
                 </p>
               ) : (
                 <>

@@ -4,7 +4,7 @@ import { parseMembersCsv } from './importers/membershipImportParser';
 import { currentMembersCount, saveMembersExport } from './membershipStore';
 
 // Fetch the members export from ClubControl and save it exactly as a manual
-// upload on /operations/membership would. Used by the weekly fetch and the
+// upload on /operations/membership used to. Used by the weekly fetch and the
 // "Fetch from ClubControl now" button (pages/api/private/clubcontrol-sync.ts)
 // and by the meeting-day membership report (pages/api/cron/membership-report.ts),
 // which fetches first so the meeting gets that day's figures.
@@ -46,7 +46,7 @@ export async function syncMembersFromClubControl(admin: SupabaseClient, uploaded
     return {
       ok: false,
       status: 409,
-      error: `ClubControl's export has ${members.length} members, against ${previous} last time, so it wasn't saved. Check ClubControl, or upload the export by hand.`,
+      error: `ClubControl's export has ${members.length} members, against ${previous} last time, so it wasn't saved and the last export is still in use. Check ClubControl, then fetch again.`,
     };
   }
 

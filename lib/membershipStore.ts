@@ -3,9 +3,8 @@ import type { ImportedMember, ImportedPlayer } from './importers/membershipImpor
 // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
 import type { ImportedLoveAdminPayment } from './importers/loveAdminImportParser';
 
-// Saving a ClubControl members export or a GMS player list, shared by the
-// manual upload (pages/api/private/membership-import.ts) and the automatic
-// fetches (lib/clubcontrolSync.ts, lib/gmsSync.ts). Server-side only:
+// Saving a ClubControl members export or a GMS player list, from the
+// automatic fetches (lib/clubcontrolSync.ts, lib/gmsSync.ts). Server-side only:
 // takes a service-role client. Tables are in supabase/policies/membership.sql.
 
 const INSERT_BATCH = 500;
@@ -59,7 +58,7 @@ export async function currentMembersCount(admin: SupabaseClient): Promise<number
   return data?.row_count ?? null;
 }
 
-// Saving a GMS player list, shared by the manual upload and the automatic
+// Saving a GMS player list, from the automatic
 // fetch from GMS (lib/gmsSync.ts). Adds new players and updates existing ones
 // (matched on name and date of birth); never removes anyone.
 export async function savePlayers(
@@ -97,7 +96,7 @@ export async function currentPlayersCount(admin: SupabaseClient): Promise<number
 }
 
 // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
-// Replaces the previous LoveAdmin invoices, from an uploaded report or the
+// Replaces the previous LoveAdmin invoices, from the
 // Thrive4 fetch (lib/thrive4Sync.ts). The old rows go only once the new ones
 // are all in.
 export async function saveLoveAdminPayments(

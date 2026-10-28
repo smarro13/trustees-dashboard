@@ -1,5 +1,5 @@
 // Fetches the members export from ClubControl Hub, the same CSV an admin
-// downloads from Reports → Members and uploads on /operations/membership.
+// downloads from Reports → Members (once uploaded by hand on /operations/membership).
 // Server-side only (pages/api/private/clubcontrol-sync.ts).
 //
 // ClubControl has no API: it's a Laravel site with a normal login form, so

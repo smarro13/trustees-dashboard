@@ -86,10 +86,7 @@ Every temporary piece is marked `LoveAdmin migration (temporary)`, so
    `hasActiveMandate`, `ClubControlMandate`) can go too, unless something else
    uses it by then. Remove the `THRIVE4_*` lines in `.env.local.example`, and
    `THRIVE4_EMAIL` / `THRIVE4_PASSWORD` in Vercel.
-4. **`lib/importers/membershipImportParser.ts`:** `readXlsxSheets` and
-   `cellDate` were exported for the old LoveAdmin parser. They can stay
-   exported, or go back to plain `function`s.
-5. **Database** (Supabase SQL editor), after the code change is deployed:
+4. **Database** (Supabase SQL editor), after the code change is deployed:
 
    ```sql
    begin;
@@ -102,7 +99,7 @@ Every temporary piece is marked `LoveAdmin migration (temporary)`, so
    commit;
    ```
 
-6. Check: `git grep -n "LoveAdmin migration"` finds nothing, and
+5. Check: `git grep -n "LoveAdmin migration"` finds nothing, and
    `npx tsc --noEmit` passes.
 
 Keep ClubControl's billing method (`billing_method`, `DIRECT_DEBIT_ACTIVE`,
