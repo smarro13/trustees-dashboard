@@ -199,7 +199,7 @@ function matchLoveAdminName(
 
 // The ClubControl column on the LoveAdmin cards: how they pay, the matched
 // name when it differs, and a flag for anyone not on ClubControl at all.
-function ClubControlStatus({ row }: { row: { clubControl: string; clubControlName: string | null; notOnClubControl: boolean } }) {
+function ClubControlStatus({ row }: { row: { clubControl: string; clubControlName: string | null; notOnClubControl: boolean; payerNotLinked?: string | null } }) {
   if (row.notOnClubControl) {
     return (
       <span className="inline-flex whitespace-nowrap rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700 ring-1 ring-rose-200" title="No one with this name (or a near match) is in ClubControl">
@@ -211,6 +211,11 @@ function ClubControlStatus({ row }: { row: { clubControl: string; clubControlNam
     <span className="text-zinc-600">
       {row.clubControl}
       {row.clubControlName && <span className="block text-xs text-zinc-400">as {row.clubControlName} in ClubControl</span>}
+      {row.payerNotLinked && (
+        <span className="block whitespace-normal text-xs font-medium text-amber-700">
+          Their LoveAdmin payer, {row.payerNotLinked}, has an active ClubControl mandate, but they aren’t on that account: link them in ClubControl.
+        </span>
+      )}
     </span>
   );
 }
@@ -1063,6 +1068,12 @@ export default function MembershipPage() {
           ...l,
           team: playersByKey.get(l.name_key)?.team ?? null,
           ...matchLoveAdminName(l.beneficiary, billingNames, membersByName, memberNameById),
+          // Their LoveAdmin payer has moved (an active mandate) but this person
+          // wasn't added to the payer's ClubControl account.
+          payerNotLinked:
+            l.payer && nameKey(l.payer, '') !== l.name_key && paysByDirectDebit(findClubControl(l.payer, billingNames)?.record)
+              ? l.payer
+              : null,
         };
       })
       .filter((l) => filter === 'all' || (l.team !== null && teamNamesInFilter.has(l.team)))
