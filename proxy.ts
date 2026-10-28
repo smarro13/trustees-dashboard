@@ -91,6 +91,10 @@ const getRequiredRoleForPath = (pathname: string): DashboardRole => {
 // pages with no role requirement (meetings, operations, admin).
 const DOR_PATHS = new Set(['/', '/agenda/rugby', '/operations/membership', '/operations/membership/report']);
 
+// Pages opened up by the per-user membership switch on /admin/roles
+// (app_metadata.membership_access), whatever the user's role.
+const MEMBERSHIP_PATHS = new Set(['/operations/membership', '/operations/membership/report']);
+
 const hasRequiredRole = (actual: DashboardRole, required: DashboardRole) => {
   if (!required) return true;
   if (!actual) return false;
@@ -264,6 +268,10 @@ export async function proxy(req: NextRequest) {
           redirectUrl.searchParams.set('access', 'denied');
           return NextResponse.redirect(redirectUrl);
         }
+        return response;
+      }
+
+      if (MEMBERSHIP_PATHS.has(req.nextUrl.pathname) && (user?.app_metadata as any)?.membership_access === true) {
         return response;
       }
 

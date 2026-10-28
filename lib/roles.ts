@@ -66,6 +66,11 @@ export const resolveRoleFromUser = (user: any): DashboardRole => {
   return getHighestRoleFromList(appRoles) || getHighestRoleFromList(userRoles);
 };
 
+// Membership access for someone whose role doesn't include it, e.g. a coach
+// on the commercial team. Set per user on /admin/roles. It lives in
+// app_metadata, which users can't edit themselves.
+export const hasMembershipFlag = (user: any): boolean => user?.app_metadata?.membership_access === true;
+
 export const getCurrentUserRole = async (): Promise<DashboardRole> => {
   const { data } = await supabase.auth.getUser();
   return resolveRoleFromUser(data.user);

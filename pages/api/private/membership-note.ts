@@ -4,7 +4,8 @@ import { createClient } from '@supabase/supabase-js';
 // Saves a comment on a person on /operations/membership, and the admin-only
 // "hide from report" flag (membership_notes in supabase/policies/membership.sql).
 //
-// Admins, trustees and directors can comment; only admins can hide or unhide.
+// Admins, trustees, directors, the Director of Rugby and anyone given the
+// membership switch on /admin/roles can comment; only admins can hide or unhide.
 // Hiding someone needs a comment, and a hidden person's comment can't be
 // cleared. A comment that's cleared on someone who isn't hidden is deleted.
 
@@ -50,7 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
   if (userError || !user) return res.status(401).json({ ok: false, error: 'Unauthorized' });
   const role = resolveRole(user);
-  if (!COMMENT_ROLES.includes(role)) {
+  if (!COMMENT_ROLES.includes(role) && (user.app_metadata as any)?.membership_access !== true) {
     return res.status(403).json({ ok: false, error: 'Your role cannot comment on membership records.' });
   }
 

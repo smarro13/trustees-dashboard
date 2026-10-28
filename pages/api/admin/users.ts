@@ -103,6 +103,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     id: user.id,
     email: user.email || '',
     role: resolveRole(user),
+    membership_access: (user.app_metadata as any)?.membership_access === true,
     created_at: user.created_at,
     last_sign_in_at: user.last_sign_in_at,
   }));

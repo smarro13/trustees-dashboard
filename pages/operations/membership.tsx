@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
-import { resolveRoleFromUser } from '../../lib/roles';
+import { hasMembershipFlag, resolveRoleFromUser } from '../../lib/roles';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
 import {
   PLAYING_CATEGORIES,
@@ -95,6 +95,7 @@ type PlayersPreview = {
 };
 
 // 'dor' = Director of Rugby (sees the players; can comment, can't upload or hide).
+// Anyone else given the membership switch on /admin/roles gets the same access.
 const VIEW_ROLES = new Set(['admin', 'trustee', 'director', 'dor']);
 const PAGE_SIZE = 1000;
 
@@ -522,6 +523,7 @@ function UploadPanel({ onSaved, setNotice }: { onSaved: () => Promise<void>; set
 export default function MembershipPage() {
   const [role, setRole] = useState<string | null>(null);
   const [checkedRole, setCheckedRole] = useState(false);
+  const [membershipFlag, setMembershipFlag] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [imports, setImports] = useState<Import[]>([]);
@@ -638,15 +640,17 @@ export default function MembershipPage() {
     const init = async () => {
       const { data } = await supabase.auth.getUser();
       const userRole = resolveRoleFromUser(data.user);
+      const flagged = hasMembershipFlag(data.user);
       setRole(userRole);
+      setMembershipFlag(flagged);
       setCheckedRole(true);
-      if (userRole && VIEW_ROLES.has(userRole)) await loadData();
+      if ((userRole && VIEW_ROLES.has(userRole)) || flagged) await loadData();
       else setLoading(false);
     };
     void init();
   }, []);
 
-  const canView = !!role && VIEW_ROLES.has(role);
+  const canView = (!!role && VIEW_ROLES.has(role)) || membershipFlag;
   const canUpload = role === 'admin';
   const months = monthsIntoSeason();
   // e.g. "since Sep ’26"

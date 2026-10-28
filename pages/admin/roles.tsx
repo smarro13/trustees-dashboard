@@ -8,6 +8,7 @@ type AdminUser = {
   id: string;
   email: string;
   role: DashboardRole;
+  membership_access?: boolean;
   created_at?: string | null;
   last_sign_in_at?: string | null;
 };
@@ -37,6 +38,7 @@ export default function AdminRolesPage() {
   const [draftRoles, setDraftRoles] = useState<Record<string, string>>({});
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [forcingSignOutId, setForcingSignOutId] = useState<string | null>(null);
+  const [membershipSavingId, setMembershipSavingId] = useState<string | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -147,6 +149,35 @@ export default function AdminRolesPage() {
     );
     setStatus('Role updated successfully.');
     setSavingUserId(null);
+  };
+
+  // Membership switch: read access to /operations/membership on top of the
+  // user's role (e.g. a coach on the commercial team). Saves straight away.
+  const setMembershipAccess = async (userId: string, enabled: boolean) => {
+    setMembershipSavingId(userId);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) { setStatus('Not logged in.'); setMembershipSavingId(null); return; }
+
+    const response = await fetch('/api/admin/membership-access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ userId, enabled }),
+    });
+    const payload = await response.json();
+    setMembershipSavingId(null);
+    if (!response.ok || !payload.ok) {
+      setStatus(payload.error || 'Unable to change membership access.');
+      return;
+    }
+    setUsers((current) =>
+      current.map((user) => (user.id === userId ? { ...user, membership_access: payload.membership_access } : user)),
+    );
+    setStatus(
+      enabled
+        ? 'Membership access on. They need to sign in again (or use Sign out) to pick it up.'
+        : 'Membership access off. Use Sign out so it takes effect straight away.',
+    );
   };
 
   const forceSignOut = async (userId: string) => {
@@ -358,6 +389,7 @@ export default function AdminRolesPage() {
                       <th className="px-3 py-2 text-left font-semibold text-zinc-700">Current role</th>
                       <th className="px-3 py-2 text-left font-semibold text-zinc-700">New role</th>
                       <th className="px-3 py-2 text-left font-semibold text-zinc-700">Save</th>
+                      <th className="px-3 py-2 text-left font-semibold text-zinc-700" title="Read access to the Membership page on top of their role, e.g. a coach">Membership</th>
                       <th className="px-3 py-2 text-left font-semibold text-zinc-700">Force sign out</th>
                       <th className="px-3 py-2 text-left font-semibold text-zinc-700">Delete</th>
                     </tr>
@@ -398,6 +430,18 @@ export default function AdminRolesPage() {
                           >
                             {savingUserId === user.id ? 'Saving...' : 'Save role'}
                           </button>
+                        </td>
+                        <td className="px-3 py-2">
+                          <label className="inline-flex items-center gap-2 text-xs text-zinc-700">
+                            <input
+                              type="checkbox"
+                              checked={!!user.membership_access}
+                              disabled={membershipSavingId === user.id}
+                              onChange={(event) => setMembershipAccess(user.id, event.target.checked)}
+                              className="h-4 w-4 rounded border-zinc-300"
+                            />
+                            {membershipSavingId === user.id ? 'Saving...' : 'Access'}
+                          </label>
                         </td>
                         <td className="px-3 py-2">
                           {user.id !== currentUserId ? (
