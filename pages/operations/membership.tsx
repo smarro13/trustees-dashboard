@@ -13,6 +13,7 @@ import {
   ageOn,
   DIRECT_DEBIT_ACTIVE,
   billingByName,
+  type ClubControlBilling,
   isPaidUp,
   isSideCategory,
   monthsIntoSeason,
@@ -41,6 +42,8 @@ type Member = {
   active: boolean;
   // ClubControl's billing method, e.g. "Direct Debit: Active" (automatic fetch only).
   billing_method?: string | null;
+  // ClubControl's member id (the export's "Id").
+  external_id?: string | null;
 };
 
 type Player = {
@@ -146,7 +149,7 @@ async function loadAll<T>(query: (from: number, to: number) => PromiseLike<{ dat
 // The members export's rows, with ClubControl's billing method when the
 // column exists (supabase/policies/membership_billing_method.sql); without it
 // until that has been run.
-const MEMBER_COLUMNS = 'id, first_name, last_name, email, categories, renewal_date, active';
+const MEMBER_COLUMNS = 'id, first_name, last_name, email, categories, renewal_date, active, external_id';
 async function loadMembers(importId: string): Promise<Member[]> {
   const load = (columns: string) =>
     loadAll<Member>((from, to) =>
@@ -212,6 +215,21 @@ type Thrive4BillingPerson = {
   invoiced: { id: number; date: string | null; amount: number | null; status: string | null }[];
 };
 
+// A member's direct debit mandate on ClubControl, read live by
+// pages/api/private/clubcontrol-mandates.ts (lib/clubcontrol.ts).
+type ClubControlMandate = {
+  member_id: string;
+  url: string;
+  mandate_id: string | null;
+  mandate_status: string | null;
+  payment_amount: string | null;
+  payment_date: string | null;
+  payment_type: string | null;
+  renewal_due: string | null;
+};
+// Same rule as lib/clubcontrol.ts hasActiveMandate (which the server applies again).
+const hasActiveMandate = (m: ClubControlMandate | undefined) => !!m?.mandate_id && /^active$/i.test(m.mandate_status ?? '');
+
 const sumAmounts = (items: { amount: number | null }[]) => items.reduce((t, i) => t + (i.amount ?? 0), 0);
 
 function Thrive4BillingCard({ open, onToggle, membersByName, billing, canClose, setNotice }: {
@@ -219,7 +237,7 @@ function Thrive4BillingCard({ open, onToggle, membersByName, billing, canClose, 
   onToggle: () => void;
   membersByName: Map<string, Member>;
   // Each name's ClubControl billing method (billingByName in lib/membership.ts).
-  billing: Map<string, string | null>;
+  billing: Map<string, ClubControlBilling>;
   // Admins: "Make inactive" buttons (pages/api/private/thrive4-deactivate.ts).
   canClose: boolean;
   setNotice: (n: InlineNotice) => void;
@@ -231,6 +249,10 @@ function Thrive4BillingCard({ open, onToggle, membersByName, billing, canClose, 
   // Who the "Make inactive" confirmation is for: one person, or everyone who's moved.
   const [confirming, setConfirming] = useState<{ guids: string[]; label: string } | null>(null);
   const [closing, setClosing] = useState(false);
+  // Admins: each moved person's ClubControl mandate, by ClubControl member id.
+  const [mandates, setMandates] = useState<Map<string, ClubControlMandate>>(new Map());
+  const [mandatesLoading, setMandatesLoading] = useState(false);
+  const [mandatesError, setMandatesError] = useState<string | null>(null);
 
   const check = async () => {
     setChecking(true);
@@ -257,15 +279,43 @@ function Thrive4BillingCard({ open, onToggle, membersByName, billing, canClose, 
           // isn't enough: everyone was brought across from LoveAdmin as active.
           const key = nameKey(p.name, '');
           const member = membersByName.get(key) ?? null;
-          const method = billing.get(key) ?? null;
+          const method = billing.get(key)?.billing_method ?? null;
           const clubControl = !member ? 'Not on ClubControl' : method ?? (isPaidUp(member) ? 'Active, billing not known' : 'Inactive');
-          return { ...p, clubControl, moved: method === DIRECT_DEBIT_ACTIVE };
+          return { ...p, clubControl, memberId: billing.get(key)?.external_id ?? null, moved: method === DIRECT_DEBIT_ACTIVE };
         })
         .sort((a, b) => Number(b.moved) - Number(a.moved) || a.name.localeCompare(b.name)),
     [people, membersByName, billing],
   );
   const moved = rows.filter((r) => r.moved);
-  const billingKnown = [...billing.values()].some((b) => b !== null);
+  // Only someone with an active mandate on ClubControl can be made inactive.
+  const closable = moved.filter((r) => r.memberId && hasActiveMandate(mandates.get(r.memberId)));
+  const movedIds = moved.map((r) => r.memberId).filter((id): id is string => !!id).join(',');
+
+  // After each check, read the mandates of everyone who's moved.
+  useEffect(() => {
+    if (!canClose || !movedIds) return;
+    let cancelled = false;
+    (async () => {
+      setMandatesLoading(true);
+      setMandatesError(null);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const response = await fetch('/api/private/clubcontrol-mandates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.session?.access_token ?? ''}` },
+          body: JSON.stringify({ memberIds: movedIds.split(',') }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.ok) throw new Error(payload.error || 'Reading the ClubControl mandates failed.');
+        if (!cancelled) setMandates(new Map((payload.mandates as ClubControlMandate[]).map((m) => [m.member_id, m])));
+      } catch (e: any) {
+        if (!cancelled) setMandatesError(e.message);
+      }
+      if (!cancelled) setMandatesLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [canClose, movedIds, people]);
+  const billingKnown = [...billing.values()].some((b) => b.billing_method !== null);
   const movedDue = moved.reduce((t, r) => t + sumAmounts(r.upcoming), 0);
   const shown = onlyMoved ? moved : rows;
 
@@ -285,7 +335,7 @@ function Thrive4BillingCard({ open, onToggle, membersByName, billing, canClose, 
       const failed: { name: string; error?: string }[] = payload.failed ?? [];
       const parts = [`Made ${done.length} ${done.length === 1 ? 'person' : 'people'} inactive on Thrive4.`];
       if (failed.length) parts.push(`${failed.length} failed: ${failed.map((f) => f.name).join(', ')}.`);
-      if (payload.refused) parts.push(`${payload.refused} skipped: no longer both billed on Thrive4 and on an active ClubControl direct debit.`);
+      if (payload.refused) parts.push(`${payload.refused} skipped: no longer billed on Thrive4 with an active ClubControl mandate.`);
       setNotice({ type: failed.length ? 'error' : 'success', message: parts.join(' ') });
       setConfirming(null);
       await check();
@@ -311,17 +361,17 @@ function Thrive4BillingCard({ open, onToggle, membersByName, billing, canClose, 
                 Only people who’ve moved
               </label>
             )}
-            {canClose && people && moved.length > 0 && (
+            {canClose && people && closable.length > 0 && (
               <button
                 type="button"
                 onClick={() => setConfirming({
-                  guids: moved.map((r) => r.person_guid),
-                  label: `all ${moved.length} people who’ve moved${movedDue ? ` (${money(movedDue)} due to be invoiced next)` : ''}`,
+                  guids: closable.map((r) => r.person_guid),
+                  label: `all ${closable.length} people with an active ClubControl mandate`,
                 })}
-                disabled={closing || checking}
+                disabled={closing || checking || mandatesLoading}
                 className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
               >
-                Make all {moved.length} inactive
+                Make all {closable.length} inactive
               </button>
             )}
             <button
@@ -352,6 +402,15 @@ function Thrive4BillingCard({ open, onToggle, membersByName, billing, canClose, 
               : `${moved.length} ${moved.length === 1 ? 'person has' : 'people have'} moved to ClubControl but ${moved.length === 1 ? 'is' : 'are'} still on Thrive4${movedDue ? `: ${money(movedDue)} due to be invoiced next` : ''}.`}
             {' '}<span className="text-zinc-500">Thrive4 is billing {rows.length} people in all.</span>
           </p>
+          {canClose && moved.length > 0 && (
+            <p className={`px-5 pt-2 text-xs ${mandatesError ? 'text-rose-600' : 'text-zinc-500'}`}>
+              {mandatesError
+                ? mandatesError
+                : mandatesLoading
+                  ? 'Reading each person’s direct debit mandate from ClubControl…'
+                  : `Each person’s ClubControl record is shown below: check the mandate before making them inactive. ${closable.length} of ${moved.length} have an active mandate.`}
+            </p>
+          )}
           {shown.length === 0 ? (
             <p className="px-5 py-6 text-sm text-zinc-400">Nobody to show.</p>
           ) : (
@@ -396,16 +455,38 @@ function Thrive4BillingCard({ open, onToggle, membersByName, billing, canClose, 
                           ? (
                             <div className="flex flex-col items-start gap-1">
                               <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-800 ring-1 ring-rose-200">Direct debit active: close on Thrive4</span>
-                              {canClose && (
-                                <button
-                                  type="button"
-                                  onClick={() => setConfirming({ guids: [r.person_guid], label: r.name })}
-                                  disabled={closing || checking}
-                                  className="text-xs font-semibold text-rose-700 underline-offset-2 hover:underline disabled:opacity-60"
-                                >
-                                  Make inactive
-                                </button>
-                              )}
+                              {canClose && (() => {
+                                const m = r.memberId ? mandates.get(r.memberId) : undefined;
+                                if (!m) return mandatesLoading ? <span className="text-xs text-zinc-400">Reading mandate…</span> : <span className="text-xs text-zinc-500">ClubControl record not read</span>;
+                                return (
+                                  <>
+                                    <span className="text-xs text-zinc-700">
+                                      Mandate {m.mandate_id ?? 'none'} · <span className={hasActiveMandate(m) ? 'font-semibold text-emerald-700' : 'font-semibold text-rose-700'}>{m.mandate_status ?? 'no status'}</span>
+                                    </span>
+                                    <span className="text-xs text-zinc-500">
+                                      {m.payment_date
+                                        ? `Last paid ${m.payment_amount ?? ''} on ${m.payment_date}`
+                                        : `First payment${m.payment_amount ? ` of ${m.payment_amount}` : ''} not collected yet`}
+                                      {m.renewal_due && ` · renews ${shortDate(m.renewal_due)}`}
+                                    </span>
+                                    <a href={m.url} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-violet-700 underline-offset-2 hover:underline">
+                                      Open in ClubControl ↗
+                                    </a>
+                                    {hasActiveMandate(m) ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => setConfirming({ guids: [r.person_guid], label: r.name })}
+                                        disabled={closing || checking}
+                                        className="text-xs font-semibold text-rose-700 underline-offset-2 hover:underline disabled:opacity-60"
+                                      >
+                                        Make inactive on Thrive4
+                                      </button>
+                                    ) : (
+                                      <span className="text-xs text-zinc-500">No active mandate, so it can’t be closed from here</span>
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </div>
                           )
                           : <span className="text-zinc-600">{r.clubControl}</span>}
@@ -421,7 +502,7 @@ function Thrive4BillingCard({ open, onToggle, membersByName, billing, canClose, 
       <ConfirmDialog
         open={confirming !== null}
         title="Make inactive on Thrive4?"
-        description={confirming ? `This makes ${confirming.label} inactive on Thrive4, which stops their Thrive4 subscriptions so no more invoices are raised. Each one is checked again first: only people still billed on Thrive4 and on an active ClubControl direct debit are changed. Undo it in Thrive4 if needed.` : ''}
+        description={confirming ? `This makes ${confirming.label} inactive on Thrive4, which stops their Thrive4 subscriptions so no more invoices are raised. Each one is checked again first: only people still billed on Thrive4 with an active direct debit mandate on ClubControl are changed. Undo it in Thrive4 if needed.` : ''}
         confirmLabel={closing ? 'Making inactive…' : 'Make inactive'}
         tone="danger"
         loading={closing}

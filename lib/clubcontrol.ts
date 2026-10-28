@@ -118,7 +118,10 @@ async function readBillingMethods(jar: Jar): Promise<Map<string, string>> {
 // Members list couldn't be read.
 export type ClubControlExport = { csv: string; fileName: string; billingById: Map<string, string> | null };
 
-export async function fetchMembersExport(): Promise<ClubControlExport> {
+// Logs in with the dashboard's account, runs `work`, then logs out (best
+// effort). `work` gets the cookie jar and the HTML of the first page it asks
+// for is used for the logout form token.
+async function withClubControl<T>(work: (jar: Jar, setLogoutToken: (html: string) => void) => Promise<T>): Promise<T> {
   const email = process.env.CLUBCONTROL_EMAIL || '';
   const password = process.env.CLUBCONTROL_PASSWORD || '';
   if (!email || !password) {
@@ -127,7 +130,6 @@ export async function fetchMembersExport(): Promise<ClubControlExport> {
 
   const jar: Jar = new Map();
 
-  // 1. Log in.
   const loginPage = await request(jar, '/login');
   const loginToken = formToken(await loginPage.text());
   if (!loginToken) throw new ClubControlError('The ClubControl login page has changed (no form token).');
@@ -143,13 +145,29 @@ export async function fetchMembersExport(): Promise<ClubControlExport> {
 
   let logoutToken = '';
   try {
-    // 2. Find the export on the Reports page.
+    return await work(jar, (html) => {
+      if (!logoutToken) logoutToken = formToken(html);
+    });
+  } finally {
+    if (logoutToken) {
+      await request(jar, '/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ _token: logoutToken }).toString(),
+      }).catch(() => undefined);
+    }
+  }
+}
+
+export async function fetchMembersExport(): Promise<ClubControlExport> {
+  return withClubControl(async (jar, setLogoutToken) => {
+    // 1. Find the export on the Reports page.
     const reports = await request(jar, '/reports');
     if (reports.status !== 200) throw new ClubControlError(`ClubControl's Reports page returned ${reports.status}.`);
     const reportsHtml = await reports.text();
-    logoutToken = formToken(reportsHtml);
+    setLogoutToken(reportsHtml);
 
-    // 3. Download it.
+    // 2. Download it.
     const exported = await request(jar, membersExportPath(reportsHtml));
     const type = exported.headers.get('content-type') ?? '';
     const disposition = exported.headers.get('content-disposition') ?? '';
@@ -160,7 +178,7 @@ export async function fetchMembersExport(): Promise<ClubControlExport> {
     const csv = await exported.text();
     const fileName = disposition.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)?.[1] ?? 'clubcontrol-members.csv';
 
-    // 4. Billing methods from the Members list.
+    // 3. Billing methods from the Members list.
     let billingById: Map<string, string> | null = null;
     try {
       billingById = await readBillingMethods(jar);
@@ -168,14 +186,94 @@ export async function fetchMembersExport(): Promise<ClubControlExport> {
       console.error('ClubControl billing methods not read:', error instanceof Error ? error.message : error);
     }
     return { csv, fileName: `${decodeURIComponent(fileName)} (fetched automatically)`, billingById };
-  } finally {
-    // 5. Log out (best effort).
-    if (logoutToken) {
-      await request(jar, '/logout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ _token: logoutToken }).toString(),
-      }).catch(() => undefined);
-    }
-  }
+  });
 }
+
+// ── A member's direct debit mandate (the Thrive4 billing card) ──
+
+// What a member's ClubControl membership page shows about paying by direct
+// debit: the GoCardless mandate, the latest membership payment and the
+// renewal date. Read live, never stored.
+export type ClubControlMandate = {
+  member_id: string;
+  // Where to see it in ClubControl.
+  url: string;
+  mandate_id: string | null;
+  mandate_status: string | null;
+  payment_amount: string | null;
+  // "-" in ClubControl (not collected yet) becomes null.
+  payment_date: string | null;
+  payment_type: string | null;
+  renewal_due: string | null;
+};
+
+export const clubControlMemberUrl = (memberId: string) => `${BASE}/members/${memberId}/memberships/edit`;
+
+// The page's tables, each as { headings, rows }, found by their headings.
+function readTables(html: string) {
+  return [...html.matchAll(/<table[\s\S]*?<\/table>/gi)].map((t) => ({
+    headings: [...t[0].matchAll(/<th[^>]*>([\s\S]*?)<\/th>/gi)].map((m) => cellText(m[1]).toLowerCase()),
+    rows: [...t[0].matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)]
+      .map((r) => [...r[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map((c) => cellText(c[1])))
+      .filter((r) => r.length > 0),
+  }));
+}
+
+function readMandatePage(memberId: string, html: string): ClubControlMandate {
+  const tables = readTables(html);
+  const find = (heading: string) => tables.find((t) => t.headings.includes(heading));
+  const cell = (table: ReturnType<typeof find>, row: string[] | undefined, heading: string) => {
+    const i = table?.headings.indexOf(heading) ?? -1;
+    const value = i >= 0 ? (row?.[i] ?? '').trim() : '';
+    return value && value !== '-' ? value : null;
+  };
+
+  const mandates = find('mandate id');
+  // An active mandate first, if there's more than one.
+  const mandate = mandates?.rows.find((r) => /active/i.test(cell(mandates, r, 'mandate status') ?? '')) ?? mandates?.rows[0];
+  const payments = find('payment type');
+  const payment = payments?.rows[0];
+  const subscriptions = find('renewal due');
+
+  return {
+    member_id: memberId,
+    url: clubControlMemberUrl(memberId),
+    mandate_id: cell(mandates, mandate, 'mandate id'),
+    mandate_status: cell(mandates, mandate, 'mandate status'),
+    payment_amount: cell(payments, payment, 'payment'),
+    payment_date: cell(payments, payment, 'payment date'),
+    payment_type: cell(payments, payment, 'payment type'),
+    renewal_due: cell(subscriptions, subscriptions?.rows[0], 'renewal due'),
+  };
+}
+
+const MAX_MANDATE_LOOKUPS = 100;
+
+// The mandate record for each ClubControl member id (the export's "Id").
+// Members whose page can't be read are left out.
+export async function fetchMandates(memberIds: string[]): Promise<Map<string, ClubControlMandate>> {
+  const ids = [...new Set(memberIds.filter((id) => /^\d+$/.test(id)))].slice(0, MAX_MANDATE_LOOKUPS);
+  const found = new Map<string, ClubControlMandate>();
+  if (ids.length === 0) return found;
+
+  return withClubControl(async (jar, setLogoutToken) => {
+    const list = await request(jar, '/members');
+    if (list.status !== 200) throw new ClubControlError(`ClubControl's Members page returned ${list.status}.`);
+    setLogoutToken(await list.text());
+
+    for (let i = 0; i < ids.length; i += PAGES_AT_ONCE) {
+      const batch = ids.slice(i, i + PAGES_AT_ONCE);
+      const pages = await Promise.all(batch.map(async (id) => {
+        const res = await request(jar, `/members/${id}/memberships/edit`);
+        return res.status === 200 ? [id, await res.text()] as const : null;
+      }));
+      for (const page of pages) if (page) found.set(page[0], readMandatePage(page[0], page[1]));
+    }
+    return found;
+  });
+}
+
+// An active GoCardless mandate: what has to be there before someone is made
+// inactive on Thrive4.
+export const hasActiveMandate = (m: ClubControlMandate | null | undefined) =>
+  !!m?.mandate_id && /^active$/i.test(m.mandate_status ?? '');

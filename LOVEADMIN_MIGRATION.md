@@ -35,10 +35,17 @@ ClubControl** is flagged: they have moved but are still open on Thrive4.
 active.) The direct debit status is ClubControl's "Billing Method", read by
 the automatic ClubControl fetch (`supabase/policies/membership_billing_method.sql`). Checking stores nothing and changes nothing in Thrive4.
 
+For admins, each flagged person also shows their **ClubControl record**, read
+live: the GoCardless mandate (id and status), their latest ClubControl
+payment (or that the first one isn't collected yet), renewal date, and a link
+to open them in ClubControl. Only someone with an **active mandate** can be
+made inactive (`pages/api/private/clubcontrol-mandates.ts`).
+
 Admins also get **Make inactive** (per person) and **Make all N inactive**. This
 does what Thrive4's own "make inactive" does, which drops the person's Thrive4
 subscriptions so no more invoices are raised. Each person is checked again on
-the server first (still billed on Thrive4 and on an active ClubControl direct debit), and every
+the server first (still billed on Thrive4, a ClubControl direct debit, and an active mandate
+on their ClubControl record, read again live), and every
 attempt is logged in `thrive4_deactivations`. Undo it in Thrive4 if needed.
 The fetch also stores each person's Thrive4 id (`person_guid`), so two people
 with the same name are kept apart. Uploading the report by hand still works.
@@ -51,7 +58,8 @@ Every temporary piece is marked `LoveAdmin migration (temporary)`, so
 1. **Delete these files:**
    - `lib/importers/loveAdminImportParser.ts`
    - `lib/thrive4.ts`, `lib/thrive4Sync.ts`, `pages/api/private/thrive4-sync.ts` and
-     `pages/api/private/thrive4-billing.ts`, `pages/api/private/thrive4-deactivate.ts`
+     `pages/api/private/thrive4-billing.ts`, `pages/api/private/thrive4-deactivate.ts`,
+     `pages/api/private/clubcontrol-mandates.ts`
    - `supabase/policies/membership_loveadmin.sql`
    - `LOVEADMIN_MIGRATION.md` (this file)
 2. **`pages/api/private/membership-import.ts`:** remove the

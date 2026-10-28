@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { type Thrive4BillingPerson, Thrive4Error, fetchThrive4Billing, makeThrive4Inactive } from '../../../lib/thrive4';
 import { DIRECT_DEBIT_ACTIVE, billingByName, nameKey } from '../../../lib/membership';
+import { ClubControlError, fetchMandates, hasActiveMandate } from '../../../lib/clubcontrol';
 
 // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
 // Makes people inactive on Thrive4 (lib/thrive4.ts makeThrive4Inactive), which
@@ -10,7 +11,8 @@ import { DIRECT_DEBIT_ACTIVE, billingByName, nameKey } from '../../../lib/member
 //
 // Only people who've moved can be made inactive: each one is checked again
 // here, and must still be billed by Thrive4 AND have an active direct debit in
-// the latest ClubControl fetch. Anyone else in the request is refused,
+// the latest ClubControl fetch AND an active GoCardless mandate on their
+// ClubControl record, read live (lib/clubcontrol.ts fetchMandates). Anyone else in the request is refused,
 // whatever the page sent. Every attempt is logged in thrive4_deactivations
 // (supabase/policies/membership_loveadmin.sql).
 
@@ -61,7 +63,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!latest) return res.status(409).json({ ok: false, error: 'There’s no ClubControl data yet. Fetch from ClubControl first.' });
   const { data: members, error: membersError } = await supabaseAdmin
     .from('membership_members')
-    .select('first_name, last_name, billing_method')
+    .select('first_name, last_name, billing_method, external_id')
     .eq('import_id', latest.id)
     .range(0, 9999);
   if (membersError) {
@@ -75,13 +77,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const billingNames = billingByName(members ?? []);
   const billedByGuid = new Map(billing.map((p) => [p.person_guid, p]));
 
-  const allowed = requested.filter((g) => {
+  const candidates = requested.filter((g) => {
     const p = billedByGuid.get(g);
-    return p && billingNames.get(nameKey(p.name, '')) === DIRECT_DEBIT_ACTIVE;
+    return p && billingNames.get(nameKey(p.name, ''))?.billing_method === DIRECT_DEBIT_ACTIVE;
   });
+
+  // And an active GoCardless mandate on their ClubControl record, read live now.
+  const memberIdOf = (g: string) => billingNames.get(nameKey(billedByGuid.get(g)?.name ?? '', ''))?.external_id ?? '';
+  let mandates;
+  try {
+    mandates = await fetchMandates(candidates.map(memberIdOf).filter(Boolean));
+  } catch (e) {
+    return res.status(502).json({ ok: false, error: e instanceof ClubControlError ? e.message : 'Checking ClubControl failed.' });
+  }
+  const allowed = candidates.filter((g) => hasActiveMandate(mandates.get(memberIdOf(g))));
   const refused = requested.length - allowed.length;
   if (allowed.length === 0) {
-    return res.status(409).json({ ok: false, error: 'None of them are both billed on Thrive4 and on an active ClubControl direct debit. Fetch from ClubControl, then check Thrive4 again.' });
+    return res.status(409).json({ ok: false, error: 'None of them are billed on Thrive4 with an active direct debit mandate in ClubControl. Fetch from ClubControl, then check Thrive4 again.' });
   }
 
   let results;

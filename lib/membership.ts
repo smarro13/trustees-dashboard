@@ -153,13 +153,17 @@ export const DIRECT_DEBIT_ACTIVE = 'Direct Debit: Active';
 const billingRank = (b: string | null | undefined) =>
   b === DIRECT_DEBIT_ACTIVE ? 3 : b?.startsWith('Direct Debit') ? 2 : b === 'Card' ? 1 : 0;
 
-// Each name's billing method. Someone listed twice gets their best one (an
-// active direct debit wins), as with paid-up status.
-export const billingByName = (members: { first_name: string; last_name: string; billing_method?: string | null }[]) => {
-  const map = new Map<string, string | null>();
+export type ClubControlBilling = { billing_method: string | null; external_id: string | null };
+
+// Each name's billing method and ClubControl member id. Someone listed twice
+// gets their best record (an active direct debit wins), as with paid-up status.
+export const billingByName = (members: { first_name: string; last_name: string; billing_method?: string | null; external_id?: string | null }[]) => {
+  const map = new Map<string, ClubControlBilling>();
   for (const m of members) {
     const key = nameKey(m.first_name, m.last_name);
-    if (!map.has(key) || billingRank(m.billing_method) > billingRank(map.get(key))) map.set(key, m.billing_method ?? null);
+    if (!map.has(key) || billingRank(m.billing_method) > billingRank(map.get(key)?.billing_method)) {
+      map.set(key, { billing_method: m.billing_method ?? null, external_id: m.external_id ?? null });
+    }
   }
   return map;
 };
