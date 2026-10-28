@@ -16,3 +16,8 @@ alter table public.membership_members add column if not exists billing_method te
 -- (e.g. the rest of the family) get the account holder's ClubControl member
 -- id here, read from that account's member list by the automatic fetch.
 alter table public.membership_members add column if not exists covered_by_id text;
+
+-- GoCardless mandate status on each direct debit account (28 Oct 2026),
+-- e.g. "Active". Someone has moved off LoveAdmin when they have an active
+-- mandate, their own or the account paying for them (covered_by_id).
+alter table public.membership_members add column if not exists mandate_status text;

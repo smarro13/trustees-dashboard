@@ -123,12 +123,15 @@ async function readBillingMethods(jar: Jar): Promise<Map<string, string>> {
 
 // The people each active direct debit account pays for: the "Name" column of
 // the members table on the account's membership page (Name | Subscription |
-// Renewal Due | Amount | Status). Returns nameKey -> the account's member id.
-// Accounts are read ACCOUNTS_AT_ONCE at a time.
+// Renewal Due | Amount | Status), and the account's GoCardless mandate status.
+// Only an account whose mandate is Active covers anyone. Returns covered
+// (nameKey -> the account's member id) and mandateById (member id -> mandate
+// status). Accounts are read ACCOUNTS_AT_ONCE at a time.
 const ACCOUNTS_AT_ONCE = 10;
 
-async function readCoveredMembers(jar: Jar, accountIds: string[]): Promise<Map<string, string>> {
+async function readCoveredMembers(jar: Jar, accountIds: string[]) {
   const covered = new Map<string, string>();
+  const mandateById = new Map<string, string>();
   for (let i = 0; i < accountIds.length; i += ACCOUNTS_AT_ONCE) {
     const batch = accountIds.slice(i, i + ACCOUNTS_AT_ONCE);
     const pages = await Promise.all(batch.map(async (id) => {
@@ -137,25 +140,31 @@ async function readCoveredMembers(jar: Jar, accountIds: string[]): Promise<Map<s
     }));
     for (const page of pages) {
       if (!page) continue;
-      const table = readTables(page[1]).find((t) => t.headings.includes('name') && t.headings.includes('renewal due'));
+      const [id, html] = page;
+      const mandate = readMandatePage(id, html);
+      if (mandate.mandate_status) mandateById.set(id, mandate.mandate_status);
+      if (!hasActiveMandate(mandate)) continue;
+      const table = readTables(html).find((t) => t.headings.includes('name') && t.headings.includes('renewal due'));
       const nameColumn = table?.headings.indexOf('name') ?? -1;
       for (const row of table?.rows ?? []) {
         const name = row[nameColumn]?.trim();
-        if (name) covered.set(nameKey(name, ''), page[0]);
+        if (name) covered.set(nameKey(name, ''), id);
       }
     }
   }
-  return covered;
+  return { covered, mandateById };
 }
 
 // billingById: each member's Billing Method by member id, or null if the
 // Members list couldn't be read. coveredBy: nameKey -> member id of the active
 // direct debit account that pays for them, or null if that couldn't be read.
+// mandateById: member id -> GoCardless mandate status, for each direct debit account.
 export type ClubControlExport = {
   csv: string;
   fileName: string;
   billingById: Map<string, string> | null;
   coveredBy: Map<string, string> | null;
+  mandateById: Map<string, string> | null;
 };
 
 // Logs in with the dashboard's account, runs `work`, then logs out (best
@@ -228,15 +237,16 @@ export async function fetchMembersExport(): Promise<ClubControlExport> {
 
     // 4. Who each active direct debit pays for.
     let coveredBy: Map<string, string> | null = null;
+    let mandateById: Map<string, string> | null = null;
     if (billingById) {
       try {
         const accounts = [...billingById].filter(([, method]) => method === DIRECT_DEBIT_ACTIVE).map(([id]) => id);
-        coveredBy = await readCoveredMembers(jar, accounts);
+        ({ covered: coveredBy, mandateById } = await readCoveredMembers(jar, accounts));
       } catch (error) {
         console.error('ClubControl direct debit members not read:', error instanceof Error ? error.message : error);
       }
     }
-    return { csv, fileName: `${decodeURIComponent(fileName)} (fetched automatically)`, billingById, coveredBy };
+    return { csv, fileName: `${decodeURIComponent(fileName)} (fetched automatically)`, billingById, coveredBy, mandateById };
   });
 }
 

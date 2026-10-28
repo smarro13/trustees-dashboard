@@ -13,6 +13,9 @@ export type ImportedMember = {
   // Member id of the active direct debit account that pays for them, when it
   // isn't their own (lib/clubcontrol.ts readCoveredMembers).
   covered_by_id?: string | null;
+  // GoCardless mandate status on their own record, e.g. "Active" (direct
+  // debit accounts only; lib/clubcontrol.ts).
+  mandate_status?: string | null;
   first_name: string;
   last_name: string;
   email: string | null;

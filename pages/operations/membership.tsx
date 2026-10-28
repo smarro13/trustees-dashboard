@@ -12,6 +12,7 @@ import {
   TEAM_GROUPS,
   ageOn,
   billingByName,
+  findClubControl,
   mandateMemberId,
   paysByDirectDebit,
   type ClubControlBilling,
@@ -49,6 +50,8 @@ type Member = {
   external_id?: string | null;
   // Member id of the active direct debit account that pays for them, if not their own.
   covered_by_id?: string | null;
+  // GoCardless mandate status on their own record (direct debit accounts only).
+  mandate_status?: string | null;
 };
 
 type Player = {
@@ -150,11 +153,11 @@ async function loadMembers(importId: string): Promise<Member[]> {
   const load = (columns: string) =>
     loadAll<Member>((from, to) =>
       supabase.from('membership_members').select(columns).eq('import_id', importId).order('id').range(from, to) as any);
-  for (const extra of [', billing_method, covered_by_id', ', billing_method']) {
+  for (const extra of [', billing_method, covered_by_id, mandate_status', ', billing_method, covered_by_id', ', billing_method']) {
     try {
       return await load(MEMBER_COLUMNS + extra);
     } catch (error: any) {
-      if (!/billing_method|covered_by_id/.test(error?.message ?? '')) throw error;
+      if (!/billing_method|covered_by_id|mandate_status/.test(error?.message ?? '')) throw error;
     }
   }
   return load(MEMBER_COLUMNS);
@@ -162,9 +165,54 @@ async function loadMembers(importId: string): Promise<Member[]> {
 
 // What ClubControl says about how someone pays, for the LoveAdmin cards.
 function clubControlLabel(member: Member | null, billing: ClubControlBilling | undefined, nameById: Map<string, string>) {
-  if (!member) return 'Not on ClubControl';
-  if (billing?.covered_by_id) return `Paid by ${nameById.get(billing.covered_by_id) ?? 'another member'}’s direct debit`;
-  return billing?.billing_method ?? (isPaidUp(member) ? 'Active' : 'Inactive');
+  if (!member || !billing) return 'Not on ClubControl';
+  if (paysByDirectDebit(billing) && billing.covered_by_id && mandateMemberId(billing) === billing.covered_by_id) {
+    return `Paid by ${nameById.get(billing.covered_by_id) ?? 'another member'}’s direct debit`;
+  }
+  if (paysByDirectDebit(billing)) return 'Active mandate';
+  if (billing.mandate_status) return `Mandate ${billing.mandate_status.toLowerCase()}`;
+  if (billing.billing_method?.startsWith('Direct Debit')) return billing.billing_method;
+  return 'No mandate';
+}
+
+// A LoveAdmin / Thrive4 name matched to ClubControl: exactly, or by a
+// near-identical name (e.g. "Ste" for "Steven"; lib/membership.ts findClubControl).
+function matchLoveAdminName(
+  name: string,
+  billing: Map<string, ClubControlBilling>,
+  membersByName: Map<string, Member>,
+  nameById: Map<string, string>,
+) {
+  const match = findClubControl(name, billing);
+  const member = match ? membersByName.get(match.key) ?? null : null;
+  const record = match?.record;
+  return {
+    clubControl: clubControlLabel(member, record, nameById),
+    // How ClubControl writes the name, when it differs.
+    clubControlName: match?.nearMatch && member ? `${member.first_name} ${member.last_name}`.trim() : null,
+    notOnClubControl: !member,
+    // Whose record holds the mandate: theirs, or the paying account's.
+    memberId: mandateMemberId(record),
+    moved: paysByDirectDebit(record),
+  };
+}
+
+// The ClubControl column on the LoveAdmin cards: how they pay, the matched
+// name when it differs, and a flag for anyone not on ClubControl at all.
+function ClubControlStatus({ row }: { row: { clubControl: string; clubControlName: string | null; notOnClubControl: boolean } }) {
+  if (row.notOnClubControl) {
+    return (
+      <span className="inline-flex whitespace-nowrap rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700 ring-1 ring-rose-200" title="No one with this name (or a near match) is in ClubControl">
+        ⚠ Not on ClubControl
+      </span>
+    );
+  }
+  return (
+    <span className="text-zinc-600">
+      {row.clubControl}
+      {row.clubControlName && <span className="block text-xs text-zinc-400">as {row.clubControlName} in ClubControl</span>}
+    </span>
+  );
 }
 
 
@@ -279,16 +327,7 @@ function Thrive4BillingCard({ open, onToggle, membersByName, billing, nameById, 
           // Moved = paid by an active direct debit in ClubControl: their own,
           // or the account that pays for them (a parent for the family). Being
           // active there isn't enough: everyone was brought across as active.
-          const key = nameKey(p.name, '');
-          const member = membersByName.get(key) ?? null;
-          const record = billing.get(key);
-          return {
-            ...p,
-            clubControl: clubControlLabel(member, record, nameById),
-            // Whose record holds the mandate: theirs, or the paying account's.
-            memberId: mandateMemberId(record),
-            moved: paysByDirectDebit(record),
-          };
+          return { ...p, ...matchLoveAdminName(p.name, billing, membersByName, nameById) };
         })
         .sort((a, b) => Number(b.moved) - Number(a.moved) || a.name.localeCompare(b.name)),
     [people, membersByName, billing, nameById],
@@ -497,7 +536,7 @@ function Thrive4BillingCard({ open, onToggle, membersByName, billing, nameById, 
                               })()}
                             </div>
                           )
-                          : <span className="text-zinc-600">{r.clubControl}</span>}
+                          : <ClubControlStatus row={r} />}
                       </td>
                     </tr>
                   ))}
@@ -1018,14 +1057,12 @@ export default function MembershipPage() {
     return loveAdmin
       .filter((l) => !hiddenKeys.has(l.name_key))
       .map((l) => {
-        const member = membersByName.get(l.name_key) ?? null;
-        const record = billingNames.get(l.name_key);
+        // Moved = an active mandate in ClubControl, their own or the
+        // account paying for them, matched by name or a near-identical name.
         return {
           ...l,
           team: playersByKey.get(l.name_key)?.team ?? null,
-          // Their own direct debit, or the account that pays for them.
-          moved: paysByDirectDebit(record),
-          clubControl: clubControlLabel(member, record, memberNameById),
+          ...matchLoveAdminName(l.beneficiary, billingNames, membersByName, memberNameById),
         };
       })
       .filter((l) => filter === 'all' || (l.team !== null && teamNamesInFilter.has(l.team)))
@@ -1033,12 +1070,13 @@ export default function MembershipPage() {
   }, [loveAdmin, playerRows, membersByName, billingNames, memberNameById, hiddenKeys, filter, teamNamesInFilter]);
   const stillOnLoveAdmin = useMemo(() => loveAdminRows.filter((l) => !l.moved), [loveAdminRows]);
   const movedFromLoveAdmin = loveAdminRows.length - stillOnLoveAdmin.length;
+  const notOnClubControl = stillOnLoveAdmin.filter((l) => l.notOnClubControl).length;
   // Without ClubControl's direct debit details nobody can be taken off Still
   // on LoveAdmin, so say which step is missing rather than show everyone.
   const directDebitDataMissing = !members.some((m) => m.billing_method)
     ? `ClubControl’s direct debit details aren’t loaded${membersImport ? ` (last ClubControl fetch ${shortDate(membersImport.uploaded_at)})` : ''}, so nobody is taken off this list yet. Run supabase/policies/membership_billing_method.sql, then press “Fetch from ClubControl now”.`
-    : !members.some((m) => m.covered_by_id)
-      ? `ClubControl hasn’t been fetched since the dashboard started reading who each direct debit pays for${membersImport ? ` (last fetch ${shortDate(membersImport.uploaded_at)})` : ''}, so people paid for by someone else’s direct debit (e.g. a parent’s) still show here. Re-run supabase/policies/membership_billing_method.sql, then press “Fetch from ClubControl now”.`
+    : !members.some((m) => m.covered_by_id) || !members.some((m) => m.mandate_status)
+      ? `ClubControl hasn’t been fetched since the dashboard started reading who each direct debit pays for${membersImport ? ` (last fetch ${shortDate(membersImport.uploaded_at)})` : ''}, so people paid for by someone else’s direct debit (e.g. a parent’s), or with an active mandate, may still show here. Re-run supabase/policies/membership_billing_method.sql, then press “Fetch from ClubControl now”.`
       : null;
 
   // Admins' Hidden tab: everyone hidden, with what the report would show.
@@ -1523,11 +1561,13 @@ export default function MembershipPage() {
                 <div className={`flex flex-wrap items-center justify-between gap-3 bg-violet-50 px-5 py-4 ${openCards.loveAdmin ? 'border-b border-violet-200' : ''}`}>
                   <CardHeading open={openCards.loveAdmin} onToggle={() => toggleCard('loveAdmin')} title={`Still on LoveAdmin (${stillOnLoveAdmin.length})`}>
                     Paid through LoveAdmin (Thrive4), the old system, last month, so counted as paid, but with no active direct
-                    debit in ClubControl yet (their own, or one paying for them).{' '}
+                    debit mandate in ClubControl yet (their own, or the account paying for them).{' '}
                     {loveAdminImport
                       ? `Fetched from Thrive4 automatically, ${shortDate(loveAdminImport.uploaded_at)} (every Monday and on meeting days).`
                       : 'Not fetched from Thrive4 yet: it runs every Monday and on meeting days, or an admin can press “Fetch from Thrive4 now”.'}
                     {movedFromLoveAdmin > 0 && ` ${movedFromLoveAdmin} more have moved (paid by an active ClubControl direct debit, theirs or the family’s): see Thrive4 billing.`}
+                    {notOnClubControl > 0 && ` ${notOnClubControl} aren’t on ClubControl at all (flagged ⚠).`}
+                    {' Names that differ slightly (e.g. Ste / Steven) are matched; the ClubControl name is shown under the status.'}
                     {filter !== 'all' && ` Showing only those on ${filterLabel}.`}
                   </CardHeading>
                 </div>
@@ -1546,7 +1586,7 @@ export default function MembershipPage() {
                           <div className="min-w-0 flex-1 space-y-0.5">
                             <p className="text-sm font-medium text-zinc-900">{l.beneficiary}</p>
                             <p className="text-xs text-zinc-500">
-                              {[l.team, `ClubControl: ${l.clubControl}`].filter(Boolean).join(' · ')}
+                              {l.team && <>{l.team} · </>}<ClubControlStatus row={l} />
                             </p>
                             <p className="text-xs text-zinc-600">
                               {l.payer && nameKey(l.payer, '') !== l.name_key ? `Paid by ${l.payer}` : 'Pays for themselves'}
@@ -1583,7 +1623,7 @@ export default function MembershipPage() {
                               <td className="whitespace-nowrap px-3 py-2 text-zinc-600">{l.team ?? '—'}</td>
                               <td className="px-3 py-2 text-zinc-600">{l.payer && nameKey(l.payer, '') !== l.name_key ? l.payer : 'Themselves'}</td>
                               <td className="px-3 py-2 text-right tabular-nums text-zinc-600">{l.invoice_amount !== null ? money(l.invoice_amount) : '—'}</td>
-                              <td className="whitespace-nowrap px-3 py-2 text-zinc-600">{l.clubControl}</td>
+                              <td className="whitespace-nowrap px-3 py-2"><ClubControlStatus row={l} /></td>
                               <td className="w-12 px-3 py-1.5 text-center">
                                 <NoteCell
                                   personKey={l.name_key}

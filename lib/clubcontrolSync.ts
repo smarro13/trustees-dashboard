@@ -41,7 +41,11 @@ export async function syncMembersFromClubControl(admin: SupabaseClient, uploaded
   if (exported.billingById) {
     for (const m of members) m.billing_method = (m.external_id && exported.billingById.get(m.external_id)) || null;
   }
-  // Paid for by someone else's active direct debit (a parent for the family):
+  // Their own GoCardless mandate status, for everyone with a direct debit.
+  if (exported.mandateById) {
+    for (const m of members) m.mandate_status = (m.external_id && exported.mandateById.get(m.external_id)) || null;
+  }
+  // Paid for by someone else's active mandate (a parent for the family):
   // the account holder's member id. Not set on the account holder themselves.
   if (exported.coveredBy) {
     for (const m of members) {

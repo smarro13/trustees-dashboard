@@ -153,44 +153,173 @@ export const DIRECT_DEBIT_ACTIVE = 'Direct Debit: Active';
 export type ClubControlBilling = {
   billing_method: string | null;
   external_id: string | null;
-  // The ClubControl member id of the account whose active direct debit pays
-  // for this person (e.g. a parent paying for the family), when it isn't their
+  // GoCardless mandate status on their own record (e.g. "Active"), read by
+  // the automatic fetch for everyone with a direct debit.
+  mandate_status: string | null;
+  // The ClubControl member id of the account whose active mandate pays for
+  // this person (e.g. a parent paying for the family), when it isn't their
   // own. Read by the automatic fetch from that account's member list.
   covered_by_id: string | null;
 };
 
-// Pays through ClubControl by direct debit: their own, or the account that
-// pays for them.
+const isActiveMandate = (status: string | null | undefined) => /^active$/i.test(status ?? '');
+
+// Has their own active mandate. Before mandate statuses were stored, an
+// active direct debit billing method stands in for it.
+const ownActiveMandate = (b: ClubControlBilling) =>
+  b.mandate_status ? isActiveMandate(b.mandate_status) : b.billing_method === DIRECT_DEBIT_ACTIVE;
+
+// Pays through ClubControl by an active direct debit mandate: their own, or
+// the account that pays for them.
 export const paysByDirectDebit = (b: ClubControlBilling | null | undefined) =>
-  b?.billing_method === DIRECT_DEBIT_ACTIVE || !!b?.covered_by_id;
+  !!b && (ownActiveMandate(b) || !!b.covered_by_id);
 
 // Whose ClubControl record holds the direct debit mandate for this person.
 export const mandateMemberId = (b: ClubControlBilling | null | undefined) =>
-  !b ? null : b.billing_method === DIRECT_DEBIT_ACTIVE ? b.external_id : b.covered_by_id ?? b.external_id;
+  !b ? null : ownActiveMandate(b) ? b.external_id : b.covered_by_id ?? b.external_id;
 
 const billingRank = (b: Partial<ClubControlBilling> | null | undefined) =>
-  b?.billing_method === DIRECT_DEBIT_ACTIVE ? 4
+  isActiveMandate(b?.mandate_status) || b?.billing_method === DIRECT_DEBIT_ACTIVE ? 4
     : b?.covered_by_id ? 3
       : b?.billing_method?.startsWith('Direct Debit') ? 2
         : b?.billing_method === 'Card' ? 1
           : 0;
 
-// Each name's billing method, ClubControl member id and the account paying
-// for them. Someone listed twice gets their best record (a direct debit
-// wins), as with paid-up status.
+// Each name's billing method, mandate, ClubControl member id and the account
+// paying for them. Someone listed twice gets their best record (an active
+// mandate wins), as with paid-up status.
 export const billingByName = (members: {
   first_name: string;
   last_name: string;
   billing_method?: string | null;
   external_id?: string | null;
+  mandate_status?: string | null;
   covered_by_id?: string | null;
 }[]) => {
   const map = new Map<string, ClubControlBilling>();
   for (const m of members) {
     const key = nameKey(m.first_name, m.last_name);
     if (!map.has(key) || billingRank(m) > billingRank(map.get(key))) {
-      map.set(key, { billing_method: m.billing_method ?? null, external_id: m.external_id ?? null, covered_by_id: m.covered_by_id ?? null });
+      map.set(key, {
+        billing_method: m.billing_method ?? null,
+        external_id: m.external_id ?? null,
+        mandate_status: m.mandate_status ?? null,
+        covered_by_id: m.covered_by_id ?? null,
+      });
     }
   }
   return map;
+};
+
+// ── Finding someone in ClubControl when the names differ ──
+//
+// Thrive4 (LoveAdmin) and ClubControl often spell first names differently:
+// "Ste Warner" / "Steven Warner", "Katy Davies" / "Katherine Davies". If the
+// exact name isn't in ClubControl, look for the same surname with a
+// compatible first name: one is the start of the other (at least 3 letters),
+// or both are forms of the same name.
+
+const NAME_GROUPS = [
+  'katherine kathryn catherine cathryn kate katy katie kat kath cath cathy kathy',
+  'stephen steven steve ste stevie',
+  'michael mike mick mikey micky mickey',
+  'william will bill billy liam',
+  'robert rob robbie bob bobby bert',
+  'thomas tom tommy',
+  'james jim jimmy jamie',
+  'joseph joe joey',
+  'daniel dan danny',
+  'matthew matt matty',
+  'christopher chris kit',
+  'anthony tony ant',
+  'jonathan jon jonny',
+  'nicholas nick nicky',
+  'alexander alex',
+  'alexandra alex lexi',
+  'benjamin ben benny',
+  'samuel sam sammy',
+  'samantha sam sammie',
+  'edward ed eddie ted teddy',
+  'richard rich richie rick ricky dick',
+  'andrew andy drew',
+  'david dave davey',
+  'peter pete',
+  'philip phillip phil',
+  'gregory greg',
+  'timothy tim timmy',
+  'lawrence laurence larry laurie',
+  'frederick fred freddie',
+  'henry harry hal',
+  'elizabeth liz lizzie beth betty libby eliza',
+  'margaret maggie meg peggy',
+  'rebecca becky becca',
+  'jennifer jen jenny',
+  'victoria vicky vicki tori',
+  'deborah debbie deb',
+  'susan sue susie suzanne',
+  'patricia pat trish tricia',
+  'jessica jess jessie',
+  'charlotte charlie lottie',
+  'abigail abbie abby',
+  'olivia liv livvy',
+  'eleanor ellie nell',
+  'josephine jo josie',
+  'joanne jo joanna',
+].map((g) => g.split(' '));
+
+const NAME_GROUP_OF = new Map<string, number[]>();
+NAME_GROUPS.forEach((group, i) => {
+  for (const n of group) NAME_GROUP_OF.set(n, [...(NAME_GROUP_OF.get(n) ?? []), i]);
+});
+
+const firstNamesMatch = (a: string, b: string) => {
+  if (a === b) return true;
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  if (short.length >= 3 && long.startsWith(short)) return true;
+  const groups = NAME_GROUP_OF.get(a) ?? [];
+  return groups.some((g) => (NAME_GROUP_OF.get(b) ?? []).includes(g));
+};
+
+export type ClubControlMatch = {
+  // The ClubControl name it matched (nameKey form).
+  key: string;
+  record: ClubControlBilling;
+  // True when the names aren't identical (e.g. "Ste" for "Steven").
+  nearMatch: boolean;
+};
+
+// By surname (last word of the name key), for near matches.
+const surnameIndexCache = new WeakMap<Map<string, ClubControlBilling>, Map<string, string[]>>();
+const surnameIndex = (billing: Map<string, ClubControlBilling>) => {
+  let index = surnameIndexCache.get(billing);
+  if (!index) {
+    index = new Map();
+    for (const key of billing.keys()) {
+      const words = key.split(' ');
+      const surname = words[words.length - 1];
+      index.set(surname, [...(index.get(surname) ?? []), key]);
+    }
+    surnameIndexCache.set(billing, index);
+  }
+  return index;
+};
+
+// Someone's ClubControl record from their name as another system writes it.
+// An exact match first; otherwise the same surname with a compatible first
+// name, but only when exactly one ClubControl name fits: two candidates
+// (e.g. a Daniel and a Danielle with the same surname) could be different
+// people, so neither is assumed.
+export const findClubControl = (fullName: string, billing: Map<string, ClubControlBilling>): ClubControlMatch | null => {
+  const key = nameKey(fullName, '');
+  const exact = billing.get(key);
+  if (exact) return { key, record: exact, nearMatch: false };
+
+  const words = key.split(' ');
+  if (words.length < 2) return null;
+  const first = words[0];
+  const surname = words[words.length - 1];
+  const candidates = (surnameIndex(billing).get(surname) ?? [])
+    .filter((k) => firstNamesMatch(first, k.split(' ')[0]))
+    .map((k) => ({ key: k, record: billing.get(k)!, nearMatch: true }));
+  return candidates.length === 1 ? candidates[0] : null;
 };
