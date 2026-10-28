@@ -17,6 +17,16 @@ What it does:
   empty, the migration is done.
 - Each upload replaces the previous one.
 
+## Fetched automatically from Thrive4 (28 Oct 2026)
+
+LoveAdmin is now called Thrive4 (club.thrive4.com). With a Thrive4 login in
+Vercel (`THRIVE4_EMAIL` / `THRIVE4_PASSWORD`, an account with admin access to
+the club) the same invoices are fetched every Monday, on meeting days, and by
+**Fetch from Thrive4 now** on `/operations/membership`, so nobody needs to
+upload the report. It covers the last 3 months of invoices (they are monthly).
+The fetch also stores each person's Thrive4 id (`person_guid`), so two people
+with the same name are kept apart. Uploading the report by hand still works.
+
 ## Removing it once everyone has moved
 
 Every temporary piece is marked `LoveAdmin migration (temporary)`, so
@@ -24,6 +34,7 @@ Every temporary piece is marked `LoveAdmin migration (temporary)`, so
 
 1. **Delete these files:**
    - `lib/importers/loveAdminImportParser.ts`
+   - `lib/thrive4.ts`, `lib/thrive4Sync.ts` and `pages/api/private/thrive4-sync.ts`
    - `supabase/policies/membership_loveadmin.sql`
    - `LOVEADMIN_MIGRATION.md` (this file)
 2. **`pages/api/private/membership-import.ts`:** remove the
@@ -47,7 +58,13 @@ Every temporary piece is marked `LoveAdmin migration (temporary)`, so
 4. **`lib/importers/membershipImportParser.ts`:** `readXlsxSheets` and
    `cellDate` were exported for the LoveAdmin parser. They can stay exported,
    or go back to plain `function`s.
-5. **Database** (Supabase SQL editor), after the code change is deployed:
+5. **Other files:** remove the marked Thrive4 blocks in
+   `pages/api/cron/membership-sync.ts` and `pages/api/cron/membership-report.ts`,
+   `saveLoveAdminPayments` in `lib/membershipStore.ts`, `thrive4` from
+   `FetchSource` / `FETCH_NAMES` and the fetch buttons in
+   `pages/operations/membership.tsx`, the `THRIVE4_*` lines in
+   `.env.local.example`, and `THRIVE4_EMAIL` / `THRIVE4_PASSWORD` in Vercel.
+6. **Database** (Supabase SQL editor), after the code change is deployed:
 
    ```sql
    begin;

@@ -2,6 +2,8 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { syncMembersFromClubControl } from '../../../lib/clubcontrolSync';
 import { syncPlayersFromGms } from '../../../lib/gmsSync';
+// LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+import { syncPaymentsFromThrive4 } from '../../../lib/thrive4Sync';
 import { buildMembershipSummary, loadMembershipData } from '../../../lib/membershipSummary';
 
 // Meeting-day membership report. Runs once a day (vercel.json "crons"); on the
@@ -74,6 +76,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const sync = await syncPlayersFromGms(supabaseAdmin, 'GMS (meeting-day fetch)');
     gms = 'error' in sync ? `fetch failed: ${sync.error}` : `fetched ${sync.players} players`;
   }
+  // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+  let thrive4: string = 'not connected';
+  if (process.env.THRIVE4_EMAIL && process.env.THRIVE4_PASSWORD) {
+    const sync = await syncPaymentsFromThrive4(supabaseAdmin, 'Thrive4 (meeting-day fetch)');
+    thrive4 = 'error' in sync ? `fetch failed: ${sync.error}` : `fetched ${sync.people} people on paid invoices`;
+  }
 
   const summary = buildMembershipSummary(await loadMembershipData(supabaseAdmin));
 
@@ -103,5 +111,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     saved.push(meeting.id);
   }
 
-  return res.status(200).json({ ok: true, day, clubControl, gms, saved, skipped });
+  return res.status(200).json({ ok: true, day, clubControl, gms, thrive4, saved, skipped });
 }

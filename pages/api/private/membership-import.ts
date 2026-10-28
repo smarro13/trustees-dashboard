@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { parseGmsPlayers, parseMembersCsv } from '../../../lib/importers/membershipImportParser';
 import { teamFromBirthDate } from '../../../lib/membership';
-import { savePlayers, saveMembersExport } from '../../../lib/membershipStore';
+import { saveLoveAdminPayments, savePlayers, saveMembersExport } from '../../../lib/membershipStore';
 // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
 import { parseLoveAdminInvoices } from '../../../lib/importers/loveAdminImportParser';
 
@@ -105,21 +105,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const summary = { paidInvoices, skippedInvoices, people: payments.length };
     if (!apply) return res.status(200).json({ ok: true, preview: summary });
 
-    const { data: imported, error: importError } = await supabaseAdmin
-      .from('membership_imports')
-      .insert({ kind, file_name: filename, row_count: payments.length, uploaded_by: uploadedBy })
-      .select('id')
-      .single();
-    if (importError || !imported) return res.status(500).json({ ok: false, error: importError?.message ?? 'Save failed.' });
-
-    const { error } = await supabaseAdmin
-      .from('membership_loveadmin')
-      .insert(payments.map((p) => ({ ...p, import_id: imported.id })));
-    if (error) {
-      await supabaseAdmin.from('membership_imports').delete().eq('id', imported.id);
-      return res.status(500).json({ ok: false, error: `Save failed: ${error.message}` });
-    }
-    await supabaseAdmin.from('membership_imports').delete().eq('kind', 'loveadmin').neq('id', imported.id);
+    const saved = await saveLoveAdminPayments(supabaseAdmin, payments, filename, uploadedBy);
+    if ('error' in saved) return res.status(500).json({ ok: false, error: saved.error });
     return res.status(200).json({ ok: true, saved: summary });
   }
 

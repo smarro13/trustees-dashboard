@@ -2,10 +2,12 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { syncMembersFromClubControl } from '../../../lib/clubcontrolSync';
 import { syncPlayersFromGms } from '../../../lib/gmsSync';
+// LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+import { syncPaymentsFromThrive4 } from '../../../lib/thrive4Sync';
 
 // Weekly membership data fetch (vercel.json "crons", Mondays): the members
-// export from ClubControl and the player list from GMS, each skipped if its
-// login isn't set. Protected by CRON_SECRET ("Authorization: Bearer …").
+// export from ClubControl, the player list from GMS and the paid LoveAdmin
+// invoices from Thrive4, each skipped if its login isn't set. Protected by CRON_SECRET ("Authorization: Bearer …").
 // Admins can fetch either one any time from /operations/membership.
 
 export const config = { maxDuration: 60 };
@@ -38,6 +40,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     results.gms = 'error' in r ? `failed: ${r.error}` : `fetched ${r.players} players`;
   } else {
     results.gms = 'not connected';
+  }
+
+  // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+  if (process.env.THRIVE4_EMAIL && process.env.THRIVE4_PASSWORD) {
+    const r = await syncPaymentsFromThrive4(supabaseAdmin, 'Thrive4 (weekly fetch)');
+    results.thrive4 = 'error' in r ? `failed: ${r.error}` : `fetched ${r.people} people on paid invoices`;
+  } else {
+    results.thrive4 = 'not connected';
   }
 
   const failed = Object.values(results).some((v) => v.startsWith('failed'));

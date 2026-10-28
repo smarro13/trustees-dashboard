@@ -33,6 +33,11 @@ create table if not exists public.membership_loveadmin (
   received numeric(10, 2)
 );
 
+-- Thrive4's id for the person (28 Oct 2026), set by the automatic fetch
+-- (lib/thrive4.ts), so two people with the same name stay separate. Empty for
+-- rows from an uploaded report, which only has names.
+alter table public.membership_loveadmin add column if not exists person_guid text;
+
 create index if not exists membership_loveadmin_import_idx on public.membership_loveadmin (import_id);
 
 alter table public.membership_loveadmin enable row level security;

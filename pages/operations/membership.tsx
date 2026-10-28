@@ -77,6 +77,11 @@ type PlayerRow = Player & { team: string | null; status: PlayerStatus; member: M
 type Filter = string;
 type StatusFilter = 'all' | 'unpaid' | PlayerStatus;
 type View = 'report' | 'hidden';
+// Where the automatic fetches come from (pages/api/private/<source>-sync.ts).
+// 'thrive4' is LoveAdmin — LoveAdmin migration (temporary), see LOVEADMIN_MIGRATION.md.
+type FetchSource = 'clubcontrol' | 'gms' | 'thrive4';
+const FETCH_NAMES: Record<FetchSource, string> = { clubcontrol: 'ClubControl', gms: 'GMS', thrive4: 'Thrive4' };
+
 type Card = 'byTeam' | 'players' | 'notOnGms' | 'loveAdmin' | 'inactive';
 
 // Which report cards start open. Each viewer's own choice is remembered in
@@ -555,17 +560,17 @@ export default function MembershipPage() {
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
   const [showUpload, setShowUpload] = useState(false);
-  const [fetching, setFetching] = useState<'clubcontrol' | 'gms' | null>(null);
+  const [fetching, setFetching] = useState<FetchSource | null>(null);
 
-  // Fetches the latest data straight from ClubControl or GMS (both also happen
-  // automatically every Monday morning and on meeting days; see
-  // pages/api/private/clubcontrol-sync.ts and gms-sync.ts).
-  const fetchFrom = async (source: 'clubcontrol' | 'gms') => {
-    const name = source === 'gms' ? 'GMS' : 'ClubControl';
+  // Fetches the latest data straight from ClubControl, GMS or Thrive4 (all
+  // also happen automatically every Monday morning and on meeting days; see
+  // pages/api/private/clubcontrol-sync.ts, gms-sync.ts and thrive4-sync.ts).
+  const fetchFrom = async (source: FetchSource) => {
+    const name = FETCH_NAMES[source];
     setFetching(source);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
-      const response = await fetch(`/api/private/${source === 'gms' ? 'gms' : 'clubcontrol'}-sync`, {
+      const response = await fetch(`/api/private/${source}-sync`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${sessionData.session?.access_token ?? ''}` },
       });
@@ -575,7 +580,9 @@ export default function MembershipPage() {
         type: 'success',
         message: source === 'gms'
           ? `Fetched ${payload.saved.players} players from GMS.`
-          : `Fetched ${payload.saved.total} members from ClubControl (${payload.saved.inactive} inactive).`,
+          : source === 'thrive4'
+            ? `Fetched ${payload.saved.paidInvoices} paid LoveAdmin invoices from Thrive4, covering ${payload.saved.people} people.`
+            : `Fetched ${payload.saved.total} members from ClubControl (${payload.saved.inactive} inactive).`,
       });
       await loadData();
     } catch (error: any) {
@@ -882,7 +889,7 @@ export default function MembershipPage() {
             )}
             {canUpload && (
               <>
-                {(['clubcontrol', 'gms'] as const).map((source) => (
+                {(['clubcontrol', 'gms', 'thrive4'] as const).map((source) => (
                   <button
                     key={source}
                     type="button"
@@ -891,7 +898,7 @@ export default function MembershipPage() {
                     className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-60"
                     title="Also happens automatically every Monday and on meeting days"
                   >
-                    {fetching === source ? 'Fetching…' : `🔄 Fetch from ${source === 'gms' ? 'GMS' : 'ClubControl'} now`}
+                    {fetching === source ? 'Fetching…' : `🔄 Fetch from ${FETCH_NAMES[source]} now`}
                   </button>
                 ))}
               </>

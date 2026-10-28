@@ -10,6 +10,8 @@ import { nameKey } from '../membership';
 import { cellDate, readXlsxSheets } from './membershipImportParser';
 
 export type ImportedLoveAdminPayment = {
+  // Thrive4's id for the person; only the automatic fetch has it (lib/thrive4.ts).
+  person_guid?: string | null;
   name_key: string;
   beneficiary: string;
   payer: string | null;

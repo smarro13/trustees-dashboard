@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ImportedMember, ImportedPlayer } from './importers/membershipImportParser';
+// LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+import type { ImportedLoveAdminPayment } from './importers/loveAdminImportParser';
 
 // Saving a ClubControl members export or a GMS player list, shared by the
 // manual upload (pages/api/private/membership-import.ts) and the automatic
@@ -87,4 +89,32 @@ export async function currentPlayersCount(admin: SupabaseClient): Promise<number
     .limit(1)
     .maybeSingle();
   return data?.row_count ?? null;
+}
+
+// LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+// Replaces the previous LoveAdmin invoices, from an uploaded report or the
+// Thrive4 fetch (lib/thrive4Sync.ts). The old rows go only once the new ones
+// are all in.
+export async function saveLoveAdminPayments(
+  admin: SupabaseClient,
+  payments: ImportedLoveAdminPayment[],
+  fileName: string,
+  uploadedBy: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data: imported, error: importError } = await admin
+    .from('membership_imports')
+    .insert({ kind: 'loveadmin', file_name: fileName, row_count: payments.length, uploaded_by: uploadedBy })
+    .select('id')
+    .single();
+  if (importError || !imported) return { ok: false, error: importError?.message ?? 'Save failed.' };
+
+  const { error } = await admin
+    .from('membership_loveadmin')
+    .insert(payments.map((p) => ({ ...p, import_id: imported.id })));
+  if (error) {
+    await admin.from('membership_imports').delete().eq('id', imported.id);
+    return { ok: false, error: `Save failed: ${error.message}` };
+  }
+  await admin.from('membership_imports').delete().eq('kind', 'loveadmin').neq('id', imported.id);
+  return { ok: true };
 }
