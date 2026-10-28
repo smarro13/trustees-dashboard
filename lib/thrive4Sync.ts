@@ -4,7 +4,7 @@ import { saveLoveAdminPayments } from './membershipStore';
 
 // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
 //
-// Fetch the paid LoveAdmin invoices from Thrive4 (lib/thrive4.ts) and save
+// Fetch last month's paid LoveAdmin invoices from Thrive4 (lib/thrive4.ts) and save
 // them exactly as an uploaded Invoices All Report would. Used by the weekly
 // fetch, the "Fetch from Thrive4 now" button (pages/api/private/thrive4-sync.ts)
 // and the meeting-day membership report (pages/api/cron/membership-report.ts).
@@ -14,7 +14,7 @@ import { saveLoveAdminPayments } from './membershipStore';
 // saved, though, in case Thrive4 returned nothing by mistake.
 
 export type Thrive4SyncResult =
-  | { ok: true; people: number; paidInvoices: number; skippedInvoices: number }
+  | { ok: true; people: number; paidInvoices: number; skippedInvoices: number; monthLabel: string }
   | { ok: false; status: number; error: string };
 
 export async function syncPaymentsFromThrive4(admin: SupabaseClient, uploadedBy: string): Promise<Thrive4SyncResult> {
@@ -27,13 +27,15 @@ export async function syncPaymentsFromThrive4(admin: SupabaseClient, uploadedBy:
     return { ok: false, status: 502, error: message };
   }
 
-  const { payments, paidInvoices, skippedInvoices } = fetched;
+  const { payments, paidInvoices, skippedInvoices, month } = fetched;
+  // e.g. "Sep 2026"
+  const monthLabel = new Date(`${month.from}T12:00:00Z`).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
   if (payments.length === 0) {
-    return { ok: false, status: 502, error: 'Thrive4 returned no paid invoices, so nothing was saved.' };
+    return { ok: false, status: 502, error: `Thrive4 has no paid invoices for ${monthLabel}, so nothing was saved.` };
   }
 
-  const fileName = `Thrive4 invoices (fetched automatically ${new Date().toISOString().slice(0, 10)})`;
+  const fileName = `Thrive4 invoices for ${monthLabel} (fetched automatically ${new Date().toISOString().slice(0, 10)})`;
   const saved = await saveLoveAdminPayments(admin, payments, fileName, uploadedBy);
   if ('error' in saved) return { ok: false, status: 500, error: saved.error };
-  return { ok: true, people: payments.length, paidInvoices, skippedInvoices };
+  return { ok: true, people: payments.length, paidInvoices, skippedInvoices, monthLabel };
 }

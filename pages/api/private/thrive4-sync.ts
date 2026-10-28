@@ -43,6 +43,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if ('error' in result) return res.status(result.status).json({ ok: false, error: result.error });
   return res.status(200).json({
     ok: true,
-    saved: { people: result.people, paidInvoices: result.paidInvoices, skippedInvoices: result.skippedInvoices },
+    saved: { people: result.people, paidInvoices: result.paidInvoices, skippedInvoices: result.skippedInvoices, month: result.monthLabel },
   });
 }

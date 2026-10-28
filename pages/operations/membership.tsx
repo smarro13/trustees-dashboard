@@ -581,7 +581,7 @@ export default function MembershipPage() {
         message: source === 'gms'
           ? `Fetched ${payload.saved.players} players from GMS.`
           : source === 'thrive4'
-            ? `Fetched ${payload.saved.paidInvoices} paid LoveAdmin invoices from Thrive4, covering ${payload.saved.people} people.`
+            ? `Fetched ${payload.saved.paidInvoices} paid LoveAdmin invoices for ${payload.saved.month} from Thrive4, covering ${payload.saved.people} people.`
             : `Fetched ${payload.saved.total} members from ClubControl (${payload.saved.inactive} inactive).`,
       });
       await loadData();

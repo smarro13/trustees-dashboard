@@ -45,7 +45,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
   if (process.env.THRIVE4_EMAIL && process.env.THRIVE4_PASSWORD) {
     const r = await syncPaymentsFromThrive4(supabaseAdmin, 'Thrive4 (weekly fetch)');
-    results.thrive4 = 'error' in r ? `failed: ${r.error}` : `fetched ${r.people} people on paid invoices`;
+    results.thrive4 = 'error' in r ? `failed: ${r.error}` : `fetched ${r.people} people on paid invoices for ${r.monthLabel}`;
   } else {
     results.thrive4 = 'not connected';
   }

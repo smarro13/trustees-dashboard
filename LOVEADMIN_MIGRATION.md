@@ -23,7 +23,9 @@ LoveAdmin is now called Thrive4 (club.thrive4.com). With a Thrive4 login in
 Vercel (`THRIVE4_EMAIL` / `THRIVE4_PASSWORD`, an account with admin access to
 the club) the same invoices are fetched every Monday, on meeting days, and by
 **Fetch from Thrive4 now** on `/operations/membership`, so nobody needs to
-upload the report. It covers the last 3 months of invoices (they are monthly).
+upload the report. It covers the **previous calendar month** only (on 28 Oct,
+that is September): the club is moving off Thrive4, so only who paid there
+last month matters.
 The fetch also stores each person's Thrive4 id (`person_guid`), so two people
 with the same name are kept apart. Uploading the report by hand still works.
 

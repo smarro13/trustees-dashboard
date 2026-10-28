@@ -80,7 +80,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let thrive4: string = 'not connected';
   if (process.env.THRIVE4_EMAIL && process.env.THRIVE4_PASSWORD) {
     const sync = await syncPaymentsFromThrive4(supabaseAdmin, 'Thrive4 (meeting-day fetch)');
-    thrive4 = 'error' in sync ? `fetch failed: ${sync.error}` : `fetched ${sync.people} people on paid invoices`;
+    thrive4 = 'error' in sync ? `fetch failed: ${sync.error}` : `fetched ${sync.people} people on paid invoices for ${sync.monthLabel}`;
   }
 
   const summary = buildMembershipSummary(await loadMembershipData(supabaseAdmin));

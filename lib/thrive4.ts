@@ -5,7 +5,8 @@ import type { ImportedLoveAdminPayment } from './importers/loveAdminImportParser
 //
 // Fetches paid invoices from Thrive4 (LoveAdmin's new name, club.thrive4.com),
 // the same invoices as the "Invoices All Report" an admin downloads and
-// uploads on /operations/membership. Server-side only (lib/thrive4Sync.ts).
+// uploads on /operations/membership, for the previous calendar month only.
+// Server-side only (lib/thrive4Sync.ts).
 //
 // Thrive4's web app talks to a JSON API, which this calls with the
 // dashboard's own login (THRIVE4_EMAIL / THRIVE4_PASSWORD):
@@ -19,9 +20,17 @@ const THRIVE4 = 'https://club.thrive4.com';
 const TIMEOUT_MS = 45000;
 // The club's organisation id in Thrive4 (not a secret: it's in every request).
 const ORG_GUID = process.env.THRIVE4_ORG_GUID || '00cf34d8-ba98-4eee-a9b4-e0fa14c2a087';
-// The same period as the report's default. Invoices are monthly, so three
-// months covers everyone still paying through LoveAdmin.
+// Thrive4 is asked for the last 3 months (a period it offers), and only the
+// previous calendar month's invoices are kept (previousMonth below): the club
+// is moving off Thrive4, so only who paid there last month matters.
 const DATE_FILTER = 'last 3 months';
+
+// First and last day of the previous calendar month, as YYYY-MM-DD.
+export function previousMonth(today = new Date()): { from: string; to: string } {
+  const first = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 1, 1));
+  const last = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 0));
+  return { from: first.toISOString().slice(0, 10), to: last.toISOString().slice(0, 10) };
+}
 const PAID_STATUS = 'reconciled';
 
 export class Thrive4Error extends Error {}
@@ -85,6 +94,8 @@ export type Thrive4Invoices = {
   payments: (ImportedLoveAdminPayment & { person_guid: string })[];
   paidInvoices: number;
   skippedInvoices: number;
+  // The month covered, e.g. { from: '2026-09-01', to: '2026-09-30' }.
+  month: { from: string; to: string };
 };
 
 export async function fetchThrive4Payments(): Promise<Thrive4Invoices> {
@@ -114,15 +125,21 @@ export async function fetchThrive4Payments(): Promise<Thrive4Invoices> {
   const invoices = (await response.json().catch(() => null)) as Invoice[] | null;
   if (!Array.isArray(invoices)) throw new Thrive4Error('Thrive4 returned something other than an invoice list.');
 
+  const month = previousMonth();
+  const inMonth = invoices.filter((i) => {
+    const day = (i.invoiceDate ?? '').slice(0, 10);
+    return day >= month.from && day <= month.to;
+  });
+
   // Newest first, so each person keeps their latest paid invoice.
-  invoices.sort((a, b) => String(b.invoiceDate ?? '').localeCompare(String(a.invoiceDate ?? '')));
+  inMonth.sort((a, b) => String(b.invoiceDate ?? '').localeCompare(String(a.invoiceDate ?? '')));
 
   // One row per person, by their Thrive4 id: two people with the same name
   // stay separate, and a child on several invoices counts once.
   const payments = new Map<string, Thrive4Invoices['payments'][number]>();
   let paidInvoices = 0;
   let skippedInvoices = 0;
-  for (const invoice of invoices) {
+  for (const invoice of inMonth) {
     if ((invoice.reconciliationStatus ?? '').toLowerCase() !== PAID_STATUS || !(invoice.amountPaid ?? 0)) {
       skippedInvoices += 1;
       continue;
@@ -144,5 +161,5 @@ export async function fetchThrive4Payments(): Promise<Thrive4Invoices> {
       });
     }
   }
-  return { payments: [...payments.values()], paidInvoices, skippedInvoices };
+  return { payments: [...payments.values()], paidInvoices, skippedInvoices, month };
 }
