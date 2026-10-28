@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { type Thrive4BillingPerson, Thrive4Error, fetchThrive4Billing, makeThrive4Inactive } from '../../../lib/thrive4';
-import { DIRECT_DEBIT_ACTIVE, billingByName, nameKey } from '../../../lib/membership';
+import { billingByName, mandateMemberId, nameKey, paysByDirectDebit } from '../../../lib/membership';
 import { ClubControlError, fetchMandates, hasActiveMandate } from '../../../lib/clubcontrol';
 
 // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
@@ -63,13 +63,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!latest) return res.status(409).json({ ok: false, error: 'There’s no ClubControl data yet. Fetch from ClubControl first.' });
   const { data: members, error: membersError } = await supabaseAdmin
     .from('membership_members')
-    .select('first_name, last_name, billing_method, external_id')
+    .select('first_name, last_name, billing_method, external_id, covered_by_id')
     .eq('import_id', latest.id)
     .range(0, 9999);
   if (membersError) {
     return res.status(500).json({
       ok: false,
-      error: /billing_method/.test(membersError.message)
+      error: /billing_method|covered_by_id/.test(membersError.message)
         ? 'Direct debit status isn’t stored yet: run supabase/policies/membership_billing_method.sql, then fetch from ClubControl.'
         : membersError.message,
     });
@@ -79,11 +79,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const candidates = requested.filter((g) => {
     const p = billedByGuid.get(g);
-    return p && billingNames.get(nameKey(p.name, ''))?.billing_method === DIRECT_DEBIT_ACTIVE;
+    // Their own direct debit, or the account that pays for them.
+    return p && paysByDirectDebit(billingNames.get(nameKey(p.name, '')));
   });
 
   // And an active GoCardless mandate on their ClubControl record, read live now.
-  const memberIdOf = (g: string) => billingNames.get(nameKey(billedByGuid.get(g)?.name ?? '', ''))?.external_id ?? '';
+  // The mandate is on their own record, or on the paying account's.
+  const memberIdOf = (g: string) => mandateMemberId(billingNames.get(nameKey(billedByGuid.get(g)?.name ?? '', ''))) ?? '';
   let mandates;
   try {
     mandates = await fetchMandates(candidates.map(memberIdOf).filter(Boolean));

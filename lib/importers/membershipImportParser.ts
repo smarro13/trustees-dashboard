@@ -10,6 +10,9 @@ export type ImportedMember = {
   // ClubControl's "Billing Method", e.g. "Direct Debit: Active". Only the
   // automatic fetch has it (lib/clubcontrol.ts).
   billing_method?: string | null;
+  // Member id of the active direct debit account that pays for them, when it
+  // isn't their own (lib/clubcontrol.ts readCoveredMembers).
+  covered_by_id?: string | null;
   first_name: string;
   last_name: string;
   email: string | null;

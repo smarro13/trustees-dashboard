@@ -22,8 +22,14 @@ is moving off Thrive4, so only who paid there last month matters.
 - The **Still on LoveAdmin** card lists everyone who paid through LoveAdmin
   and has **no active direct debit in ClubControl yet**, with who pays for
   them, the invoice amount, their team and their ClubControl billing method.
-  Anyone with an active ClubControl direct debit has moved: they're left off
-  this card and shown on the Thrive4 billing card until closed there. When the
+  Anyone paid by an active ClubControl direct debit has moved: they're left
+  off this card and shown on the Thrive4 billing card until closed there.
+  That includes people paid for by **someone else's** direct debit (a parent
+  for the family): only the account holder shows "Direct Debit: Active" in
+  ClubControl, so the ClubControl fetch also opens each active direct debit
+  account and reads who it pays for (`covered_by_id`). The card shows them as
+  "Paid by <name>'s direct debit", and the mandate checked is the account
+  holder's. When the
   card is empty, the migration is done.
 
 ## Who Thrive4 is still billing, and closing them

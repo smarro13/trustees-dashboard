@@ -150,19 +150,46 @@ export const splitCategories = (value: string): string[] => {
 // doesn't, as everyone was brought across from LoveAdmin as active.
 export const DIRECT_DEBIT_ACTIVE = 'Direct Debit: Active';
 
-const billingRank = (b: string | null | undefined) =>
-  b === DIRECT_DEBIT_ACTIVE ? 3 : b?.startsWith('Direct Debit') ? 2 : b === 'Card' ? 1 : 0;
+export type ClubControlBilling = {
+  billing_method: string | null;
+  external_id: string | null;
+  // The ClubControl member id of the account whose active direct debit pays
+  // for this person (e.g. a parent paying for the family), when it isn't their
+  // own. Read by the automatic fetch from that account's member list.
+  covered_by_id: string | null;
+};
 
-export type ClubControlBilling = { billing_method: string | null; external_id: string | null };
+// Pays through ClubControl by direct debit: their own, or the account that
+// pays for them.
+export const paysByDirectDebit = (b: ClubControlBilling | null | undefined) =>
+  b?.billing_method === DIRECT_DEBIT_ACTIVE || !!b?.covered_by_id;
 
-// Each name's billing method and ClubControl member id. Someone listed twice
-// gets their best record (an active direct debit wins), as with paid-up status.
-export const billingByName = (members: { first_name: string; last_name: string; billing_method?: string | null; external_id?: string | null }[]) => {
+// Whose ClubControl record holds the direct debit mandate for this person.
+export const mandateMemberId = (b: ClubControlBilling | null | undefined) =>
+  !b ? null : b.billing_method === DIRECT_DEBIT_ACTIVE ? b.external_id : b.covered_by_id ?? b.external_id;
+
+const billingRank = (b: Partial<ClubControlBilling> | null | undefined) =>
+  b?.billing_method === DIRECT_DEBIT_ACTIVE ? 4
+    : b?.covered_by_id ? 3
+      : b?.billing_method?.startsWith('Direct Debit') ? 2
+        : b?.billing_method === 'Card' ? 1
+          : 0;
+
+// Each name's billing method, ClubControl member id and the account paying
+// for them. Someone listed twice gets their best record (a direct debit
+// wins), as with paid-up status.
+export const billingByName = (members: {
+  first_name: string;
+  last_name: string;
+  billing_method?: string | null;
+  external_id?: string | null;
+  covered_by_id?: string | null;
+}[]) => {
   const map = new Map<string, ClubControlBilling>();
   for (const m of members) {
     const key = nameKey(m.first_name, m.last_name);
-    if (!map.has(key) || billingRank(m.billing_method) > billingRank(map.get(key)?.billing_method)) {
-      map.set(key, { billing_method: m.billing_method ?? null, external_id: m.external_id ?? null });
+    if (!map.has(key) || billingRank(m) > billingRank(map.get(key))) {
+      map.set(key, { billing_method: m.billing_method ?? null, external_id: m.external_id ?? null, covered_by_id: m.covered_by_id ?? null });
     }
   }
   return map;

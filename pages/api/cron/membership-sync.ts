@@ -26,29 +26,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ ok: false, error: 'Unauthorized' });
   }
 
-  const results: Record<string, string> = {};
-
-  if (process.env.CLUBCONTROL_EMAIL && process.env.CLUBCONTROL_PASSWORD) {
-    const r = await syncMembersFromClubControl(supabaseAdmin, 'ClubControl (weekly fetch)');
-    results.clubControl = 'error' in r ? `failed: ${r.error}` : `fetched ${r.total} members`;
-  } else {
-    results.clubControl = 'not connected';
-  }
-
-  if (process.env.GMS_EMAIL && process.env.GMS_PASSWORD) {
-    const r = await syncPlayersFromGms(supabaseAdmin, 'GMS (weekly fetch)');
-    results.gms = 'error' in r ? `failed: ${r.error}` : `fetched ${r.players} players`;
-  } else {
-    results.gms = 'not connected';
-  }
-
-  // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
-  if (process.env.THRIVE4_EMAIL && process.env.THRIVE4_PASSWORD) {
-    const r = await syncPaymentsFromThrive4(supabaseAdmin, 'Thrive4 (weekly fetch)');
-    results.thrive4 = 'error' in r ? `failed: ${r.error}` : `fetched ${r.people} people on paid invoices for ${r.monthLabel}`;
-  } else {
-    results.thrive4 = 'not connected';
-  }
+  // The three fetches don't depend on each other, so they run side by side to
+  // stay inside the time limit (ClubControl alone takes ~25s).
+  const [clubControl, gms, thrive4] = await Promise.all([
+    process.env.CLUBCONTROL_EMAIL && process.env.CLUBCONTROL_PASSWORD
+      ? syncMembersFromClubControl(supabaseAdmin, 'ClubControl (weekly fetch)')
+          .then((r) => ('error' in r ? `failed: ${r.error}` : `fetched ${r.total} members`))
+      : 'not connected',
+    process.env.GMS_EMAIL && process.env.GMS_PASSWORD
+      ? syncPlayersFromGms(supabaseAdmin, 'GMS (weekly fetch)')
+          .then((r) => ('error' in r ? `failed: ${r.error}` : `fetched ${r.players} players`))
+      : 'not connected',
+    // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+    process.env.THRIVE4_EMAIL && process.env.THRIVE4_PASSWORD
+      ? syncPaymentsFromThrive4(supabaseAdmin, 'Thrive4 (weekly fetch)')
+          .then((r) => ('error' in r ? `failed: ${r.error}` : `fetched ${r.people} people on paid invoices for ${r.monthLabel}`))
+      : 'not connected',
+  ]);
+  const results: Record<string, string> = { clubControl, gms, thrive4 };
 
   const failed = Object.values(results).some((v) => v.startsWith('failed'));
   return res.status(failed ? 502 : 200).json({ ok: !failed, ...results });

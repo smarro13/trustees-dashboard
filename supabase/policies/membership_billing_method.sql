@@ -11,3 +11,9 @@
 -- now". Idempotent — safe to re-run.
 
 alter table public.membership_members add column if not exists billing_method text;
+
+-- Paid for by someone else's direct debit (28 Oct 2026). Only the account
+-- holder shows "Direct Debit: Active"; the people their direct debit pays for
+-- (e.g. the rest of the family) get the account holder's ClubControl member
+-- id here, read from that account's member list by the automatic fetch.
+alter table public.membership_members add column if not exists covered_by_id text;

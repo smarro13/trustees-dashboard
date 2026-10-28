@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { ClubControlError, fetchMembersExport } from './clubcontrol';
 import { parseMembersCsv } from './importers/membershipImportParser';
 import { currentMembersCount, saveMembersExport } from './membershipStore';
+import { nameKey } from './membership';
 
 // Fetch the members export from ClubControl and save it exactly as a manual
 // upload on /operations/membership used to. Used by the weekly fetch and the
@@ -39,6 +40,14 @@ export async function syncMembersFromClubControl(admin: SupabaseClient, uploaded
   // ClubControl's own member id.
   if (exported.billingById) {
     for (const m of members) m.billing_method = (m.external_id && exported.billingById.get(m.external_id)) || null;
+  }
+  // Paid for by someone else's active direct debit (a parent for the family):
+  // the account holder's member id. Not set on the account holder themselves.
+  if (exported.coveredBy) {
+    for (const m of members) {
+      const account = exported.coveredBy.get(nameKey(m.first_name, m.last_name));
+      m.covered_by_id = account && account !== m.external_id ? account : null;
+    }
   }
 
   const previous = await currentMembersCount(admin);

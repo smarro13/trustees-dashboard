@@ -11,8 +11,9 @@ import {
   TEAM_BY_NAME,
   TEAM_GROUPS,
   ageOn,
-  DIRECT_DEBIT_ACTIVE,
   billingByName,
+  mandateMemberId,
+  paysByDirectDebit,
   type ClubControlBilling,
   isPaidUp,
   isSideCategory,
@@ -46,6 +47,8 @@ type Member = {
   billing_method?: string | null;
   // ClubControl's member id (the export's "Id").
   external_id?: string | null;
+  // Member id of the active direct debit account that pays for them, if not their own.
+  covered_by_id?: string | null;
 };
 
 type Player = {
@@ -139,20 +142,29 @@ async function loadAll<T>(query: (from: number, to: number) => PromiseLike<{ dat
   }
 }
 
-// The members export's rows, with ClubControl's billing method when the
-// column exists (supabase/policies/membership_billing_method.sql); without it
-// until that has been run.
+// The members export's rows, with ClubControl's billing method and paying
+// account when those columns exist (supabase/policies/membership_billing_method.sql);
+// without them until that has been run.
 const MEMBER_COLUMNS = 'id, first_name, last_name, email, categories, renewal_date, active, external_id';
 async function loadMembers(importId: string): Promise<Member[]> {
   const load = (columns: string) =>
     loadAll<Member>((from, to) =>
       supabase.from('membership_members').select(columns).eq('import_id', importId).order('id').range(from, to) as any);
-  try {
-    return await load(`${MEMBER_COLUMNS}, billing_method`);
-  } catch (error: any) {
-    if (!/billing_method/.test(error?.message ?? '')) throw error;
-    return load(MEMBER_COLUMNS);
+  for (const extra of [', billing_method, covered_by_id', ', billing_method']) {
+    try {
+      return await load(MEMBER_COLUMNS + extra);
+    } catch (error: any) {
+      if (!/billing_method|covered_by_id/.test(error?.message ?? '')) throw error;
+    }
   }
+  return load(MEMBER_COLUMNS);
+}
+
+// What ClubControl says about how someone pays, for the LoveAdmin cards.
+function clubControlLabel(member: Member | null, billing: ClubControlBilling | undefined, nameById: Map<string, string>) {
+  if (!member) return 'Not on ClubControl';
+  if (billing?.covered_by_id) return `Paid by ${nameById.get(billing.covered_by_id) ?? 'another member'}’s direct debit`;
+  return billing?.billing_method ?? (isPaidUp(member) ? 'Active' : 'Inactive');
 }
 
 
@@ -219,12 +231,14 @@ const hasActiveMandate = (m: ClubControlMandate | undefined) => !!m?.mandate_id 
 
 const sumAmounts = (items: { amount: number | null }[]) => items.reduce((t, i) => t + (i.amount ?? 0), 0);
 
-function Thrive4BillingCard({ open, onToggle, membersByName, billing, canClose, setNotice }: {
+function Thrive4BillingCard({ open, onToggle, membersByName, billing, nameById, canClose, setNotice }: {
   open: boolean;
   onToggle: () => void;
   membersByName: Map<string, Member>;
   // Each name's ClubControl billing method (billingByName in lib/membership.ts).
   billing: Map<string, ClubControlBilling>;
+  // ClubControl member id -> name, for "Paid by …'s direct debit".
+  nameById: Map<string, string>;
   // Admins: "Make inactive" buttons (pages/api/private/thrive4-deactivate.ts).
   canClose: boolean;
   setNotice: (n: InlineNotice) => void;
@@ -262,16 +276,22 @@ function Thrive4BillingCard({ open, onToggle, membersByName, billing, canClose, 
     () =>
       (people ?? [])
         .map((p) => {
-          // Moved = an active direct debit in ClubControl. Being active there
-          // isn't enough: everyone was brought across from LoveAdmin as active.
+          // Moved = paid by an active direct debit in ClubControl: their own,
+          // or the account that pays for them (a parent for the family). Being
+          // active there isn't enough: everyone was brought across as active.
           const key = nameKey(p.name, '');
           const member = membersByName.get(key) ?? null;
-          const method = billing.get(key)?.billing_method ?? null;
-          const clubControl = !member ? 'Not on ClubControl' : method ?? (isPaidUp(member) ? 'Active, billing not known' : 'Inactive');
-          return { ...p, clubControl, memberId: billing.get(key)?.external_id ?? null, moved: method === DIRECT_DEBIT_ACTIVE };
+          const record = billing.get(key);
+          return {
+            ...p,
+            clubControl: clubControlLabel(member, record, nameById),
+            // Whose record holds the mandate: theirs, or the paying account's.
+            memberId: mandateMemberId(record),
+            moved: paysByDirectDebit(record),
+          };
         })
         .sort((a, b) => Number(b.moved) - Number(a.moved) || a.name.localeCompare(b.name)),
-    [people, membersByName, billing],
+    [people, membersByName, billing, nameById],
   );
   const moved = rows.filter((r) => r.moved);
   // Only someone with an active mandate on ClubControl can be made inactive.
@@ -448,6 +468,7 @@ function Thrive4BillingCard({ open, onToggle, membersByName, billing, canClose, 
                                 return (
                                   <>
                                     <span className="text-xs text-zinc-700">
+                                      {r.clubControl.startsWith('Paid by') && <>{r.clubControl}. </>}
                                       Mandate {m.mandate_id ?? 'none'} · <span className={hasActiveMandate(m) ? 'font-semibold text-emerald-700' : 'font-semibold text-rose-700'}>{m.mandate_status ?? 'no status'}</span>
                                     </span>
                                     <span className="text-xs text-zinc-500">
@@ -854,6 +875,10 @@ export default function MembershipPage() {
   // as paid up if either record is.
   // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
   const billingNames = useMemo(() => billingByName(members), [members]);
+  const memberNameById = useMemo(
+    () => new Map(members.filter((m) => m.external_id).map((m) => [m.external_id as string, `${m.first_name} ${m.last_name}`.trim()])),
+    [members],
+  );
 
   const membersByName = useMemo(() => {
     const map = new Map<string, Member>();
@@ -994,17 +1019,18 @@ export default function MembershipPage() {
       .filter((l) => !hiddenKeys.has(l.name_key))
       .map((l) => {
         const member = membersByName.get(l.name_key) ?? null;
-        const method = billingNames.get(l.name_key)?.billing_method ?? null;
+        const record = billingNames.get(l.name_key);
         return {
           ...l,
           team: playersByKey.get(l.name_key)?.team ?? null,
-          moved: method === DIRECT_DEBIT_ACTIVE,
-          clubControl: !member ? 'Not on ClubControl' : method ?? (isPaidUp(member) ? 'Active' : 'Inactive'),
+          // Their own direct debit, or the account that pays for them.
+          moved: paysByDirectDebit(record),
+          clubControl: clubControlLabel(member, record, memberNameById),
         };
       })
       .filter((l) => filter === 'all' || (l.team !== null && teamNamesInFilter.has(l.team)))
       .sort((a, b) => byName(a.beneficiary, b.beneficiary));
-  }, [loveAdmin, playerRows, membersByName, billingNames, hiddenKeys, filter, teamNamesInFilter]);
+  }, [loveAdmin, playerRows, membersByName, billingNames, memberNameById, hiddenKeys, filter, teamNamesInFilter]);
   const stillOnLoveAdmin = useMemo(() => loveAdminRows.filter((l) => !l.moved), [loveAdminRows]);
   const movedFromLoveAdmin = loveAdminRows.length - stillOnLoveAdmin.length;
 
@@ -1490,11 +1516,11 @@ export default function MembershipPage() {
                 <div className={`flex flex-wrap items-center justify-between gap-3 bg-violet-50 px-5 py-4 ${openCards.loveAdmin ? 'border-b border-violet-200' : ''}`}>
                   <CardHeading open={openCards.loveAdmin} onToggle={() => toggleCard('loveAdmin')} title={`Still on LoveAdmin (${stillOnLoveAdmin.length})`}>
                     Paid through LoveAdmin (Thrive4), the old system, last month, so counted as paid, but with no active direct
-                    debit in ClubControl yet.{' '}
+                    debit in ClubControl yet (their own, or one paying for them).{' '}
                     {loveAdminImport
                       ? `Fetched from Thrive4 automatically, ${shortDate(loveAdminImport.uploaded_at)} (every Monday and on meeting days).`
                       : 'Not fetched from Thrive4 yet: it runs every Monday and on meeting days, or an admin can press “Fetch from Thrive4 now”.'}
-                    {movedFromLoveAdmin > 0 && ` ${movedFromLoveAdmin} more have moved (active direct debit in ClubControl): see Thrive4 billing.`}
+                    {movedFromLoveAdmin > 0 && ` ${movedFromLoveAdmin} more have moved (paid by an active ClubControl direct debit, theirs or the family’s): see Thrive4 billing.`}
                     {filter !== 'all' && ` Showing only those on ${filterLabel}.`}
                   </CardHeading>
                 </div>
@@ -1567,7 +1593,7 @@ export default function MembershipPage() {
             )}
 
             {/* LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md. */}
-            <Thrive4BillingCard open={openCards.thrive4} onToggle={() => toggleCard('thrive4')} membersByName={membersByName} billing={billingNames} canClose={canUpload} setNotice={setNotice} />
+            <Thrive4BillingCard open={openCards.thrive4} onToggle={() => toggleCard('thrive4')} membersByName={membersByName} billing={billingNames} nameById={memberNameById} canClose={canUpload} setNotice={setNotice} />
 
             <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-amber-200">
               <div className={`flex flex-wrap items-center justify-between gap-3 bg-amber-50 px-5 py-4 ${openCards.inactive ? 'border-b border-amber-200' : ''}`}>

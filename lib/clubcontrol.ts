@@ -12,6 +12,13 @@
 // member's "Billing Method" from the Members list (e.g. "Direct Debit:
 // Active"), a page at a time. If that part fails the export still comes back,
 // without billing methods.
+//
+// A direct debit often pays for more than one person (a parent for the
+// family), and only the account holder shows "Direct Debit: Active". So it
+// then opens each active direct debit account and reads the members it pays
+// for, giving each of them the account holder's member id (covered_by_id).
+
+import { DIRECT_DEBIT_ACTIVE, nameKey } from './membership';
 
 const BASE = 'https://www.clubcontrolhub.co.uk';
 const TIMEOUT_MS = 30000;
@@ -114,9 +121,42 @@ async function readBillingMethods(jar: Jar): Promise<Map<string, string>> {
   return billing;
 }
 
+// The people each active direct debit account pays for: the "Name" column of
+// the members table on the account's membership page (Name | Subscription |
+// Renewal Due | Amount | Status). Returns nameKey -> the account's member id.
+// Accounts are read ACCOUNTS_AT_ONCE at a time.
+const ACCOUNTS_AT_ONCE = 10;
+
+async function readCoveredMembers(jar: Jar, accountIds: string[]): Promise<Map<string, string>> {
+  const covered = new Map<string, string>();
+  for (let i = 0; i < accountIds.length; i += ACCOUNTS_AT_ONCE) {
+    const batch = accountIds.slice(i, i + ACCOUNTS_AT_ONCE);
+    const pages = await Promise.all(batch.map(async (id) => {
+      const res = await request(jar, `/members/${id}/memberships/edit`);
+      return res.status === 200 ? [id, await res.text()] as const : null;
+    }));
+    for (const page of pages) {
+      if (!page) continue;
+      const table = readTables(page[1]).find((t) => t.headings.includes('name') && t.headings.includes('renewal due'));
+      const nameColumn = table?.headings.indexOf('name') ?? -1;
+      for (const row of table?.rows ?? []) {
+        const name = row[nameColumn]?.trim();
+        if (name) covered.set(nameKey(name, ''), page[0]);
+      }
+    }
+  }
+  return covered;
+}
+
 // billingById: each member's Billing Method by member id, or null if the
-// Members list couldn't be read.
-export type ClubControlExport = { csv: string; fileName: string; billingById: Map<string, string> | null };
+// Members list couldn't be read. coveredBy: nameKey -> member id of the active
+// direct debit account that pays for them, or null if that couldn't be read.
+export type ClubControlExport = {
+  csv: string;
+  fileName: string;
+  billingById: Map<string, string> | null;
+  coveredBy: Map<string, string> | null;
+};
 
 // Logs in with the dashboard's account, runs `work`, then logs out (best
 // effort). `work` gets the cookie jar and the HTML of the first page it asks
@@ -185,7 +225,18 @@ export async function fetchMembersExport(): Promise<ClubControlExport> {
     } catch (error) {
       console.error('ClubControl billing methods not read:', error instanceof Error ? error.message : error);
     }
-    return { csv, fileName: `${decodeURIComponent(fileName)} (fetched automatically)`, billingById };
+
+    // 4. Who each active direct debit pays for.
+    let coveredBy: Map<string, string> | null = null;
+    if (billingById) {
+      try {
+        const accounts = [...billingById].filter(([, method]) => method === DIRECT_DEBIT_ACTIVE).map(([id]) => id);
+        coveredBy = await readCoveredMembers(jar, accounts);
+      } catch (error) {
+        console.error('ClubControl direct debit members not read:', error instanceof Error ? error.message : error);
+      }
+    }
+    return { csv, fileName: `${decodeURIComponent(fileName)} (fetched automatically)`, billingById, coveredBy };
   });
 }
 

@@ -66,22 +66,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Fetch the latest members export from ClubControl first, so the meeting
   // gets that day's figures (the routine fetch is only weekly). If it fails,
   // the report still saves, from the last export.
-  let clubControl: string = 'not connected';
-  if (process.env.CLUBCONTROL_EMAIL && process.env.CLUBCONTROL_PASSWORD) {
-    const sync = await syncMembersFromClubControl(supabaseAdmin, 'ClubControl (meeting-day fetch)');
-    clubControl = 'error' in sync ? `fetch failed: ${sync.error}` : `fetched ${sync.total} members`;
-  }
-  let gms: string = 'not connected';
-  if (process.env.GMS_EMAIL && process.env.GMS_PASSWORD) {
-    const sync = await syncPlayersFromGms(supabaseAdmin, 'GMS (meeting-day fetch)');
-    gms = 'error' in sync ? `fetch failed: ${sync.error}` : `fetched ${sync.players} players`;
-  }
-  // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
-  let thrive4: string = 'not connected';
-  if (process.env.THRIVE4_EMAIL && process.env.THRIVE4_PASSWORD) {
-    const sync = await syncPaymentsFromThrive4(supabaseAdmin, 'Thrive4 (meeting-day fetch)');
-    thrive4 = 'error' in sync ? `fetch failed: ${sync.error}` : `fetched ${sync.people} people on paid invoices for ${sync.monthLabel}`;
-  }
+  // The three fetches run side by side to stay inside the time limit.
+  const [clubControl, gms, thrive4] = await Promise.all([
+    process.env.CLUBCONTROL_EMAIL && process.env.CLUBCONTROL_PASSWORD
+      ? syncMembersFromClubControl(supabaseAdmin, 'ClubControl (meeting-day fetch)')
+          .then((sync) => ('error' in sync ? `fetch failed: ${sync.error}` : `fetched ${sync.total} members`))
+      : 'not connected',
+    process.env.GMS_EMAIL && process.env.GMS_PASSWORD
+      ? syncPlayersFromGms(supabaseAdmin, 'GMS (meeting-day fetch)')
+          .then((sync) => ('error' in sync ? `fetch failed: ${sync.error}` : `fetched ${sync.players} players`))
+      : 'not connected',
+    // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+    process.env.THRIVE4_EMAIL && process.env.THRIVE4_PASSWORD
+      ? syncPaymentsFromThrive4(supabaseAdmin, 'Thrive4 (meeting-day fetch)')
+          .then((sync) => ('error' in sync ? `fetch failed: ${sync.error}` : `fetched ${sync.people} people on paid invoices for ${sync.monthLabel}`))
+      : 'not connected',
+  ]);
 
   const summary = buildMembershipSummary(await loadMembershipData(supabaseAdmin));
 
