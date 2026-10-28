@@ -98,8 +98,6 @@ const DEFAULT_OPEN: Record<Card, boolean> = { byTeam: true, players: true, notOn
 const OPEN_CARDS_KEY = 'membership-open-cards';
 
 type MembersPreview = { total: number; inactive: number };
-// LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
-type LoveAdminPreview = { paidInvoices: number; skippedInvoices: number; people: number };
 type PlayersPreview = {
   total: number;
   added: number;
@@ -721,9 +719,9 @@ function NoteCell({
 }
 
 function UploadPanel({ onSaved, setNotice }: { onSaved: () => Promise<void>; setNotice: (n: InlineNotice) => void }) {
-  const [kind, setKind] = useState<'members' | 'players' | 'loveadmin'>('members');
+  const [kind, setKind] = useState<'members' | 'players'>('members');
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<MembersPreview | PlayersPreview | LoveAdminPreview | null>(null);
+  const [preview, setPreview] = useState<MembersPreview | PlayersPreview | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [inputKey, setInputKey] = useState(0);
@@ -757,9 +755,7 @@ function UploadPanel({ onSaved, setNotice }: { onSaved: () => Promise<void>; set
         type: 'success',
         message: kind === 'members'
           ? `ClubControl export saved — ${body.saved.total} members.`
-          : kind === 'loveadmin'
-            ? `LoveAdmin invoices saved — ${body.saved.people} people counted as paid.`
-            : `GMS player list saved — ${body.saved.added} added, ${body.saved.updated} updated.`,
+          : `GMS player list saved — ${body.saved.added} added, ${body.saved.updated} updated.`,
       });
       reset();
       await onSaved();
@@ -772,7 +768,6 @@ function UploadPanel({ onSaved, setNotice }: { onSaved: () => Promise<void>; set
 
   const playersPreview = kind === 'players' ? (preview as PlayersPreview | null) : null;
   const membersPreview = kind === 'members' ? (preview as MembersPreview | null) : null;
-  const loveAdminPreview = kind === 'loveadmin' ? (preview as LoveAdminPreview | null) : null;
 
   return (
     <section className="mb-8 rounded-2xl bg-white shadow-sm ring-1 ring-blue-200">
@@ -784,20 +779,16 @@ function UploadPanel({ onSaved, setNotice }: { onSaved: () => Promise<void>; set
         <div className="flex flex-wrap gap-2">
           <Chip active={kind === 'members'} onClick={() => { setKind('members'); reset(); }}>ClubControl members export</Chip>
           <Chip active={kind === 'players'} onClick={() => { setKind('players'); reset(); }}>GMS player list</Chip>
-          {/* LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md. */}
-          <Chip active={kind === 'loveadmin'} onClick={() => { setKind('loveadmin'); reset(); }}>LoveAdmin invoices (temporary)</Chip>
         </div>
         <p className="text-sm text-zinc-600">
           {kind === 'members'
             ? 'The members .csv from ClubControl. It replaces the previous export.'
-            : kind === 'loveadmin'
-              ? 'LoveAdmin’s “Invoices All Report” (.xlsx). Everyone a paid invoice was for counts as paid, and shows under Still on LoveAdmin until they’ve moved. It replaces the previous upload.'
-              : 'The player list from GMS (.xlsx or .csv). New players are added and existing ones updated — nobody is removed. Teams come from each player’s date of birth and gender.'}
+            : 'The player list from GMS (.xlsx or .csv). New players are added and existing ones updated — nobody is removed. Teams come from each player’s date of birth and gender.'}
         </p>
         <input
           key={inputKey}
           type="file"
-          accept={kind === 'members' ? '.csv' : kind === 'loveadmin' ? '.xlsx' : '.xlsx,.csv'}
+          accept={kind === 'members' ? '.csv' : '.xlsx,.csv'}
           disabled={busy}
           className="block w-full text-sm text-zinc-700 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
           onChange={(e) => {
@@ -814,18 +805,6 @@ function UploadPanel({ onSaved, setNotice }: { onSaved: () => Promise<void>; set
           <div className="rounded-lg bg-zinc-50 p-4 text-sm ring-1 ring-zinc-200">
             <p className="font-medium text-zinc-900">{membersPreview.total} members, {membersPreview.inactive} inactive.</p>
             <p className="mt-1 text-zinc-600">This replaces the current ClubControl data.</p>
-          </div>
-        )}
-
-        {loveAdminPreview && (
-          <div className="rounded-lg bg-zinc-50 p-4 text-sm ring-1 ring-zinc-200">
-            <p className="font-medium text-zinc-900">
-              {loveAdminPreview.paidInvoices} paid invoices, covering {loveAdminPreview.people} people.
-            </p>
-            {loveAdminPreview.skippedInvoices > 0 && (
-              <p className="mt-1 text-zinc-600">{loveAdminPreview.skippedInvoices} unpaid or cancelled invoices are ignored.</p>
-            )}
-            <p className="mt-1 text-zinc-600">This replaces the current LoveAdmin data.</p>
           </div>
         )}
 
@@ -1138,23 +1117,30 @@ export default function MembershipPage() {
   }, [members, players, hiddenKeys, notOnGmsSearch]);
 
   // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
-  // Everyone still paying through LoveAdmin, with their team and ClubControl
-  // status — the list shrinks to nothing as people move over.
-  const stillOnLoveAdmin = useMemo(() => {
+  // Everyone who paid through LoveAdmin last month (fetched automatically from
+  // Thrive4), with their team and ClubControl billing method. Anyone with an
+  // active ClubControl direct debit has moved, so isn't listed (they show on
+  // the Thrive4 billing card until closed there). The list shrinks to nothing
+  // as people move over.
+  const loveAdminRows = useMemo(() => {
     const playersByKey = new Map(playerRows.map((p) => [p.name_key, p]));
     return loveAdmin
       .filter((l) => !hiddenKeys.has(l.name_key))
       .map((l) => {
         const member = membersByName.get(l.name_key) ?? null;
+        const method = billingNames.get(l.name_key)?.billing_method ?? null;
         return {
           ...l,
           team: playersByKey.get(l.name_key)?.team ?? null,
-          clubControl: !member ? 'Not on ClubControl' : isPaidUp(member) ? 'Active' : 'Inactive',
+          moved: method === DIRECT_DEBIT_ACTIVE,
+          clubControl: !member ? 'Not on ClubControl' : method ?? (isPaidUp(member) ? 'Active' : 'Inactive'),
         };
       })
       .filter((l) => filter === 'all' || (l.team !== null && teamNamesInFilter.has(l.team)))
       .sort((a, b) => byName(a.beneficiary, b.beneficiary));
-  }, [loveAdmin, playerRows, membersByName, hiddenKeys, filter, teamNamesInFilter]);
+  }, [loveAdmin, playerRows, membersByName, billingNames, hiddenKeys, filter, teamNamesInFilter]);
+  const stillOnLoveAdmin = useMemo(() => loveAdminRows.filter((l) => !l.moved), [loveAdminRows]);
+  const movedFromLoveAdmin = loveAdminRows.length - stillOnLoveAdmin.length;
 
   // Admins' Hidden tab: everyone hidden, with what the report would show.
   const hiddenPeople = useMemo(() => {
@@ -1209,7 +1195,7 @@ export default function MembershipPage() {
                 ClubControl export: {membersImport ? shortDate(membersImport.uploaded_at) : 'not uploaded yet'}
                 {' · '}GMS player list: {playersImport ? shortDate(playersImport.uploaded_at) : 'not uploaded yet'}
                 {/* LoveAdmin migration (temporary) */}
-                {loveAdminImport && <>{' · '}LoveAdmin: {shortDate(loveAdminImport.uploaded_at)}</>}
+                {' · '}Thrive4 (LoveAdmin): {loveAdminImport ? shortDate(loveAdminImport.uploaded_at) : 'not fetched yet'}
               </p>
             )}
           </div>
@@ -1643,16 +1629,21 @@ export default function MembershipPage() {
             </section>
 
             {/* LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md. */}
-            {loveAdmin.length > 0 && (
+            {(
               <section className="mb-8 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-violet-200">
                 <div className={`flex flex-wrap items-center justify-between gap-3 bg-violet-50 px-5 py-4 ${openCards.loveAdmin ? 'border-b border-violet-200' : ''}`}>
                   <CardHeading open={openCards.loveAdmin} onToggle={() => toggleCard('loveAdmin')} title={`Still on LoveAdmin (${stillOnLoveAdmin.length})`}>
-                    Paid through LoveAdmin, the old system, so counted as paid — but still to be moved to ClubControl.
+                    Paid through LoveAdmin (Thrive4), the old system, last month, so counted as paid, but with no active direct
+                    debit in ClubControl yet.{' '}
+                    {loveAdminImport
+                      ? `Fetched from Thrive4 automatically, ${shortDate(loveAdminImport.uploaded_at)} (every Monday and on meeting days).`
+                      : 'Not fetched from Thrive4 yet: it runs every Monday and on meeting days, or an admin can press “Fetch from Thrive4 now”.'}
+                    {movedFromLoveAdmin > 0 && ` ${movedFromLoveAdmin} more have moved (active direct debit in ClubControl): see Thrive4 billing.`}
                     {filter !== 'all' && ` Showing only those on ${filterLabel}.`}
                   </CardHeading>
                 </div>
                 {!openCards.loveAdmin ? null : stillOnLoveAdmin.length === 0 ? (
-                  <p className="px-5 py-6 text-sm text-zinc-400">Nobody on LoveAdmin for this selection.</p>
+                  <p className="px-5 py-6 text-sm text-zinc-400">{loveAdminImport ? 'Nobody still on LoveAdmin for this selection.' : 'No Thrive4 data yet.'}</p>
                 ) : (
                   <>
                     <ul className="divide-y divide-zinc-100 sm:hidden">
