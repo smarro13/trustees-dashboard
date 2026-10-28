@@ -30,11 +30,11 @@ is moving off Thrive4, so only who paid there last month matters.
   account and reads who it pays for (`covered_by_id`). The card shows them as
   "Paid by <name>'s direct debit", and the mandate checked is the account
   holder's. "Moved" means an **active GoCardless mandate** (status read from
-  each direct debit account's ClubControl page, \`mandate_status\`).
+  each direct debit account's ClubControl page, `mandate_status`).
 - Names are matched between the two systems exactly, or by a near-identical
   name when exactly one ClubControl person fits: the same surname and a
   compatible first name ("Ste" / "Steven", "Katy" / "Katherine"; see
-  \`findClubControl\` in \`lib/membership.ts\`). The ClubControl name is shown
+  `findClubControl` in `lib/membership.ts`). The ClubControl name is shown
   under the status when it differs. Anyone with no match at all is flagged
   **⚠ Not on ClubControl**. When the card is empty, the migration is done.
 
