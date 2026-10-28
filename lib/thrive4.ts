@@ -98,16 +98,18 @@ export type Thrive4Invoices = {
   month: { from: string; to: string };
 };
 
-export async function fetchThrive4Payments(): Promise<Thrive4Invoices> {
-  const session = await signIn();
+const INVOICES_PATH = '/services/payment/invoices/organisation/datefilter';
+const SUBSCRIPTIONS_PATH = '/services/payment/organisation/purchase-orders/outstanding/date-filter';
 
+// Both lists take the same filter as Thrive4's own report pages.
+async function listByDate<T>(session: Session, path: string, dateFilter: string, what: string): Promise<T[]> {
   const response = await call(
-    `${THRIVE4}/services/payment/invoices/organisation/datefilter`,
+    `${THRIVE4}${path}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        dateFilter: DATE_FILTER,
+        dateFilter,
         startDate: null,
         endDate: null,
         productGuids: null,
@@ -121,9 +123,16 @@ export async function fetchThrive4Payments(): Promise<Thrive4Invoices> {
     },
     session,
   );
-  if (!response.ok) throw new Thrive4Error(`Thrive4 wouldn’t return the invoices (${response.status}).`);
-  const invoices = (await response.json().catch(() => null)) as Invoice[] | null;
-  if (!Array.isArray(invoices)) throw new Thrive4Error('Thrive4 returned something other than an invoice list.');
+  if (!response.ok) throw new Thrive4Error(`Thrive4 wouldn’t return the ${what} (${response.status}).`);
+  const rows = (await response.json().catch(() => null)) as T[] | null;
+  if (!Array.isArray(rows)) throw new Thrive4Error(`Thrive4 returned something other than a list of ${what}.`);
+  return rows;
+}
+
+export async function fetchThrive4Payments(): Promise<Thrive4Invoices> {
+  const session = await signIn();
+
+  const invoices = await listByDate<Invoice>(session, INVOICES_PATH, DATE_FILTER, 'invoices');
 
   const month = previousMonth();
   const inMonth = invoices.filter((i) => {
@@ -162,4 +171,76 @@ export async function fetchThrive4Payments(): Promise<Thrive4Invoices> {
     }
   }
   return { payments: [...payments.values()], paidInvoices, skippedInvoices, month };
+}
+
+// ── What Thrive4 is still billing (the Thrive4 billing card on /operations/membership) ──
+
+// A subscription ("purchase order") that will raise the next monthly invoice.
+type Subscription = {
+  id: number;
+  beneficiaryGuid: string | null;
+  firstName: string | null; // the person it's for
+  lastName: string | null;
+  userFirstName: string | null; // who pays (the account owner)
+  userLastName: string | null;
+  description: string | null;
+  grossAmountPostDiscount: number | null;
+  payableDate: string | null;
+  autoRenew: boolean | null;
+  doNotRenewOrder: boolean | null;
+};
+
+export type Thrive4BillingPerson = {
+  person_guid: string;
+  name: string;
+  payer: string | null;
+  // Subscriptions due to raise the next invoice.
+  upcoming: { id: number; description: string | null; amount: number | null; payable_date: string | null }[];
+  // This month's invoices: already raised.
+  invoiced: { id: number; date: string | null; amount: number | null; status: string | null }[];
+};
+
+const fullName = (first: string | null, last: string | null) => [first, last].filter(Boolean).join(' ').trim();
+
+// Everyone Thrive4 has invoiced this month or will invoice next, by Thrive4 id.
+// Read only: nothing in Thrive4 is changed.
+export async function fetchThrive4Billing(): Promise<Thrive4BillingPerson[]> {
+  const session = await signIn();
+  const [subscriptions, invoices] = await Promise.all([
+    // "all" returns every outstanding subscription (the next month's invoices).
+    listByDate<Subscription>(session, SUBSCRIPTIONS_PATH, 'all', 'subscriptions'),
+    listByDate<Invoice>(session, INVOICES_PATH, 'this month', 'invoices'),
+  ]);
+
+  const people = new Map<string, Thrive4BillingPerson>();
+  const person = (guid: string, name: string, payer: string | null) => {
+    let p = people.get(guid);
+    if (!p) {
+      p = { person_guid: guid, name, payer, upcoming: [], invoiced: [] };
+      people.set(guid, p);
+    }
+    return p;
+  };
+
+  for (const s of subscriptions) {
+    if (!s.beneficiaryGuid || s.doNotRenewOrder) continue;
+    person(s.beneficiaryGuid, fullName(s.firstName, s.lastName), fullName(s.userFirstName, s.userLastName) || null).upcoming.push({
+      id: s.id,
+      description: s.description,
+      amount: s.grossAmountPostDiscount,
+      payable_date: s.payableDate ? s.payableDate.slice(0, 10) : null,
+    });
+  }
+  for (const i of invoices) {
+    for (const b of i.beneficiaryDetail ?? []) {
+      if (!b.person_guid) continue;
+      person(b.person_guid, (b.person_name ?? '').trim(), fullName(i.firstName, i.lastName) || null).invoiced.push({
+        id: i.id,
+        date: i.invoiceDate ? i.invoiceDate.slice(0, 10) : null,
+        amount: i.totalGrossAmount,
+        status: i.reconciliationStatus,
+      });
+    }
+  }
+  return [...people.values()].sort((a, b) => a.name.localeCompare(b.name));
 }

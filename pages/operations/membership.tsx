@@ -82,11 +82,11 @@ type View = 'report' | 'hidden';
 type FetchSource = 'clubcontrol' | 'gms' | 'thrive4';
 const FETCH_NAMES: Record<FetchSource, string> = { clubcontrol: 'ClubControl', gms: 'GMS', thrive4: 'Thrive4' };
 
-type Card = 'byTeam' | 'players' | 'notOnGms' | 'loveAdmin' | 'inactive';
+type Card = 'byTeam' | 'players' | 'notOnGms' | 'loveAdmin' | 'thrive4' | 'inactive';
 
 // Which report cards start open. Each viewer's own choice is remembered in
 // their browser after that.
-const DEFAULT_OPEN: Record<Card, boolean> = { byTeam: true, players: true, notOnGms: false, loveAdmin: false, inactive: false };
+const DEFAULT_OPEN: Record<Card, boolean> = { byTeam: true, players: true, notOnGms: false, loveAdmin: false, thrive4: false, inactive: false };
 const OPEN_CARDS_KEY = 'membership-open-cards';
 
 type MembersPreview = { total: number; inactive: number };
@@ -177,6 +177,158 @@ function CardHeading({ open, onToggle, title, children }: {
     </div>
   );
 }
+
+// LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+// What Thrive4 (LoveAdmin) has invoiced this month and will invoice next, per
+// person, checked live (pages/api/private/thrive4-billing.ts). Anyone already
+// active in ClubControl is flagged: they've moved but Thrive4 is still billing
+// them, so their Thrive4 subscription needs closing.
+type Thrive4BillingPerson = {
+  person_guid: string;
+  name: string;
+  payer: string | null;
+  upcoming: { id: number; description: string | null; amount: number | null; payable_date: string | null }[];
+  invoiced: { id: number; date: string | null; amount: number | null; status: string | null }[];
+};
+
+const sumAmounts = (items: { amount: number | null }[]) => items.reduce((t, i) => t + (i.amount ?? 0), 0);
+
+function Thrive4BillingCard({ open, onToggle, membersByName }: {
+  open: boolean;
+  onToggle: () => void;
+  membersByName: Map<string, Member>;
+}) {
+  const [people, setPeople] = useState<Thrive4BillingPerson[] | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [onlyMoved, setOnlyMoved] = useState(true);
+
+  const check = async () => {
+    setChecking(true);
+    setError(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const response = await fetch('/api/private/thrive4-billing', {
+        headers: { Authorization: `Bearer ${sessionData.session?.access_token ?? ''}` },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.ok) throw new Error(payload.error || 'Checking Thrive4 failed.');
+      setPeople(payload.people);
+    } catch (e: any) {
+      setError(e.message);
+    }
+    setChecking(false);
+  };
+
+  const rows = useMemo(
+    () =>
+      (people ?? [])
+        .map((p) => {
+          const member = membersByName.get(nameKey(p.name, '')) ?? null;
+          const clubControl = !member ? 'Not on ClubControl' : isPaidUp(member) ? 'Active' : 'Inactive';
+          return { ...p, clubControl, moved: clubControl === 'Active' };
+        })
+        .sort((a, b) => Number(b.moved) - Number(a.moved) || a.name.localeCompare(b.name)),
+    [people, membersByName],
+  );
+  const moved = rows.filter((r) => r.moved);
+  const movedDue = moved.reduce((t, r) => t + sumAmounts(r.upcoming), 0);
+  const shown = onlyMoved ? moved : rows;
+
+  return (
+    <section className="mb-8 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-violet-200">
+      <div className={`flex flex-wrap items-center justify-between gap-3 bg-violet-50 px-5 py-4 ${open ? 'border-b border-violet-200' : ''}`}>
+        <CardHeading open={open} onToggle={onToggle} title={people ? `Thrive4 billing (${moved.length} moved, still billed)` : 'Thrive4 billing'}>
+          What Thrive4 (LoveAdmin) invoiced this month and will invoice next, checked live. Anyone active in ClubControl has
+          moved but is still being billed on Thrive4, so their Thrive4 subscription needs closing.
+        </CardHeading>
+        {open && (
+          <div className="flex flex-wrap items-center gap-3">
+            {people && (
+              <label className="inline-flex items-center gap-2 text-sm text-zinc-700">
+                <input type="checkbox" checked={onlyMoved} onChange={(e) => setOnlyMoved(e.target.checked)} className="h-4 w-4 rounded border-zinc-300" />
+                Only people who’ve moved
+              </label>
+            )}
+            <button
+              type="button"
+              onClick={check}
+              disabled={checking}
+              className="rounded-lg border border-violet-300 bg-white px-4 py-2 text-sm font-medium text-violet-800 hover:bg-violet-50 disabled:opacity-60"
+            >
+              {checking ? 'Checking…' : people ? '🔄 Check again' : '🔍 Check Thrive4'}
+            </button>
+          </div>
+        )}
+      </div>
+      {!open ? null : error ? (
+        <p role="alert" className="px-5 py-6 text-sm text-rose-600">{error}</p>
+      ) : !people ? (
+        <p className="px-5 py-6 text-sm text-zinc-500">Press Check Thrive4 to see who it’s still billing.</p>
+      ) : (
+        <>
+          <p className="px-5 pt-4 text-sm text-zinc-700">
+            {moved.length === 0
+              ? 'Nobody who’s active in ClubControl has a Thrive4 subscription or invoice this month.'
+              : `${moved.length} ${moved.length === 1 ? 'person has' : 'people have'} moved to ClubControl but ${moved.length === 1 ? 'is' : 'are'} still on Thrive4${movedDue ? `: ${money(movedDue)} due to be invoiced next` : ''}.`}
+            {' '}<span className="text-zinc-500">Thrive4 is billing {rows.length} people in all.</span>
+          </p>
+          {shown.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-zinc-400">Nobody to show.</p>
+          ) : (
+            <div className="overflow-x-auto pb-2 pt-2">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wide text-zinc-500">
+                    <th className="px-5 py-2 font-semibold">Name</th>
+                    <th className="px-3 py-2 font-semibold">Paid by</th>
+                    <th className="px-3 py-2 font-semibold">Next invoice</th>
+                    <th className="px-3 py-2 font-semibold">This month</th>
+                    <th className="px-3 py-2 font-semibold">ClubControl</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100">
+                  {shown.map((r) => (
+                    <tr key={r.person_guid} className={`align-top ${r.moved ? 'bg-rose-50/60' : ''}`}>
+                      <td className="px-5 py-2 font-medium text-zinc-900">{r.name}</td>
+                      <td className="px-3 py-2 text-zinc-600">{r.payer && nameKey(r.payer, '') !== nameKey(r.name, '') ? r.payer : 'Themselves'}</td>
+                      <td className="px-3 py-2 text-zinc-600">
+                        {r.upcoming.length === 0
+                          ? <span className="text-zinc-400">None due</span>
+                          : r.upcoming.map((u) => (
+                              <div key={u.id}>
+                                {u.amount !== null ? money(u.amount) : '—'} on {shortDate(u.payable_date)}
+                                {u.description && <span className="text-zinc-400"> · {u.description}</span>}
+                              </div>
+                            ))}
+                      </td>
+                      <td className="px-3 py-2 text-zinc-600">
+                        {r.invoiced.length === 0
+                          ? <span className="text-zinc-400">—</span>
+                          : r.invoiced.map((i) => (
+                              <div key={i.id} className="whitespace-nowrap">
+                                {i.amount !== null ? money(i.amount) : '—'} on {shortDate(i.date)}
+                                <span className="text-zinc-400"> · {i.status ?? 'unknown'}</span>
+                              </div>
+                            ))}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2">
+                        {r.moved
+                          ? <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-800 ring-1 ring-rose-200">Active: close on Thrive4</span>
+                          : <span className="text-zinc-600">{r.clubControl}</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 
 function StatusBadge({ status }: { status: PlayerStatus }) {
   return (
@@ -1381,6 +1533,9 @@ export default function MembershipPage() {
                 )}
               </section>
             )}
+
+            {/* LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md. */}
+            <Thrive4BillingCard open={openCards.thrive4} onToggle={() => toggleCard('thrive4')} membersByName={membersByName} />
 
             <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-amber-200">
               <div className={`flex flex-wrap items-center justify-between gap-3 bg-amber-50 px-5 py-4 ${openCards.inactive ? 'border-b border-amber-200' : ''}`}>
