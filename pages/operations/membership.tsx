@@ -1033,6 +1033,13 @@ export default function MembershipPage() {
   }, [loveAdmin, playerRows, membersByName, billingNames, memberNameById, hiddenKeys, filter, teamNamesInFilter]);
   const stillOnLoveAdmin = useMemo(() => loveAdminRows.filter((l) => !l.moved), [loveAdminRows]);
   const movedFromLoveAdmin = loveAdminRows.length - stillOnLoveAdmin.length;
+  // Without ClubControl's direct debit details nobody can be taken off Still
+  // on LoveAdmin, so say which step is missing rather than show everyone.
+  const directDebitDataMissing = !members.some((m) => m.billing_method)
+    ? `ClubControl’s direct debit details aren’t loaded${membersImport ? ` (last ClubControl fetch ${shortDate(membersImport.uploaded_at)})` : ''}, so nobody is taken off this list yet. Run supabase/policies/membership_billing_method.sql, then press “Fetch from ClubControl now”.`
+    : !members.some((m) => m.covered_by_id)
+      ? `ClubControl hasn’t been fetched since the dashboard started reading who each direct debit pays for${membersImport ? ` (last fetch ${shortDate(membersImport.uploaded_at)})` : ''}, so people paid for by someone else’s direct debit (e.g. a parent’s) still show here. Re-run supabase/policies/membership_billing_method.sql, then press “Fetch from ClubControl now”.`
+      : null;
 
   // Admins' Hidden tab: everyone hidden, with what the report would show.
   const hiddenPeople = useMemo(() => {
@@ -1524,6 +1531,11 @@ export default function MembershipPage() {
                     {filter !== 'all' && ` Showing only those on ${filterLabel}.`}
                   </CardHeading>
                 </div>
+                {loveAdmin.length > 0 && directDebitDataMissing && (
+                  <p role="alert" className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800">
+                    {directDebitDataMissing}
+                  </p>
+                )}
                 {!openCards.loveAdmin ? null : stillOnLoveAdmin.length === 0 ? (
                   <p className="px-5 py-6 text-sm text-zinc-400">{loveAdminImport ? 'Nobody still on LoveAdmin for this selection.' : 'No Thrive4 data yet.'}</p>
                 ) : (
