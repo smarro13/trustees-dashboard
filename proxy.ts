@@ -79,7 +79,11 @@ const getRequiredRoleForPath = (pathname: string): DashboardRole => {
 
   // Members' personal data — admins, trustees and directors only. Matches the
   // RLS policies in supabase/policies/membership.sql.
-  if (pathname === '/operations/membership' || pathname === '/operations/membership/report') {
+  if (
+    pathname === '/operations/membership' ||
+    pathname === '/operations/membership/report' ||
+    pathname === '/operations/membership/calculator'
+  ) {
     return 'director';
   }
 
@@ -89,11 +93,21 @@ const getRequiredRoleForPath = (pathname: string): DashboardRole => {
 // Director of Rugby: the dashboard home (cut down to links to these two), the
 // Rugby agenda page and the membership page. Nothing else, including the
 // pages with no role requirement (meetings, operations, admin).
-const DOR_PATHS = new Set(['/', '/agenda/rugby', '/operations/membership', '/operations/membership/report']);
+const DOR_PATHS = new Set([
+  '/',
+  '/agenda/rugby',
+  '/operations/membership',
+  '/operations/membership/report',
+  '/operations/membership/calculator',
+]);
 
 // Pages opened up by the per-user membership switch on /admin/roles
 // (app_metadata.membership_access), whatever the user's role.
-const MEMBERSHIP_PATHS = new Set(['/operations/membership', '/operations/membership/report']);
+const MEMBERSHIP_PATHS = new Set([
+  '/operations/membership',
+  '/operations/membership/report',
+  '/operations/membership/calculator',
+]);
 
 const hasRequiredRole = (actual: DashboardRole, required: DashboardRole) => {
   if (!required) return true;
