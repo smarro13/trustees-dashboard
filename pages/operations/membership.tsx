@@ -216,6 +216,223 @@ function ClubControlStatus({ row }: { row: { clubControl: string; clubControlNam
 }
 
 
+// LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+// "Text about moving to ClubControl" (admins): edit the message, send a test,
+// see who'd be texted, queue them, then Start. The texts go out from the
+// club's phone a few at a time through the day (lib/smsCampaign.ts).
+type SmsRecipient = { payer_key: string; payer_name: string; beneficiaries: string[]; phone_masked: string | null; email_masked: string | null };
+type SmsMessageRow = { payer_name: string; beneficiaries: string[]; status: string; error: string | null; sent_at: string | null; queued_at: string };
+type SmsStatus = {
+  textbee: boolean;
+  defaultMessage: string;
+  campaign: { message: string; active: boolean; updated_by: string | null; updated_at: string | null };
+  messages: SmsMessageRow[];
+};
+
+const SMS_STATUS_LABELS: Record<string, string> = {
+  queued: 'Waiting',
+  sent: 'Sent',
+  failed: 'Failed',
+  skipped: 'Skipped (moved first)',
+  stopped: 'Replied STOP',
+};
+
+function SmsCampaignPanel({ setNotice }: { setNotice: (n: InlineNotice) => void }) {
+  const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState<SmsStatus | null>(null);
+  const [message, setMessage] = useState('');
+  const [testPhone, setTestPhone] = useState('');
+  const [recipients, setRecipients] = useState<SmsRecipient[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const call = async (method: 'GET' | 'POST', body?: object) => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const response = await fetch('/api/private/sms-campaign', {
+      method,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.session?.access_token ?? ''}` },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) throw new Error(payload.error || 'Something went wrong.');
+    return payload;
+  };
+
+  const load = async () => {
+    try {
+      const payload = await call('GET');
+      setStatus(payload);
+      setMessage((current) => current || payload.campaign.message || payload.defaultMessage);
+      setError(null);
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
+  useEffect(() => {
+    if (open && !status) void load();
+  }, [open]);
+
+  const act = async (action: string, extra: object = {}, done?: (payload: any) => void) => {
+    setBusy(action);
+    try {
+      const payload = await call('POST', { action, message, ...extra });
+      done?.(payload);
+      await load();
+    } catch (e: any) {
+      setNotice({ type: 'error', message: e.message });
+    }
+    setBusy(null);
+  };
+
+  const counts = (status?.messages ?? []).reduce<Record<string, number>>((c, m) => ({ ...c, [m.status]: (c[m.status] ?? 0) + 1 }), {});
+  const queued = counts.queued ?? 0;
+  const example = renderSmsExample(message);
+
+  return (
+    <div className="border-b border-violet-200 bg-white px-5 py-4">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="text-sm font-semibold text-violet-800 hover:underline">
+        {open ? '▾' : '▸'} 📱 Text payers about moving to ClubControl
+      </button>
+      {open && (
+        <div className="mt-3 space-y-4 text-sm">
+          {error && <p role="alert" className="text-rose-600">{error}</p>}
+          {status && !status.textbee && (
+            <p className="text-amber-700">textbee isn’t connected yet: add TEXTBEE_API_KEY in Vercel (and link your phone in the textbee app).</p>
+          )}
+          <p className="text-zinc-600">
+            One text to each payer on the LoveAdmin upload whose family has no active ClubControl mandate yet, from your
+            phone through textbee: {PER_RUN_TEXT}. Anyone who sets up their direct debit before their turn is skipped, and anyone who replies
+            STOP isn’t texted again. Mobile numbers and emails are looked up in Thrive4 and deleted once each text is sent.
+          </p>
+
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Message ({'{first}'} = payer’s first name, {'{names}'} = who they pay for)
+            </span>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              rows={4}
+              maxLength={600}
+              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+            />
+            <span className="mt-1 block text-xs text-zinc-500">
+              {message.length} characters (texts over 160 go as {Math.max(1, Math.ceil(message.length / 153))} parts)
+              {/\[LINK\]/.test(message) && <span className="font-semibold text-amber-700"> · replace [LINK] with the ClubControl link</span>}
+            </span>
+            <span className="mt-2 block rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-600 ring-1 ring-zinc-200">Example: {example}</span>
+          </label>
+
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="block">
+              <span className="mb-1 block text-xs text-zinc-500">Send a test to</span>
+              <input value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="07…" inputMode="tel" className="w-40 rounded-lg border border-zinc-300 px-3 py-2 text-sm" />
+            </label>
+            <button
+              type="button"
+              disabled={!!busy || !testPhone}
+              onClick={() => act('test', { phone: testPhone }, () => setNotice({ type: 'success', message: 'Test text sent. Check the phone.' }))}
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-60"
+            >
+              {busy === 'test' ? 'Sending…' : 'Send test'}
+            </button>
+            <button
+              type="button"
+              disabled={!!busy}
+              onClick={() => act('save', {}, () => setNotice({ type: 'success', message: 'Message saved.' }))}
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-60"
+            >
+              Save message
+            </button>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={!!busy}
+              onClick={() => act('preview', {}, (p) => setRecipients(p.recipients))}
+              className="rounded-lg border border-violet-300 bg-white px-3 py-2 font-medium text-violet-800 hover:bg-violet-50 disabled:opacity-60"
+            >
+              {busy === 'preview' ? 'Checking…' : '👀 Who would be texted?'}
+            </button>
+            {recipients && recipients.some((r) => r.phone_masked) && (
+              <button
+                type="button"
+                disabled={!!busy}
+                onClick={() => act('queue', {}, (p) => {
+                  setRecipients(null);
+                  setNotice({ type: 'success', message: `${p.queued} texts queued. Press Start to begin sending.` });
+                })}
+                className="rounded-lg bg-violet-700 px-3 py-2 font-semibold text-white hover:bg-violet-800 disabled:opacity-60"
+              >
+                {busy === 'queue' ? 'Queuing…' : `Queue ${recipients.filter((r) => r.phone_masked).length} texts`}
+              </button>
+            )}
+            {status && queued > 0 && (
+              status.campaign.active ? (
+                <button type="button" disabled={!!busy} onClick={() => act('pause')} className="rounded-lg bg-amber-500 px-3 py-2 font-semibold text-white hover:bg-amber-600 disabled:opacity-60">
+                  ⏸ Pause sending
+                </button>
+              ) : (
+                <button type="button" disabled={!!busy} onClick={() => act('start')} className="rounded-lg bg-emerald-600 px-3 py-2 font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
+                  ▶ Start sending ({queued} waiting)
+                </button>
+              )
+            )}
+            {(counts.failed ?? 0) > 0 && (
+              <button type="button" disabled={!!busy} onClick={() => act('retry')} className="rounded-lg border border-rose-300 bg-white px-3 py-2 font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-60">
+                Retry {counts.failed} failed
+              </button>
+            )}
+          </div>
+
+          {recipients && (
+            <div className="rounded-lg ring-1 ring-zinc-200">
+              <p className="border-b border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+                {recipients.length} payers still to move and not yet texted; {recipients.filter((r) => !r.phone_masked).length} have no mobile number in Thrive4 (or replied STOP) and won’t be texted; their email is shown where Thrive4 has one.
+              </p>
+              <ul className="max-h-64 divide-y divide-zinc-100 overflow-y-auto">
+                {recipients.map((r) => (
+                  <li key={r.payer_key} className="flex justify-between gap-3 px-3 py-1.5 text-xs">
+                    <span><span className="font-medium text-zinc-900">{r.payer_name}</span> <span className="text-zinc-500">for {r.beneficiaries.join(', ')}</span></span>
+                    <span className={r.phone_masked ? 'text-right text-zinc-500' : 'text-right font-medium text-rose-600'}>{r.phone_masked ?? 'no mobile'}{r.email_masked && <span className="block text-zinc-400">{r.email_masked}</span>}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {status && status.messages.length > 0 && (
+            <div className="rounded-lg ring-1 ring-zinc-200">
+              <p className="border-b border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+                {status.campaign.active ? '▶ Sending' : '⏸ Not sending'} ·{' '}
+                {Object.entries(counts).map(([k, n]) => `${SMS_STATUS_LABELS[k] ?? k}: ${n}`).join(' · ')}
+              </p>
+              <ul className="max-h-64 divide-y divide-zinc-100 overflow-y-auto">
+                {status.messages.map((m, i) => (
+                  <li key={i} className="flex justify-between gap-3 px-3 py-1.5 text-xs">
+                    <span><span className="font-medium text-zinc-900">{m.payer_name}</span> <span className="text-zinc-500">for {m.beneficiaries.join(', ')}</span></span>
+                    <span className={m.status === 'failed' ? 'text-rose-600' : 'text-zinc-500'} title={m.error ?? undefined}>
+                      {SMS_STATUS_LABELS[m.status] ?? m.status}{m.sent_at ? ` ${shortDate(m.sent_at)}` : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const PER_RUN_TEXT = 'up to 10 at a time, four times a day (10am, 12:30, 3pm and 6pm), at most 40 a day';
+
+// The message as one payer would get it, for the preview.
+const renderSmsExample = (message: string) =>
+  message.replace(/\{first\}/g, 'Mike').replace(/\{names\}/g, 'Sarah and Tom Smith');
+
 function StatTile({ label, value, detail, tone }: { label: string; value: string; detail?: string; tone?: string }) {
   return (
     <div className="min-w-0 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200 sm:p-5">
@@ -1378,6 +1595,7 @@ export default function MembershipPage() {
                     {filter !== 'all' && ` Showing only those on ${filterLabel}.`}
                   </CardHeading>
                 </div>
+                {canUpload && openCards.loveAdmin && loveAdmin.length > 0 && <SmsCampaignPanel setNotice={setNotice} />}
                 {loveAdmin.length > 0 && directDebitDataMissing && (
                   <p role="alert" className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800">
                     {directDebitDataMissing}

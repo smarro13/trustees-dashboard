@@ -3,7 +3,8 @@
 While members move from LoveAdmin (the old membership system) to ClubControl,
 admins upload LoveAdmin's **Invoices All Report** (.xlsx or .csv) on
 `/operations/membership` (**⬆ Upload LoveAdmin invoices**). The dashboard doesn't
-connect to LoveAdmin itself.
+fetch LoveAdmin data itself; the one exception is looking up payers' mobile
+numbers and emails for texting them (below).
 
 What it does:
 
@@ -32,6 +33,23 @@ What it does:
   the card is empty, the migration is done.
 - Each upload replaces the previous one.
 
+## Texting payers to move (30 Oct 2026)
+
+**📱 Text payers about moving to ClubControl** (admins, on the Still on
+LoveAdmin card): one text to each payer on the LoveAdmin upload whose family
+has no active ClubControl mandate, from the club's phone through textbee
+(`lib/textbee.ts`, `lib/smsCampaign.ts`, `pages/api/private/sms-campaign.ts`).
+Edit the message, send a test, check who'd be texted, queue, then Start. Four
+daily crons (`pages/api/cron/sms-drip/[slot].ts`) send up to 10 each, at most
+40 a day (textbee's free plan allows 50). Anyone who moves before their turn is
+skipped; anyone replying STOP is never texted again (`sms_opt_outs`).
+
+Who to text comes from the upload. Only the payers' **mobile and email** are
+looked up in Thrive4 (LoveAdmin's new name), read-only, with the dashboard's
+Thrive4 login (`THRIVE4_EMAIL` / `THRIVE4_PASSWORD`; `lib/thrive4Contacts.ts`).
+They're kept only until each text is sent. Tables:
+`supabase/policies/sms_messages.sql`.
+
 ## Removing it once everyone has moved
 
 Every temporary piece is marked `LoveAdmin migration (temporary)`, so
@@ -42,6 +60,13 @@ Every temporary piece is marked `LoveAdmin migration (temporary)`, so
    - `pages/api/private/membership-import.ts`
    - `pages/api/private/clubcontrol-mandates.ts` (nothing calls it at the moment)
    - `supabase/policies/membership_loveadmin.sql`
+   - the texting: `lib/smsCampaign.ts`, `lib/thrive4Contacts.ts`,
+     `pages/api/private/sms-campaign.ts`, `pages/api/cron/sms-drip/`, the four
+     `sms-drip` crons in `vercel.json`, `SmsCampaignPanel` in
+     `pages/operations/membership.tsx`, and the `THRIVE4_*` lines in
+     `.env.local.example` and Vercel. Keep `lib/textbee.ts` and
+     `supabase/policies/sms_messages.sql` if texts will be used for anything
+     else; otherwise drop `sms_messages` and `sms_campaigns` (keep `sms_opt_outs`).
    - `LOVEADMIN_MIGRATION.md` (this file)
 2. **`pages/operations/membership.tsx`:** remove each marked block:
    - the `LoveAdminPayment` and `LoveAdminPreview` types, and `'loveadmin'` from
