@@ -323,3 +323,184 @@ export const findClubControl = (fullName: string, billing: Map<string, ClubContr
     .map((k) => ({ key: k, record: billing.get(k)!, nearMatch: true }));
   return candidates.length === 1 ? candidates[0] : null;
 };
+
+// ── Parents ──
+//
+// ClubControl's export doesn't link parents to children, and the 21 Oct 2026
+// export has nobody with Parents Access plus another membership. So a parent is
+// anyone with Parents Access, or anyone who pays for a child: through their
+// ClubControl direct debit (covered_by_id), or as the payer on a paid LoveAdmin
+// invoice (LoveAdmin migration (temporary), see LOVEADMIN_MIGRATION.md).
+
+export const PARENT_ACCESS_CATEGORY = 'Parents Access - No Gym, Bar Discount Only';
+export const CHILD_CATEGORIES = ['Child Player', 'Mini Winnies', 'Girls'];
+const ADULT_TEAMS = ['Men', 'Ladies'];
+const MEMBERSHIP_TAGS: Record<string, string> = { 'Non-Player (Gym)': 'Gym', 'Non Player (Social)': 'Social' };
+
+type ParentMember = {
+  first_name: string;
+  last_name: string;
+  categories: string[];
+  active: boolean;
+  external_id?: string | null;
+  covered_by_id?: string | null;
+};
+
+export type ParentRow<M> = {
+  key: string;
+  // Their paid-up record, if they're listed twice.
+  member: M;
+  // Memberships beyond Parents Access. Empty means no further membership.
+  tags: string[];
+  hasParentAccess: boolean;
+  // The children they pay for, by name.
+  paysFor: string[];
+};
+
+export function findParents<M extends ParentMember>(
+  members: M[],
+  payments: { name_key: string; beneficiary: string; payer: string | null }[],
+  teamsByName: Map<string, string[]>,
+  billing: Map<string, ClubControlBilling>,
+): ParentRow<M>[] {
+  const recordsByName = new Map<string, M[]>();
+  const keyById = new Map<string, string>();
+  for (const m of members) {
+    const key = nameKey(m.first_name, m.last_name);
+    recordsByName.set(key, [...(recordsByName.get(key) ?? []), m]);
+    if (m.external_id) keyById.set(m.external_id, key);
+  }
+
+  const isChild = (key: string) =>
+    (teamsByName.get(key) ?? []).some((team) => !ADULT_TEAMS.includes(team)) ||
+    (recordsByName.get(key) ?? []).some((m) => m.categories.some((c) => CHILD_CATEGORIES.includes(c)));
+
+  const childrenByParent = new Map<string, Set<string>>();
+  const addChild = (parentKey: string, childKey: string, childName: string) => {
+    if (parentKey === childKey || !isChild(childKey)) return;
+    childrenByParent.set(parentKey, (childrenByParent.get(parentKey) ?? new Set<string>()).add(childName));
+  };
+  for (const m of members) {
+    const parentKey = m.covered_by_id ? keyById.get(m.covered_by_id) : undefined;
+    if (parentKey) addChild(parentKey, nameKey(m.first_name, m.last_name), `${m.first_name} ${m.last_name}`.trim());
+  }
+  for (const p of payments) {
+    const parentKey = p.payer ? findClubControl(p.payer, billing)?.key : undefined;
+    if (parentKey) addChild(parentKey, findClubControl(p.beneficiary, billing)?.key ?? p.name_key, p.beneficiary);
+  }
+
+  const parents: ParentRow<M>[] = [];
+  for (const [key, records] of recordsByName) {
+    const categories = [...new Set(records.flatMap((m) => m.categories))].filter((c) => !isSideCategory(c));
+    const hasParentAccess = categories.includes(PARENT_ACCESS_CATEGORY);
+    const children = childrenByParent.get(key);
+    if (!hasParentAccess && !children) continue;
+    // A child paying for a brother or sister isn't a parent.
+    if (!hasParentAccess && categories.length > 0 && categories.every((c) => CHILD_CATEGORIES.includes(c))) continue;
+    parents.push({
+      key,
+      member: records.find(isPaidUp) ?? records[0],
+      tags: categories.filter((c) => c !== PARENT_ACCESS_CATEGORY).map((c) => MEMBERSHIP_TAGS[c] ?? c),
+      hasParentAccess,
+      paysFor: [...(children ?? [])].sort(),
+    });
+  }
+  return parents;
+}
+
+// ── Incorrect memberships ──
+//
+// Child memberships that don't fit someone's age or gender. Ages go by the
+// start of the season, as the teams do (teamFromBirthDate), so an Under 18 who
+// turns 18 in the season isn't flagged. ClubControl rarely has a date of birth
+// for children, so GMS's is used when it hasn't, matched by name: someone with
+// two different dates on GMS can't be checked.
+
+const OLDEST_CHILD_AGE = 17;
+const OLDEST_MINI_WINNIES_GRADE = 6;
+const YOUNGEST_GIRLS_GRADE = 12;
+
+type MembershipCheckMember = {
+  first_name: string;
+  last_name: string;
+  categories: string[];
+  date_of_birth?: string | null;
+  gender?: string | null;
+};
+
+export type MembershipIssue = { category: string; reason: string; shouldBe: string };
+
+export type IncorrectMembership<M> = {
+  key: string;
+  member: M;
+  age: number | null;
+  dobFrom: 'ClubControl' | 'GMS';
+  issues: MembershipIssue[];
+};
+
+export function findIncorrectMemberships<M extends MembershipCheckMember>(
+  members: M[],
+  players: { name_key: string; date_of_birth: string | null; gender: string | null }[],
+  today = new Date(),
+): { incorrect: IncorrectMembership<M>[]; unchecked: M[] } {
+  const playersByName = new Map<string, typeof players>();
+  for (const p of players) playersByName.set(p.name_key, [...(playersByName.get(p.name_key) ?? []), p]);
+
+  const cutOff = new Date(seasonStart(today).getFullYear(), 7, 31, 12);
+  const incorrect: IncorrectMembership<M>[] = [];
+  const unchecked: M[] = [];
+
+  for (const member of members) {
+    const held = member.categories.filter((c) => CHILD_CATEGORIES.includes(c));
+    if (held.length === 0) continue;
+
+    const key = nameKey(member.first_name, member.last_name);
+    const onGms = playersByName.get(key) ?? [];
+    const gmsDates = [...new Set(onGms.map((p) => p.date_of_birth).filter(Boolean))] as string[];
+    const dob = member.date_of_birth || (gmsDates.length === 1 ? gmsDates[0] : null);
+    const parsed = parseIso(dob);
+    if (!parsed) {
+      unchecked.push(member);
+      continue;
+    }
+
+    const seasonAge = ageOnDate(parsed, cutOff);
+    const grade = seasonAge + 1;
+    const gender = (member.gender || onGms.find((p) => p.gender)?.gender || '').trim().toLowerCase();
+    const female = gender.startsWith('f');
+    const male = gender.startsWith('m');
+    const youngMembership = grade <= OLDEST_MINI_WINNIES_GRADE ? 'Mini Winnies' : 'Child Player';
+
+    const issues: MembershipIssue[] = [];
+    if (seasonAge > OLDEST_CHILD_AGE) {
+      for (const category of held) {
+        issues.push({ category, reason: `Over 17: was ${seasonAge} on 31 August`, shouldBe: 'an adult membership' });
+      }
+    } else {
+      if (held.includes('Mini Winnies') && grade > OLDEST_MINI_WINNIES_GRADE) {
+        issues.push({
+          category: 'Mini Winnies',
+          reason: `Under ${grade}s: Mini Winnies is Under 6s and under`,
+          shouldBe: female && grade >= YOUNGEST_GIRLS_GRADE && grade <= 17 ? 'Girls' : 'Child Player',
+        });
+      }
+      if (held.includes('Child Player') && !held.includes('Girls') && female && grade >= YOUNGEST_GIRLS_GRADE && grade <= 17) {
+        issues.push({ category: 'Child Player', reason: `Under ${grade}s girl: girls’ team age`, shouldBe: 'Girls' });
+      }
+      // Left alone if their gender isn't known: only flag what's certain.
+      if (held.includes('Girls') && (male || female)) {
+        if (male) {
+          issues.push({ category: 'Girls', reason: 'Male, so not in a girls’ team', shouldBe: youngMembership });
+        } else if (grade < YOUNGEST_GIRLS_GRADE) {
+          issues.push({ category: 'Girls', reason: `Under ${grade}s: girls’ teams start at Under 12s`, shouldBe: youngMembership });
+        } else if (grade > 17) {
+          issues.push({ category: 'Girls', reason: 'In Ladies, not a girls’ team', shouldBe: youngMembership });
+        }
+      }
+    }
+    if (issues.length > 0) {
+      incorrect.push({ key, member, age: ageOnDate(parsed, today), dobFrom: member.date_of_birth ? 'ClubControl' : 'GMS', issues });
+    }
+  }
+  return { incorrect, unchecked };
+}

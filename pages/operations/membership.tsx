@@ -12,9 +12,12 @@ import {
   ageOn,
   billingByName,
   findClubControl,
+  findIncorrectMemberships,
+  findParents,
   mandateMemberId,
   paysByDirectDebit,
   type ClubControlBilling,
+  type MembershipIssue,
   isPaidUp,
   isSideCategory,
   nameKey,
@@ -40,6 +43,8 @@ type Member = {
   categories: string[];
   renewal_date: string | null;
   active: boolean;
+  date_of_birth: string | null;
+  gender: string | null;
   // ClubControl's billing method, e.g. "Direct Debit: Active" (automatic fetch only).
   billing_method?: string | null;
   // ClubControl's member id (the export's "Id").
@@ -94,11 +99,11 @@ type View = 'report' | 'hidden';
 type FetchSource = 'clubcontrol' | 'gms';
 const FETCH_NAMES: Record<FetchSource, string> = { clubcontrol: 'ClubControl', gms: 'GMS' };
 
-type Card = 'byTeam' | 'players' | 'notOnGms' | 'loveAdmin' | 'inactive';
+type Card = 'byTeam' | 'players' | 'notOnGms' | 'parents' | 'loveAdmin' | 'inactive' | 'incorrect';
 
 // Which report cards start open. Each viewer's own choice is remembered in
 // their browser after that.
-const DEFAULT_OPEN: Record<Card, boolean> = { byTeam: true, players: true, notOnGms: false, loveAdmin: false, inactive: false };
+const DEFAULT_OPEN: Record<Card, boolean> = { byTeam: true, players: true, notOnGms: false, parents: false, loveAdmin: false, inactive: false, incorrect: false };
 const OPEN_CARDS_KEY = 'membership-open-cards';
 
 
@@ -144,7 +149,7 @@ async function loadAll<T>(query: (from: number, to: number) => PromiseLike<{ dat
 // The members export's rows, with ClubControl's billing method and paying
 // account when those columns exist (supabase/policies/membership_billing_method.sql);
 // without them until that has been run.
-const MEMBER_COLUMNS = 'id, first_name, last_name, email, categories, renewal_date, active, external_id';
+const MEMBER_COLUMNS = 'id, first_name, last_name, email, categories, renewal_date, active, external_id, date_of_birth, gender';
 async function loadMembers(importId: string): Promise<Member[]> {
   const load = (columns: string) =>
     loadAll<Member>((from, to) =>
@@ -572,6 +577,34 @@ function LoveAdminUploadPanel({ onSaved, setNotice }: { onSaved: () => Promise<v
 }
 
 
+// What a parent has beyond Parents Access, on the Parents card.
+function ParentTags({ tags }: { tags: string[] }) {
+  if (tags.length === 0) {
+    return <span className="inline-flex whitespace-nowrap rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 ring-1 ring-zinc-200">No further membership</span>;
+  }
+  return (
+    <span className="flex flex-wrap gap-1">
+      {tags.map((tag) => (
+        <span key={tag} className="inline-flex whitespace-nowrap rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700 ring-1 ring-teal-200">{tag}</span>
+      ))}
+    </span>
+  );
+}
+
+// Why a membership looks wrong, on the Incorrect Membership? card.
+function MembershipIssues({ issues }: { issues: MembershipIssue[] }) {
+  return (
+    <ul className="space-y-1">
+      {issues.map((issue) => (
+        <li key={issue.category} className="text-xs text-zinc-600">
+          <span className="mr-1.5 inline-flex whitespace-nowrap rounded-full bg-rose-50 px-2 py-0.5 font-medium text-rose-700 ring-1 ring-rose-200">{issue.category}</span>
+          {issue.reason}. Should be {issue.shouldBe}.
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function StatusBadge({ status }: { status: PlayerStatus }) {
   return (
     <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${STATUS_STYLES[status].badge}`}>
@@ -848,6 +881,8 @@ export default function MembershipPage() {
   const [playerSearch, setPlayerSearch] = useState('');
   const [inactiveSearch, setInactiveSearch] = useState('');
   const [notOnGmsSearch, setNotOnGmsSearch] = useState('');
+  const [parentsSearch, setParentsSearch] = useState('');
+  const [incorrectSearch, setIncorrectSearch] = useState('');
 
   useEffect(() => {
     if (!notice) return;
@@ -1057,6 +1092,31 @@ export default function MembershipPage() {
       })
       .sort((a, b) => a.last_name.localeCompare(b.last_name) || a.first_name.localeCompare(b.first_name));
   }, [members, players, hiddenKeys, notOnGmsSearch]);
+
+  // Parents: anyone with Parents Access or paying for a child (lib/membership.ts
+  // findParents). Shown for all teams.
+  const parents = useMemo(() => {
+    const q = parentsSearch.trim().toLowerCase();
+    return findParents(members, loveAdmin, teamsByName, billingNames)
+      .filter((p) => !hiddenKeys.has(p.key))
+      .map((p) => ({ ...p, email: p.member.email }))
+      .filter((p) => !q || `${p.member.first_name} ${p.member.last_name} ${p.email ?? ''}`.toLowerCase().includes(q))
+      .sort((a, b) => a.member.last_name.localeCompare(b.member.last_name) || a.member.first_name.localeCompare(b.member.first_name));
+  }, [members, loveAdmin, teamsByName, billingNames, hiddenKeys, parentsSearch]);
+  const parentsNoFurther = parents.filter((p) => p.tags.length === 0).length;
+
+  // Child memberships that don't fit someone's age or gender (lib/membership.ts
+  // findIncorrectMemberships). Shown for all teams.
+  const membershipCheck = useMemo(() => findIncorrectMemberships(members, players), [members, players]);
+  const incorrectMemberships = useMemo(() => {
+    const q = incorrectSearch.trim().toLowerCase();
+    return membershipCheck.incorrect
+      .filter((r) => !hiddenKeys.has(r.key))
+      .map((r) => ({ ...r, email: r.member.email }))
+      .filter((r) => !q || `${r.member.first_name} ${r.member.last_name} ${r.email ?? ''}`.toLowerCase().includes(q))
+      .sort((a, b) => a.member.last_name.localeCompare(b.member.last_name) || a.member.first_name.localeCompare(b.member.first_name));
+  }, [membershipCheck, hiddenKeys, incorrectSearch]);
+  const membershipsNotChecked = membershipCheck.unchecked.filter((m) => !hiddenKeys.has(nameKey(m.first_name, m.last_name))).length;
 
   // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
   // Everyone on the latest LoveAdmin upload, with their team and ClubControl
@@ -1593,6 +1653,108 @@ export default function MembershipPage() {
               )}
             </section>
 
+            <section className="mb-8 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-teal-200">
+              <div className={`flex flex-wrap items-center justify-between gap-3 bg-teal-50 px-5 py-4 ${openCards.parents ? 'border-b border-teal-200' : ''}`}>
+                <CardHeading open={openCards.parents} onToggle={() => toggleCard('parents')} title={`Parents (${parents.length})`}>
+                  Anyone with Parents Access, or paying for a child by ClubControl direct debit or on a LoveAdmin invoice.
+                  {' '}{parentsNoFurther} with no further membership, {parents.length - parentsNoFurther} with gym, social or another membership. Shown for all teams.
+                </CardHeading>
+                {openCards.parents && (
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    type="search"
+                    placeholder="Search name or email…"
+                    className={`${inputClass} bg-white sm:w-56`}
+                    value={parentsSearch}
+                    onChange={(e) => setParentsSearch(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void copyEmails(parents)}
+                    disabled={parents.length === 0}
+                    className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                  >
+                    Copy emails
+                  </button>
+                </div>
+                )}
+              </div>
+              {!openCards.parents ? null : parents.length === 0 ? (
+                <p className="px-5 py-6 text-sm text-zinc-400">{parentsSearch ? 'No parents match.' : 'No parents found in the latest data.'}</p>
+              ) : (
+                <>
+                <ul className="divide-y divide-zinc-100 sm:hidden">
+                  {parents.map((p) => (
+                    <li key={p.key} className="flex items-start gap-2 px-4 py-3">
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <p className="text-sm font-medium text-zinc-900">{p.member.first_name} {p.member.last_name}</p>
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${paidAnywhere(p.member) ? STATUS_STYLES.paid.badge : STATUS_STYLES.lapsed.badge}`}>
+                            {paidAnywhere(p.member) ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+                        <ParentTags tags={p.tags} />
+                        {p.paysFor.length > 0 && <p className="text-xs text-zinc-600">Pays for {p.paysFor.join(', ')}</p>}
+                        {p.email && (
+                          <a href={`mailto:${p.email}`} className="block break-all text-xs text-blue-600 hover:underline">{p.email}</a>
+                        )}
+                      </div>
+                      <NoteCell
+                        personKey={p.key}
+                        displayName={`${p.member.first_name} ${p.member.last_name}`}
+                        note={notes.get(p.key)}
+                        canHide={canUpload}
+                        onSaved={updateNote}
+                        setNotice={setNotice}
+                      />
+                    </li>
+                  ))}
+                </ul>
+                <div className="relative hidden overflow-x-auto sm:block">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs uppercase tracking-wide text-zinc-500">
+                        <th className="px-5 py-2 font-semibold">Name</th>
+                        <th className="px-3 py-2 font-semibold">Membership</th>
+                        <th className="px-3 py-2 font-semibold">Pays for</th>
+                        <th className="px-3 py-2 font-semibold">ClubControl</th>
+                        <th className="px-3 py-2 font-semibold">Email</th>
+                        <th className="w-12 px-3 py-2"><span className="sr-only">Comment</span></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                      {parents.map((p) => (
+                        <tr key={p.key} className="align-top">
+                          <td className="px-5 py-2 font-medium text-zinc-900">{p.member.first_name} {p.member.last_name}</td>
+                          <td className="px-3 py-2"><ParentTags tags={p.tags} /></td>
+                          <td className="px-3 py-2 text-zinc-600">{p.paysFor.length > 0 ? p.paysFor.join(', ') : '—'}</td>
+                          <td className="whitespace-nowrap px-3 py-2">
+                            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${paidAnywhere(p.member) ? STATUS_STYLES.paid.badge : STATUS_STYLES.lapsed.badge}`}>
+                              {paidAnywhere(p.member) ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-zinc-600">
+                            {p.email ? <a href={`mailto:${p.email}`} className="text-blue-600 hover:underline">{p.email}</a> : '—'}
+                          </td>
+                          <td className="w-12 px-3 py-1.5 text-center">
+                            <NoteCell
+                              personKey={p.key}
+                              displayName={`${p.member.first_name} ${p.member.last_name}`}
+                              note={notes.get(p.key)}
+                              canHide={canUpload}
+                              onSaved={updateNote}
+                              setNotice={setNotice}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                </>
+              )}
+            </section>
+
             {/* LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md. */}
             {(
               <section className="mb-8 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-violet-200">
@@ -1766,6 +1928,110 @@ export default function MembershipPage() {
                               personKey={nameKey(m.first_name, m.last_name)}
                               displayName={`${m.first_name} ${m.last_name}`}
                               note={notes.get(nameKey(m.first_name, m.last_name))}
+                              canHide={canUpload}
+                              onSaved={updateNote}
+                              setNotice={setNotice}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                </>
+              )}
+            </section>
+
+            <section className="mt-8 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-rose-200">
+              <div className={`flex flex-wrap items-center justify-between gap-3 bg-rose-50 px-5 py-4 ${openCards.incorrect ? 'border-b border-rose-200' : ''}`}>
+                <CardHeading open={openCards.incorrect} onToggle={() => toggleCard('incorrect')} title={`Incorrect Membership? (${incorrectMemberships.length})`}>
+                  Child, Mini Winnies or Girls memberships that don’t fit: over 17 on 31 August, Mini Winnies above Under 6s, Girls outside the girls’ teams (Under 12s and up), or girls of that age on Child Player. Dates of birth from GMS are matched by name, so check before changing anything. Shown for all teams.
+                  {membershipsNotChecked > 0 && ` ${membershipsNotChecked} couldn’t be checked: no single date of birth in ClubControl or GMS.`}
+                </CardHeading>
+                {openCards.incorrect && (
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    type="search"
+                    placeholder="Search name or email…"
+                    className={`${inputClass} bg-white sm:w-56`}
+                    value={incorrectSearch}
+                    onChange={(e) => setIncorrectSearch(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void copyEmails(incorrectMemberships)}
+                    disabled={incorrectMemberships.length === 0}
+                    className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                  >
+                    Copy emails
+                  </button>
+                </div>
+                )}
+              </div>
+              {!openCards.incorrect ? null : incorrectMemberships.length === 0 ? (
+                <p className="px-5 py-6 text-sm text-zinc-400">
+                  {incorrectSearch ? 'No memberships match.' : members.length === 0 ? 'No ClubControl data yet.' : 'No incorrect memberships found.'}
+                </p>
+              ) : (
+                <>
+                <ul className="divide-y divide-zinc-100 sm:hidden">
+                  {incorrectMemberships.map((r) => (
+                    <li key={r.member.id} className="flex items-start gap-2 px-4 py-3">
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <p className="text-sm font-medium text-zinc-900">{r.member.first_name} {r.member.last_name}</p>
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${paidAnywhere(r.member) ? STATUS_STYLES.paid.badge : STATUS_STYLES.lapsed.badge}`}>
+                            {paidAnywhere(r.member) ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-zinc-500">Age {r.age} (date of birth from {r.dobFrom})</p>
+                        <MembershipIssues issues={r.issues} />
+                        {r.email && (
+                          <a href={`mailto:${r.email}`} className="block break-all text-xs text-blue-600 hover:underline">{r.email}</a>
+                        )}
+                      </div>
+                      <NoteCell
+                        personKey={r.key}
+                        displayName={`${r.member.first_name} ${r.member.last_name}`}
+                        note={notes.get(r.key)}
+                        canHide={canUpload}
+                        onSaved={updateNote}
+                        setNotice={setNotice}
+                      />
+                    </li>
+                  ))}
+                </ul>
+                <div className="relative hidden overflow-x-auto sm:block">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs uppercase tracking-wide text-zinc-500">
+                        <th className="px-5 py-2 font-semibold">Name</th>
+                        <th className="px-3 py-2 text-right font-semibold">Age</th>
+                        <th className="px-3 py-2 font-semibold">Issue</th>
+                        <th className="px-3 py-2 font-semibold">ClubControl</th>
+                        <th className="px-3 py-2 font-semibold">Email</th>
+                        <th className="w-12 px-3 py-2"><span className="sr-only">Comment</span></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                      {incorrectMemberships.map((r) => (
+                        <tr key={r.member.id} className="align-top">
+                          <td className="px-5 py-2 font-medium text-zinc-900">{r.member.first_name} {r.member.last_name}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-zinc-600" title={`Date of birth from ${r.dobFrom}`}>{r.age}</td>
+                          <td className="px-3 py-2"><MembershipIssues issues={r.issues} /></td>
+                          <td className="whitespace-nowrap px-3 py-2">
+                            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${paidAnywhere(r.member) ? STATUS_STYLES.paid.badge : STATUS_STYLES.lapsed.badge}`}>
+                              {paidAnywhere(r.member) ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-zinc-600">
+                            {r.email ? <a href={`mailto:${r.email}`} className="text-blue-600 hover:underline">{r.email}</a> : '—'}
+                          </td>
+                          <td className="w-12 px-3 py-1.5 text-center">
+                            <NoteCell
+                              personKey={r.key}
+                              displayName={`${r.member.first_name} ${r.member.last_name}`}
+                              note={notes.get(r.key)}
                               canHide={canUpload}
                               onSaved={updateNote}
                               setNotice={setNotice}
