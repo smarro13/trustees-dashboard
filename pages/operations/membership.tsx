@@ -17,9 +17,7 @@ import {
   type ClubControlBilling,
   isPaidUp,
   isSideCategory,
-  monthsIntoSeason,
   nameKey,
-  seasonStart,
   teamFromBirthDate,
   type PlayerStatus,
   type TeamGroup,
@@ -434,12 +432,13 @@ const PER_RUN_TEXT = 'up to 10 at a time, four times a day (10am, 12:30, 3pm and
 const renderSmsExample = (message: string) =>
   message.replace(/\{first\}/g, 'Mike').replace(/\{names\}/g, 'Sarah and Tom Smith');
 
-function StatTile({ label, value, detail, tone }: { label: string; value: string; detail?: string; tone?: string }) {
+function StatTile({ label, value, detail, tone, children }: { label: string; value: string; detail?: string; tone?: string; children?: React.ReactNode }) {
   return (
     <div className="min-w-0 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200 sm:p-5">
       <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
       <p className={`mt-1 text-2xl font-extrabold tabular-nums sm:text-3xl ${tone ?? 'text-zinc-900'}`}>{value}</p>
       {detail && <p className="mt-1 text-xs text-zinc-500">{detail}</p>}
+      {children}
     </div>
   );
 }
@@ -910,9 +909,6 @@ export default function MembershipPage() {
 
   const canView = (!!role && VIEW_ROLES.has(role)) || membershipFlag;
   const canUpload = role === 'admin';
-  const months = monthsIntoSeason();
-  // e.g. "since Sep ’26"
-  const seasonLabel = `since ${seasonStart().toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }).replace(' ', ' ’')}`;
 
   const membersImport = imports.find((i) => i.kind === 'members');
   const playersImport = imports.find((i) => i.kind === 'players');
@@ -994,8 +990,10 @@ export default function MembershipPage() {
     }
     const list = [...people.values()];
     const count = (s: PlayerStatus) => list.filter((p) => p.status === s).length;
-    const unpaidMonthly = list.filter((p) => p.status !== 'paid').reduce((sum, p) => sum + p.fee, 0);
-    return { people: list.length, paid: count('paid'), lapsed: count('lapsed'), missing: count('missing'), unpaidMonthly };
+    const monthly = (s: PlayerStatus) => list.filter((p) => p.status === s).reduce((sum, p) => sum + p.fee, 0);
+    const lapsedMonthly = monthly('lapsed');
+    const missingMonthly = monthly('missing');
+    return { people: list.length, paid: count('paid'), lapsed: count('lapsed'), missing: count('missing'), lapsedMonthly, missingMonthly, unpaidMonthly: lapsedMonthly + missingMonthly };
   }, [filteredPlayers]);
 
   const teamSummaries = useMemo(
@@ -1325,8 +1323,21 @@ export default function MembershipPage() {
               <StatTile
                 label="Unpaid per month"
                 value={money(totals.unpaidMonthly)}
-                detail={`${money(totals.unpaidMonthly * months)} ${seasonLabel}`}
-              />
+              >
+                {totals.unpaidMonthly > 0 && (
+                  <div className="mt-2">
+                    <StatusBar paid={0} lapsed={totals.lapsedMonthly} missing={totals.missingMonthly} />
+                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-zinc-500">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className={`h-2.5 w-2.5 rounded-sm ${STATUS_STYLES.lapsed.bar}`} />Lapsed {money(totals.lapsedMonthly)}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className={`h-2.5 w-2.5 rounded-sm ${STATUS_STYLES.missing.bar}`} />Not signed up {money(totals.missingMonthly)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </StatTile>
             </section>
 
             {!singleTeam && (
