@@ -2,13 +2,14 @@
 --
 -- The "Text about moving to ClubControl" campaign on /operations/membership
 -- (Still on LoveAdmin card): one text per payer on the uploaded LoveAdmin
--- report whose family hasn't set up a ClubControl direct debit, sent a few at a time from the club's
--- phone through textbee (lib/textbee.ts, lib/smsCampaign.ts,
--- pages/api/cron/sms-drip.ts).
+-- report whose family hasn't set up a ClubControl direct debit, sent a few at
+-- a time from the club's phone through textbee (lib/textbee.ts,
+-- lib/smsCampaign.ts, pages/api/cron/sms-drip/[slot].ts). Only the payers'
+-- mobile numbers and emails come from Thrive4 (lib/thrive4Contacts.ts).
 --
 -- Privacy: a phone number and email are kept only until the text is sent,
--- then cleared; a hash of it stays so a "STOP" reply can be matched. Written only
--- by the server (service role); admins can read.
+-- then cleared; a hash of the number stays so a "STOP" reply can be matched.
+-- Written only by the server (service role); admins can read.
 --
 -- Run once in the Supabase SQL editor. Idempotent — safe to re-run.
 
@@ -31,7 +32,7 @@ create table if not exists public.sms_messages (
   -- The payer's name (nameKey), so nobody is texted twice.
   payer_key text not null,
   payer_name text not null,
-  -- Who they pay for, as Thrive4 has them.
+  -- Who they pay for, as the LoveAdmin upload has them.
   beneficiaries text[] not null default '{}',
   -- Contact details from Thrive4 (lib/thrive4Contacts.ts). Cleared once sent.
   phone text,
