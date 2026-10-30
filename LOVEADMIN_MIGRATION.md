@@ -49,6 +49,8 @@ Every temporary piece is marked `LoveAdmin migration (temporary)`, so
    - `fileToBase64`, `LoveAdminUploadPanel`, `showLoveAdminUpload` and the upload
      button;
    - the `LoveAdminTag` component and its two uses beside `StatusBadge`;
+   - `'loveadmin'` from `StatusFilter`, its check in `visiblePlayers` and its
+     chip on the Players card;
    - the `loveAdmin` state, its load in `loadData`, `loveAdminImport`,
      `loveAdminByName` and `paidAnywhere`. Put `isPaidUp(...)` back wherever
      `paidAnywhere(...)` is used;
