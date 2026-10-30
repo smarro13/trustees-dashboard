@@ -85,7 +85,9 @@ Every temporary piece is marked `LoveAdmin migration (temporary)`, so
      **Still on LoveAdmin** card;
    - `'loveAdmin'` from the `Card` type and `DEFAULT_OPEN`;
    - the LoveAdmin date in the header;
-   - `loveAdminByName` from the `useMemo` dependency lists.
+   - `loveAdminByName` from the `useMemo` dependency lists;
+   - the LoveAdmin payments passed to `findParents` for the **Parents** card (the
+     card stays; pass `[]`, or drop the parameter in `lib/membership.ts`).
 3. **Other files:** remove `saveLoveAdminPayments` in `lib/membershipStore.ts`,
    and `readXlsxSheets`, `cellDate` and their helpers in
    `lib/importers/membershipImportParser.ts`, then `npm uninstall jszip`. In
