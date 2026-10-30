@@ -2,9 +2,9 @@
 --
 -- The automatic ClubControl fetch (lib/clubcontrol.ts) reads each member's
 -- "Billing Method" from ClubControl's Members list, e.g. "Direct Debit:
--- Active", "Direct Debit: Pending", "Card" or "Inactive". The Thrive4 billing
+-- Active", "Direct Debit: Pending", "Card" or "Inactive". The Still on LoveAdmin
 -- card on /operations/membership uses it: only someone with an active direct
--- debit in ClubControl has really moved off Thrive4.
+-- debit in ClubControl has really moved off LoveAdmin.
 --
 -- Run once in the Supabase SQL editor, then press "Fetch from ClubControl
 -- now". Idempotent — safe to re-run.

@@ -250,7 +250,7 @@ export async function fetchMembersExport(): Promise<ClubControlExport> {
   });
 }
 
-// ── A member's direct debit mandate (the Thrive4 billing card) ──
+// ── A member's direct debit mandate ──
 
 // What a member's ClubControl membership page shows about paying by direct
 // debit: the GoCardless mandate, the latest membership payment and the
@@ -334,7 +334,6 @@ export async function fetchMandates(memberIds: string[]): Promise<Map<string, Cl
   });
 }
 
-// An active GoCardless mandate: what has to be there before someone is made
-// inactive on Thrive4.
+// An active GoCardless mandate: someone with one has moved off LoveAdmin.
 export const hasActiveMandate = (m: ClubControlMandate | null | undefined) =>
   !!m?.mandate_id && /^active$/i.test(m.mandate_status ?? '');

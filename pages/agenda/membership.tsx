@@ -148,7 +148,7 @@ export default function MembershipReportPage() {
           <div className="border-b border-zinc-200 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
             <h2 className="text-xl font-semibold">This month&rsquo;s figures</h2>
             <p className="mt-0.5 text-sm text-zinc-500">
-              Worked out from the latest data, fetched automatically from ClubControl, GMS and Thrive4. On the day of each meeting this is saved to the meeting automatically (early morning), unless it already has one. Save it yourself to add notes or to save it sooner. A saved copy doesn&rsquo;t change when new data is fetched.
+              Worked out from the latest data, fetched automatically from ClubControl and GMS. On the day of each meeting this is saved to the meeting automatically (early morning), unless it already has one. Save it yourself to add notes or to save it sooner. A saved copy doesn&rsquo;t change when new data is fetched.
             </p>
           </div>
 

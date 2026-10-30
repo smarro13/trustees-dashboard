@@ -2,8 +2,6 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { syncMembersFromClubControl } from '../../../lib/clubcontrolSync';
 import { syncPlayersFromGms } from '../../../lib/gmsSync';
-// LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
-import { syncPaymentsFromThrive4 } from '../../../lib/thrive4Sync';
 import { buildMembershipSummary, loadMembershipData } from '../../../lib/membershipSummary';
 
 // Meeting-day membership report. Runs once a day (vercel.json "crons"); on the
@@ -66,8 +64,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Fetch the latest members export from ClubControl first, so the meeting
   // gets that day's figures (the routine fetch is only weekly). If it fails,
   // the report still saves, from the last export.
-  // The three fetches run side by side to stay inside the time limit.
-  const [clubControl, gms, thrive4] = await Promise.all([
+  // The two fetches run side by side to stay inside the time limit.
+  const [clubControl, gms] = await Promise.all([
     process.env.CLUBCONTROL_EMAIL && process.env.CLUBCONTROL_PASSWORD
       ? syncMembersFromClubControl(supabaseAdmin, 'ClubControl (meeting-day fetch)')
           .then((sync) => ('error' in sync ? `fetch failed: ${sync.error}` : `fetched ${sync.total} members`))
@@ -75,11 +73,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     process.env.GMS_EMAIL && process.env.GMS_PASSWORD
       ? syncPlayersFromGms(supabaseAdmin, 'GMS (meeting-day fetch)')
           .then((sync) => ('error' in sync ? `fetch failed: ${sync.error}` : `fetched ${sync.players} players`))
-      : 'not connected',
-    // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
-    process.env.THRIVE4_EMAIL && process.env.THRIVE4_PASSWORD
-      ? syncPaymentsFromThrive4(supabaseAdmin, 'Thrive4 (meeting-day fetch)')
-          .then((sync) => ('error' in sync ? `fetch failed: ${sync.error}` : `fetched ${sync.people} people on paid invoices for ${sync.monthLabel}`))
       : 'not connected',
   ]);
 
@@ -111,5 +104,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     saved.push(meeting.id);
   }
 
-  return res.status(200).json({ ok: true, day, clubControl, gms, thrive4, saved, skipped });
+  return res.status(200).json({ ok: true, day, clubControl, gms, saved, skipped });
 }

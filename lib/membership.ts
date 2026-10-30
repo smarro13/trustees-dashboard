@@ -213,7 +213,7 @@ export const billingByName = (members: {
 
 // ── Finding someone in ClubControl when the names differ ──
 //
-// Thrive4 (LoveAdmin) and ClubControl often spell first names differently:
+// LoveAdmin and ClubControl often spell first names differently:
 // "Ste Warner" / "Steven Warner", "Katy Davies" / "Katherine Davies". If the
 // exact name isn't in ClubControl, look for the same surname with a
 // compatible first name: one is the start of the other (at least 3 letters),
