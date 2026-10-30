@@ -89,7 +89,8 @@ type PlayerRow = Player & { team: string | null; status: PlayerStatus; member: M
 
 // 'all', 'group:Juniors' or 'team:Under 7s'.
 type Filter = string;
-type StatusFilter = 'all' | 'unpaid' | PlayerStatus;
+// 'loveadmin' — LoveAdmin migration (temporary), see LOVEADMIN_MIGRATION.md.
+type StatusFilter = 'all' | 'unpaid' | 'loveadmin' | PlayerStatus;
 type View = 'report' | 'hidden';
 // Where the automatic fetches come from (pages/api/private/<source>-sync.ts).
 type FetchSource = 'clubcontrol' | 'gms';
@@ -795,7 +796,9 @@ export default function MembershipPage() {
     const q = playerSearch.trim().toLowerCase();
     return filteredPlayers
       .filter((p) => {
-        if (statusFilter === 'unpaid' ? p.status === 'paid' : statusFilter !== 'all' && p.status !== statusFilter) return false;
+        if (statusFilter === 'loveadmin') {
+          if (!p.loveAdmin) return false;
+        } else if (statusFilter === 'unpaid' ? p.status === 'paid' : statusFilter !== 'all' && p.status !== statusFilter) return false;
         if (q && !`${p.first_name} ${p.last_name}`.toLowerCase().includes(q)) return false;
         return true;
       })
@@ -1172,7 +1175,7 @@ export default function MembershipPage() {
               {openCards.players && (
               <>
               <div className="flex flex-wrap gap-2 border-b border-zinc-100 px-5 py-3">
-                {([['all', 'All'], ['unpaid', 'Not paying'], ['paid', 'Paid'], ['lapsed', 'Lapsed'], ['missing', 'Not on ClubControl']] as [StatusFilter, string][]).map(([value, label]) => (
+                {([['all', 'All'], ['unpaid', 'Not paying'], ['paid', 'Paid'], ['lapsed', 'Lapsed'], ['missing', 'Not on ClubControl'], ['loveadmin', 'LoveAdmin']] as [StatusFilter, string][]).map(([value, label]) => (
                   <Chip key={value} active={statusFilter === value} onClick={() => setStatusFilter(value)}>{label}</Chip>
                 ))}
               </div>
