@@ -33,11 +33,6 @@ create table if not exists public.membership_loveadmin (
   received numeric(10, 2)
 );
 
--- Thrive4's id for the person (28 Oct 2026), set by the automatic fetch
--- (lib/thrive4.ts), so two people with the same name stay separate. Empty for
--- rows from an uploaded report, which only has names.
-alter table public.membership_loveadmin add column if not exists person_guid text;
-
 create index if not exists membership_loveadmin_import_idx on public.membership_loveadmin (import_id);
 
 alter table public.membership_loveadmin enable row level security;
@@ -49,27 +44,5 @@ create policy "governance read membership_loveadmin"
   to authenticated
   using (lower(coalesce(auth.jwt() -> 'app_metadata' ->> 'role', auth.jwt() -> 'user_metadata' ->> 'role'))
     in ('admin', 'trustee', 'director', 'directors', 'management', 'mangement'));
-
-
--- Who was made inactive on Thrive4 from the dashboard, and by whom (28 Oct
--- 2026). Written only by pages/api/private/thrive4-deactivate.ts using the
--- service role; admins can read it.
-create table if not exists public.thrive4_deactivations (
-  id uuid primary key default gen_random_uuid(),
-  person_guid text not null,
-  name text not null,
-  done_by text not null,
-  done_at timestamptz not null default now(),
-  ok boolean not null,
-  error text
-);
-alter table public.thrive4_deactivations enable row level security;
-revoke all on public.thrive4_deactivations from anon;
-drop policy if exists "admin read thrive4_deactivations" on public.thrive4_deactivations;
-create policy "admin read thrive4_deactivations"
-  on public.thrive4_deactivations
-  for select
-  to authenticated
-  using (lower(coalesce(auth.jwt() -> 'app_metadata' ->> 'role', auth.jwt() -> 'user_metadata' ->> 'role')) = 'admin');
 
 commit;

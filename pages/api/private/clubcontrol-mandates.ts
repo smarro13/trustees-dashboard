@@ -4,9 +4,8 @@ import { ClubControlError, fetchMandates } from '../../../lib/clubcontrol';
 
 // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
 // Each listed ClubControl member's direct debit mandate, payment and renewal
-// (lib/clubcontrol.ts fetchMandates), read live for the Thrive4 billing card on
-// /operations/membership, so the record can be seen before anyone is made
-// inactive on Thrive4. Not stored. Admins only (it shows mandate ids).
+// (lib/clubcontrol.ts fetchMandates), read live. Not stored. Admins only (it
+// shows mandate ids). Nothing on the dashboard calls this at the moment.
 
 export const config = { maxDuration: 60 };
 

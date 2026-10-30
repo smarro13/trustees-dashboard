@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { hasMembershipFlag, resolveRoleFromUser } from '../../lib/roles';
 import InlineNoticeBanner, { type InlineNotice } from '../../components/InlineNotice';
-import ConfirmDialog from '../../components/ConfirmDialog';
 import {
   PLAYING_CATEGORIES,
   STATUS_LABELS,
@@ -26,14 +25,13 @@ import {
   type TeamGroup,
 } from '../../lib/membership';
 
-// Who's paid their membership, team by team. All of it is fetched live and
+// Who's paid their membership, team by team. Players (the RFU GMS player list)
+// and payments (the ClubControl members export) are fetched live and
 // automatically (every Monday, on meeting days, or by an admin's "Fetch …
-// now" button): players from the RFU GMS player list, payments from the
-// ClubControl members export, and LoveAdmin payments from Thrive4. Nothing
-// is uploaded by hand. Tables and access rules are in
-// supabase/policies/membership.sql: admins, trustees and directors can view
-// and comment; only admins can fetch, and hide people from the report (they
-// then appear on the admins' Hidden tab). Comments are saved by
+// now" button). LoveAdmin payments are uploaded by an admin. Tables and access
+// rules are in supabase/policies/membership.sql: admins, trustees and directors
+// can view and comment; only admins can fetch, upload, and hide people from the
+// report (they then appear on the admins' Hidden tab). Comments are saved by
 // pages/api/private/membership-note.ts.
 
 type Member = {
@@ -94,15 +92,14 @@ type Filter = string;
 type StatusFilter = 'all' | 'unpaid' | PlayerStatus;
 type View = 'report' | 'hidden';
 // Where the automatic fetches come from (pages/api/private/<source>-sync.ts).
-// 'thrive4' is LoveAdmin — LoveAdmin migration (temporary), see LOVEADMIN_MIGRATION.md.
-type FetchSource = 'clubcontrol' | 'gms' | 'thrive4';
-const FETCH_NAMES: Record<FetchSource, string> = { clubcontrol: 'ClubControl', gms: 'GMS', thrive4: 'Thrive4' };
+type FetchSource = 'clubcontrol' | 'gms';
+const FETCH_NAMES: Record<FetchSource, string> = { clubcontrol: 'ClubControl', gms: 'GMS' };
 
-type Card = 'byTeam' | 'players' | 'notOnGms' | 'loveAdmin' | 'thrive4' | 'inactive';
+type Card = 'byTeam' | 'players' | 'notOnGms' | 'loveAdmin' | 'inactive';
 
 // Which report cards start open. Each viewer's own choice is remembered in
 // their browser after that.
-const DEFAULT_OPEN: Record<Card, boolean> = { byTeam: true, players: true, notOnGms: false, loveAdmin: false, thrive4: false, inactive: false };
+const DEFAULT_OPEN: Record<Card, boolean> = { byTeam: true, players: true, notOnGms: false, loveAdmin: false, inactive: false };
 const OPEN_CARDS_KEY = 'membership-open-cards';
 
 
@@ -175,7 +172,7 @@ function clubControlLabel(member: Member | null, billing: ClubControlBilling | u
   return 'No mandate';
 }
 
-// A LoveAdmin / Thrive4 name matched to ClubControl: exactly, or by a
+// A LoveAdmin name matched to ClubControl: exactly, or by a
 // near-identical name (e.g. "Ste" for "Steven"; lib/membership.ts findClubControl).
 function matchLoveAdminName(
   name: string,
@@ -191,8 +188,6 @@ function matchLoveAdminName(
     // How ClubControl writes the name, when it differs.
     clubControlName: match?.nearMatch && member ? `${member.first_name} ${member.last_name}`.trim() : null,
     notOnClubControl: !member,
-    // Whose record holds the mandate: theirs, or the paying account's.
-    memberId: mandateMemberId(record),
     moved: paysByDirectDebit(record),
   };
 }
@@ -255,312 +250,106 @@ function CardHeading({ open, onToggle, title, children }: {
 }
 
 // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
-// What Thrive4 (LoveAdmin) has invoiced this month and will invoice next, per
-// person, checked live (pages/api/private/thrive4-billing.ts). Anyone with an
-// active direct debit in ClubControl is flagged: they've moved but are still
-// open on Thrive4, so need making inactive there.
-type Thrive4BillingPerson = {
-  person_guid: string;
-  name: string;
-  payer: string | null;
-  upcoming: { id: number; description: string | null; amount: number | null; payable_date: string | null }[];
-  invoiced: { id: number; date: string | null; amount: number | null; status: string | null }[];
+type LoveAdminPreview = { paidInvoices: number; skippedInvoices: number; people: number };
+
+const fileToBase64 = async (file: File) => {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
 };
 
-// A member's direct debit mandate on ClubControl, read live by
-// pages/api/private/clubcontrol-mandates.ts (lib/clubcontrol.ts).
-type ClubControlMandate = {
-  member_id: string;
-  url: string;
-  mandate_id: string | null;
-  mandate_status: string | null;
-  payment_amount: string | null;
-  payment_date: string | null;
-  payment_type: string | null;
-  renewal_due: string | null;
-};
-// Same rule as lib/clubcontrol.ts hasActiveMandate (which the server applies again).
-const hasActiveMandate = (m: ClubControlMandate | undefined) => !!m?.mandate_id && /^active$/i.test(m.mandate_status ?? '');
+// Upload of LoveAdmin's Invoices All Report (pages/api/private/membership-import.ts).
+function LoveAdminUploadPanel({ onSaved, setNotice }: { onSaved: () => Promise<void>; setNotice: (n: InlineNotice) => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<LoveAdminPreview | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [inputKey, setInputKey] = useState(0);
 
-const sumAmounts = (items: { amount: number | null }[]) => items.reduce((t, i) => t + (i.amount ?? 0), 0);
-
-function Thrive4BillingCard({ open, onToggle, membersByName, billing, nameById, canClose, setNotice }: {
-  open: boolean;
-  onToggle: () => void;
-  membersByName: Map<string, Member>;
-  // Each name's ClubControl billing method (billingByName in lib/membership.ts).
-  billing: Map<string, ClubControlBilling>;
-  // ClubControl member id -> name, for "Paid by …'s direct debit".
-  nameById: Map<string, string>;
-  // Admins: "Make inactive" buttons (pages/api/private/thrive4-deactivate.ts).
-  canClose: boolean;
-  setNotice: (n: InlineNotice) => void;
-}) {
-  const [people, setPeople] = useState<Thrive4BillingPerson[] | null>(null);
-  const [checking, setChecking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [onlyMoved, setOnlyMoved] = useState(true);
-  // Who the "Make inactive" confirmation is for: one person, or everyone who's moved.
-  const [confirming, setConfirming] = useState<{ guids: string[]; label: string } | null>(null);
-  const [closing, setClosing] = useState(false);
-  // Admins: each moved person's ClubControl mandate, by ClubControl member id.
-  const [mandates, setMandates] = useState<Map<string, ClubControlMandate>>(new Map());
-  const [mandatesLoading, setMandatesLoading] = useState(false);
-  const [mandatesError, setMandatesError] = useState<string | null>(null);
-
-  const check = async () => {
-    setChecking(true);
-    setError(null);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const response = await fetch('/api/private/thrive4-billing', {
-        headers: { Authorization: `Bearer ${sessionData.session?.access_token ?? ''}` },
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok || !payload.ok) throw new Error(payload.error || 'Checking Thrive4 failed.');
-      setPeople(payload.people);
-    } catch (e: any) {
-      setError(e.message);
-    }
-    setChecking(false);
+  const reset = () => {
+    setFile(null); setPreview(null); setError(''); setInputKey((k) => k + 1);
   };
 
-  const rows = useMemo(
-    () =>
-      (people ?? [])
-        .map((p) => {
-          // Moved = paid by an active direct debit in ClubControl: their own,
-          // or the account that pays for them (a parent for the family). Being
-          // active there isn't enough: everyone was brought across as active.
-          return { ...p, ...matchLoveAdminName(p.name, billing, membersByName, nameById) };
-        })
-        .sort((a, b) => Number(b.moved) - Number(a.moved) || a.name.localeCompare(b.name)),
-    [people, membersByName, billing, nameById],
-  );
-  const moved = rows.filter((r) => r.moved);
-  // Only someone with an active mandate on ClubControl can be made inactive.
-  const closable = moved.filter((r) => r.memberId && hasActiveMandate(mandates.get(r.memberId)));
-  const movedIds = moved.map((r) => r.memberId).filter((id): id is string => !!id).join(',');
-
-  // After each check, read the mandates of everyone who's moved.
-  useEffect(() => {
-    if (!canClose || !movedIds) return;
-    let cancelled = false;
-    (async () => {
-      setMandatesLoading(true);
-      setMandatesError(null);
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const response = await fetch('/api/private/clubcontrol-mandates', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.session?.access_token ?? ''}` },
-          body: JSON.stringify({ memberIds: movedIds.split(',') }),
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok || !payload.ok) throw new Error(payload.error || 'Reading the ClubControl mandates failed.');
-        if (!cancelled) setMandates(new Map((payload.mandates as ClubControlMandate[]).map((m) => [m.member_id, m])));
-      } catch (e: any) {
-        if (!cancelled) setMandatesError(e.message);
-      }
-      if (!cancelled) setMandatesLoading(false);
-    })();
-    return () => { cancelled = true; };
-  }, [canClose, movedIds, people]);
-  const billingKnown = [...billing.values()].some((b) => b.billing_method !== null);
-  const movedDue = moved.reduce((t, r) => t + sumAmounts(r.upcoming), 0);
-  const shown = onlyMoved ? moved : rows;
-
-  const close = async () => {
-    if (!confirming) return;
-    setClosing(true);
+  const send = async (selected: File, apply: boolean) => {
+    setBusy(true);
+    setError('');
     try {
       const { data: sessionData } = await supabase.auth.getSession();
-      const response = await fetch('/api/private/thrive4-deactivate', {
+      const response = await fetch('/api/private/membership-import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.session?.access_token ?? ''}` },
-        body: JSON.stringify({ personGuids: confirming.guids }),
+        body: JSON.stringify({
+          filename: selected.name,
+          contentBase64: await fileToBase64(selected),
+          apply,
+        }),
       });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok && !payload.done?.length) throw new Error(payload.error || 'Making them inactive failed.');
-      const done: string[] = payload.done ?? [];
-      const failed: { name: string; error?: string }[] = payload.failed ?? [];
-      const parts = [`Made ${done.length} ${done.length === 1 ? 'person' : 'people'} inactive on Thrive4.`];
-      if (failed.length) parts.push(`${failed.length} failed: ${failed.map((f) => f.name).join(', ')}.`);
-      if (payload.refused) parts.push(`${payload.refused} skipped: no longer billed on Thrive4 with an active ClubControl mandate.`);
-      setNotice({ type: failed.length ? 'error' : 'success', message: parts.join(' ') });
-      setConfirming(null);
-      await check();
-    } catch (e: any) {
-      setNotice({ type: 'error', message: e.message });
-      setConfirming(null);
+      const body = await response.json();
+      if (!response.ok || !body.ok) { setError(body.error ?? 'Upload failed.'); return; }
+      if (!apply) {
+        setPreview(body.preview);
+        return;
+      }
+      setNotice({ type: 'success', message: `LoveAdmin invoices saved — ${body.saved.people} people counted as paid.` });
+      reset();
+      await onSaved();
+    } catch {
+      setError('Upload failed. Check your connection and try again.');
+    } finally {
+      setBusy(false);
     }
-    setClosing(false);
   };
 
   return (
-    <section className="mb-8 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-violet-200">
-      <div className={`flex flex-wrap items-center justify-between gap-3 bg-violet-50 px-5 py-4 ${open ? 'border-b border-violet-200' : ''}`}>
-        <CardHeading open={open} onToggle={onToggle} title={people ? `Thrive4 billing (${moved.length} moved, still billed)` : 'Thrive4 billing'}>
-          What Thrive4 (LoveAdmin) invoiced this month and will invoice next, checked live. Anyone with an active direct debit
-          in ClubControl has moved but is still open on Thrive4, so needs making inactive there.
-        </CardHeading>
-        {open && (
-          <div className="flex flex-wrap items-center gap-3">
-            {people && (
-              <label className="inline-flex items-center gap-2 text-sm text-zinc-700">
-                <input type="checkbox" checked={onlyMoved} onChange={(e) => setOnlyMoved(e.target.checked)} className="h-4 w-4 rounded border-zinc-300" />
-                Only people who’ve moved
-              </label>
+    <section className="mb-8 rounded-2xl bg-white shadow-sm ring-1 ring-blue-200">
+      <div className="border-b border-blue-200 bg-blue-50 px-5 py-3">
+        <h2 className="text-lg font-semibold text-zinc-900">Upload LoveAdmin invoices</h2>
+        <p className="text-xs text-zinc-600">Nothing is saved until you check the summary and press Apply.</p>
+      </div>
+      <div className="space-y-4 px-5 py-4">
+        <p className="text-sm text-zinc-600">
+          LoveAdmin’s “Invoices All Report” (.xlsx or .csv). Everyone a paid invoice in the file was for counts as paid, so export only the period you want counted. It replaces the previous upload.
+        </p>
+        <input
+          key={inputKey}
+          type="file"
+          accept=".xlsx,.csv"
+          disabled={busy}
+          className="block w-full text-sm text-zinc-700 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
+          onChange={(e) => {
+            const selected = e.target.files?.[0] ?? null;
+            setFile(selected); setPreview(null);
+            if (selected) void send(selected, false);
+          }}
+        />
+
+        {busy && !preview && <p className="text-sm text-zinc-400">Reading file…</p>}
+        {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
+
+        {preview && (
+          <div className="rounded-lg bg-zinc-50 p-4 text-sm ring-1 ring-zinc-200">
+            <p className="font-medium text-zinc-900">
+              {preview.paidInvoices} paid invoices, covering {preview.people} people.
+            </p>
+            {preview.skippedInvoices > 0 && (
+              <p className="mt-1 text-zinc-600">{preview.skippedInvoices} unpaid or cancelled invoices are ignored.</p>
             )}
-            {canClose && people && closable.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setConfirming({
-                  guids: closable.map((r) => r.person_guid),
-                  label: `all ${closable.length} people with an active ClubControl mandate`,
-                })}
-                disabled={closing || checking || mandatesLoading}
-                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
-              >
-                Make all {closable.length} inactive
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={check}
-              disabled={checking}
-              className="rounded-lg border border-violet-300 bg-white px-4 py-2 text-sm font-medium text-violet-800 hover:bg-violet-50 disabled:opacity-60"
-            >
-              {checking ? 'Checking…' : people ? '🔄 Check again' : '🔍 Check Thrive4'}
+            <p className="mt-1 text-zinc-600">This replaces the current LoveAdmin data.</p>
+          </div>
+        )}
+
+        {preview && file && (
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={reset} disabled={busy} className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50">
+              Cancel
+            </button>
+            <button type="button" onClick={() => void send(file, true)} disabled={busy} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+              {busy ? 'Working…' : 'Apply'}
             </button>
           </div>
         )}
       </div>
-      {!open ? null : error ? (
-        <p role="alert" className="px-5 py-6 text-sm text-rose-600">{error}</p>
-      ) : !people ? (
-        <p className="px-5 py-6 text-sm text-zinc-500">Press Check Thrive4 to see who it’s still billing.</p>
-      ) : (
-        <>
-          {!billingKnown && (
-            <p className="px-5 pt-4 text-sm text-amber-700">
-              Direct debit status from ClubControl isn’t loaded yet, so nobody is flagged. An admin needs to press “Fetch from ClubControl now”.
-            </p>
-          )}
-          <p className="px-5 pt-4 text-sm text-zinc-700">
-            {moved.length === 0
-              ? 'Nobody with an active ClubControl direct debit has a Thrive4 subscription or invoice this month.'
-              : `${moved.length} ${moved.length === 1 ? 'person has' : 'people have'} moved to ClubControl but ${moved.length === 1 ? 'is' : 'are'} still on Thrive4${movedDue ? `: ${money(movedDue)} due to be invoiced next` : ''}.`}
-            {' '}<span className="text-zinc-500">Thrive4 is billing {rows.length} people in all.</span>
-          </p>
-          {canClose && moved.length > 0 && (
-            <p className={`px-5 pt-2 text-xs ${mandatesError ? 'text-rose-600' : 'text-zinc-500'}`}>
-              {mandatesError
-                ? mandatesError
-                : mandatesLoading
-                  ? 'Reading each person’s direct debit mandate from ClubControl…'
-                  : `Each person’s ClubControl record is shown below: check the mandate before making them inactive. ${closable.length} of ${moved.length} have an active mandate.`}
-            </p>
-          )}
-          {shown.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-zinc-400">Nobody to show.</p>
-          ) : (
-            <div className="overflow-x-auto pb-2 pt-2">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs uppercase tracking-wide text-zinc-500">
-                    <th className="px-5 py-2 font-semibold">Name</th>
-                    <th className="px-3 py-2 font-semibold">Paid by</th>
-                    <th className="px-3 py-2 font-semibold">Next invoice</th>
-                    <th className="px-3 py-2 font-semibold">This month</th>
-                    <th className="px-3 py-2 font-semibold">ClubControl</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100">
-                  {shown.map((r) => (
-                    <tr key={r.person_guid} className={`align-top ${r.moved ? 'bg-rose-50/60' : ''}`}>
-                      <td className="px-5 py-2 font-medium text-zinc-900">{r.name}</td>
-                      <td className="px-3 py-2 text-zinc-600">{r.payer && nameKey(r.payer, '') !== nameKey(r.name, '') ? r.payer : 'Themselves'}</td>
-                      <td className="px-3 py-2 text-zinc-600">
-                        {r.upcoming.length === 0
-                          ? <span className="text-zinc-400">None due</span>
-                          : r.upcoming.map((u) => (
-                              <div key={u.id}>
-                                {u.amount !== null ? money(u.amount) : '—'} on {shortDate(u.payable_date)}
-                                {u.description && <span className="text-zinc-400"> · {u.description}</span>}
-                              </div>
-                            ))}
-                      </td>
-                      <td className="px-3 py-2 text-zinc-600">
-                        {r.invoiced.length === 0
-                          ? <span className="text-zinc-400">—</span>
-                          : r.invoiced.map((i) => (
-                              <div key={i.id} className="whitespace-nowrap">
-                                {i.amount !== null ? money(i.amount) : '—'} on {shortDate(i.date)}
-                                <span className="text-zinc-400"> · {i.status ?? 'unknown'}</span>
-                              </div>
-                            ))}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2">
-                        {r.moved
-                          ? (
-                            <div className="flex flex-col items-start gap-1">
-                              <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-800 ring-1 ring-rose-200">Direct debit active: close on Thrive4</span>
-                              {canClose && (() => {
-                                const m = r.memberId ? mandates.get(r.memberId) : undefined;
-                                if (!m) return mandatesLoading ? <span className="text-xs text-zinc-400">Reading mandate…</span> : <span className="text-xs text-zinc-500">ClubControl record not read</span>;
-                                return (
-                                  <>
-                                    <span className="text-xs text-zinc-700">
-                                      {r.clubControl.startsWith('Paid by') && <>{r.clubControl}. </>}
-                                      Mandate {m.mandate_id ?? 'none'} · <span className={hasActiveMandate(m) ? 'font-semibold text-emerald-700' : 'font-semibold text-rose-700'}>{m.mandate_status ?? 'no status'}</span>
-                                    </span>
-                                    <span className="text-xs text-zinc-500">
-                                      {m.payment_date
-                                        ? `Last paid ${m.payment_amount ?? ''} on ${m.payment_date}`
-                                        : `First payment${m.payment_amount ? ` of ${m.payment_amount}` : ''} not collected yet`}
-                                      {m.renewal_due && ` · renews ${shortDate(m.renewal_due)}`}
-                                    </span>
-                                    <a href={m.url} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-violet-700 underline-offset-2 hover:underline">
-                                      Open in ClubControl ↗
-                                    </a>
-                                    {hasActiveMandate(m) ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => setConfirming({ guids: [r.person_guid], label: r.name })}
-                                        disabled={closing || checking}
-                                        className="text-xs font-semibold text-rose-700 underline-offset-2 hover:underline disabled:opacity-60"
-                                      >
-                                        Make inactive on Thrive4
-                                      </button>
-                                    ) : (
-                                      <span className="text-xs text-zinc-500">No active mandate, so it can’t be closed from here</span>
-                                    )}
-                                  </>
-                                );
-                              })()}
-                            </div>
-                          )
-                          : <ClubControlStatus row={r} />}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
-      )}
-      <ConfirmDialog
-        open={confirming !== null}
-        title="Make inactive on Thrive4?"
-        description={confirming ? `This makes ${confirming.label} inactive on Thrive4, which stops their Thrive4 subscriptions so no more invoices are raised. Each one is checked again first: only people still billed on Thrive4 with an active direct debit mandate on ClubControl are changed. Undo it in Thrive4 if needed.` : ''}
-        confirmLabel={closing ? 'Making inactive…' : 'Make inactive'}
-        tone="danger"
-        loading={closing}
-        onConfirm={close}
-        onCancel={() => !closing && setConfirming(null)}
-      />
     </section>
   );
 }
@@ -807,10 +596,12 @@ export default function MembershipPage() {
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<InlineNotice | null>(null);
   const [fetching, setFetching] = useState<FetchSource | null>(null);
+  // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
+  const [showLoveAdminUpload, setShowLoveAdminUpload] = useState(false);
 
-  // Fetches the latest data straight from ClubControl, GMS or Thrive4 (all
-  // also happen automatically every Monday morning and on meeting days; see
-  // pages/api/private/clubcontrol-sync.ts, gms-sync.ts and thrive4-sync.ts).
+  // Fetches the latest data straight from ClubControl or GMS (both also happen
+  // automatically every Monday morning and on meeting days; see
+  // pages/api/private/clubcontrol-sync.ts and gms-sync.ts).
   const fetchFrom = async (source: FetchSource) => {
     const name = FETCH_NAMES[source];
     setFetching(source);
@@ -826,9 +617,7 @@ export default function MembershipPage() {
         type: 'success',
         message: source === 'gms'
           ? `Fetched ${payload.saved.players} players from GMS.`
-          : source === 'thrive4'
-            ? `Fetched ${payload.saved.paidInvoices} paid LoveAdmin invoices for ${payload.saved.month} from Thrive4, covering ${payload.saved.people} people.`
-            : `Fetched ${payload.saved.total} members from ClubControl (${payload.saved.inactive} inactive).`,
+          : `Fetched ${payload.saved.total} members from ClubControl (${payload.saved.inactive} inactive).`,
       });
       await loadData();
     } catch (error: any) {
@@ -1052,11 +841,9 @@ export default function MembershipPage() {
   }, [members, players, hiddenKeys, notOnGmsSearch]);
 
   // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
-  // Everyone who paid through LoveAdmin last month (fetched automatically from
-  // Thrive4), with their team and ClubControl billing method. Anyone with an
-  // active ClubControl direct debit has moved, so isn't listed (they show on
-  // the Thrive4 billing card until closed there). The list shrinks to nothing
-  // as people move over.
+  // Everyone on the latest LoveAdmin upload, with their team and ClubControl
+  // billing method. Anyone with an active ClubControl direct debit has moved,
+  // so isn't listed. The list shrinks to nothing as people move over.
   const loveAdminRows = useMemo(() => {
     const playersByKey = new Map(playerRows.map((p) => [p.name_key, p]));
     return loveAdmin
@@ -1143,7 +930,7 @@ export default function MembershipPage() {
                 ClubControl: {membersImport ? shortDate(membersImport.uploaded_at) : 'not fetched yet'}
                 {' · '}GMS: {playersImport ? shortDate(playersImport.uploaded_at) : 'not fetched yet'}
                 {/* LoveAdmin migration (temporary) */}
-                {' · '}Thrive4 (LoveAdmin): {loveAdminImport ? shortDate(loveAdminImport.uploaded_at) : 'not fetched yet'}
+                {' · '}LoveAdmin: {loveAdminImport ? shortDate(loveAdminImport.uploaded_at) : 'not uploaded yet'}
               </p>
             )}
           </div>
@@ -1160,7 +947,7 @@ export default function MembershipPage() {
             )}
             {canUpload && (
               <>
-                {(['clubcontrol', 'gms', 'thrive4'] as const).map((source) => (
+                {(['clubcontrol', 'gms'] as const).map((source) => (
                   <button
                     key={source}
                     type="button"
@@ -1172,6 +959,14 @@ export default function MembershipPage() {
                     {fetching === source ? 'Fetching…' : `🔄 Fetch from ${FETCH_NAMES[source]} now`}
                   </button>
                 ))}
+                {/* LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md. */}
+                <button
+                  type="button"
+                  onClick={() => setShowLoveAdminUpload((v) => !v)}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  {showLoveAdminUpload ? 'Close upload' : '⬆ Upload LoveAdmin invoices'}
+                </button>
               </>
             )}
           </div>
@@ -1179,6 +974,7 @@ export default function MembershipPage() {
 
         <InlineNoticeBanner notice={notice} className="mb-6" />
 
+        {canUpload && showLoveAdminUpload && <LoveAdminUploadPanel onSaved={loadData} setNotice={setNotice} />}
 
         {!checkedRole || loading ? (
           <p className="text-sm text-zinc-400">Loading…</p>
@@ -1571,12 +1367,12 @@ export default function MembershipPage() {
               <section className="mb-8 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-violet-200">
                 <div className={`flex flex-wrap items-center justify-between gap-3 bg-violet-50 px-5 py-4 ${openCards.loveAdmin ? 'border-b border-violet-200' : ''}`}>
                   <CardHeading open={openCards.loveAdmin} onToggle={() => toggleCard('loveAdmin')} title={`Still on LoveAdmin (${stillOnLoveAdmin.length})`}>
-                    Paid through LoveAdmin (Thrive4), the old system, last month, so counted as paid, but with no active direct
+                    Paid through LoveAdmin, the old system, so counted as paid, but with no active direct
                     debit mandate in ClubControl yet (their own, or the account paying for them).{' '}
                     {loveAdminImport
-                      ? `Fetched from Thrive4 automatically, ${shortDate(loveAdminImport.uploaded_at)} (every Monday and on meeting days).`
-                      : 'Not fetched from Thrive4 yet: it runs every Monday and on meeting days, or an admin can press “Fetch from Thrive4 now”.'}
-                    {movedFromLoveAdmin > 0 && ` ${movedFromLoveAdmin} more have moved (paid by an active ClubControl direct debit, theirs or the family’s): see Thrive4 billing.`}
+                      ? `Latest data: ${loveAdminImport.file_name}, ${shortDate(loveAdminImport.uploaded_at)}.`
+                      : 'Nothing uploaded yet: an admin can press “Upload LoveAdmin invoices”.'}
+                    {movedFromLoveAdmin > 0 && ` ${movedFromLoveAdmin} more have moved (paid by an active ClubControl direct debit, theirs or the family’s).`}
                     {notOnClubControl > 0 && ` ${notOnClubControl} aren’t on ClubControl at all (flagged ⚠).`}
                     {' Names that differ slightly (e.g. Ste / Steven) are matched; the ClubControl name is shown under the status.'}
                     {filter !== 'all' && ` Showing only those on ${filterLabel}.`}
@@ -1588,7 +1384,7 @@ export default function MembershipPage() {
                   </p>
                 )}
                 {!openCards.loveAdmin ? null : stillOnLoveAdmin.length === 0 ? (
-                  <p className="px-5 py-6 text-sm text-zinc-400">{loveAdminImport ? 'Nobody still on LoveAdmin for this selection.' : 'No Thrive4 data yet.'}</p>
+                  <p className="px-5 py-6 text-sm text-zinc-400">{loveAdminImport ? 'Nobody still on LoveAdmin for this selection.' : 'No LoveAdmin data yet.'}</p>
                 ) : (
                   <>
                     <ul className="divide-y divide-zinc-100 sm:hidden">
@@ -1654,9 +1450,6 @@ export default function MembershipPage() {
                 )}
               </section>
             )}
-
-            {/* LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md. */}
-            <Thrive4BillingCard open={openCards.thrive4} onToggle={() => toggleCard('thrive4')} membersByName={membersByName} billing={billingNames} nameById={memberNameById} canClose={canUpload} setNotice={setNotice} />
 
             <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-amber-200">
               <div className={`flex flex-wrap items-center justify-between gap-3 bg-amber-50 px-5 py-4 ${openCards.inactive ? 'border-b border-amber-200' : ''}`}>

@@ -97,9 +97,9 @@ export async function currentPlayersCount(admin: SupabaseClient): Promise<number
 }
 
 // LoveAdmin migration (temporary) — see LOVEADMIN_MIGRATION.md.
-// Replaces the previous LoveAdmin invoices, from the
-// Thrive4 fetch (lib/thrive4Sync.ts). The old rows go only once the new ones
-// are all in.
+// Replaces the previous LoveAdmin invoices, from the upload
+// (pages/api/private/membership-import.ts). The old rows go only once the new
+// ones are all in.
 export async function saveLoveAdminPayments(
   admin: SupabaseClient,
   payments: ImportedLoveAdminPayment[],
