@@ -11,6 +11,22 @@
     {
       "path": "/api/cron/link-check",
       "schedule": "15 4 * * *"
+    },
+    {
+      "path": "/api/cron/sms-drip/1",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/sms-drip/2",
+      "schedule": "30 12 * * *"
+    },
+    {
+      "path": "/api/cron/sms-drip/3",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/sms-drip/4",
+      "schedule": "0 18 * * *"
     }
   ]
 }
